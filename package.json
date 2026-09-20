@@ -8,6 +8,7 @@
     "scripts": {
         "dev": "vp dev",
         "build": "tsc && vp build",
+        "build:icons": "node scripts/build-icons.ts",
         "preview": "vp preview",
         "test": "vp test",
         "check": "vp check",

@@ -1,6 +1,24 @@
 import solid from "@solidjs/vite-plugin"
 import electron from "vite-plugin-electron/simple"
+import type { Plugin } from "vite-plus"
 import { defineConfig } from "vite-plus"
+
+import { ICONS_JSON, generateIcons } from "./scripts/build-icons.ts"
+
+// Regenerates src/renderer/ui/Icon.tsx from icons.json on dev/build startup,
+// and re-runs when icons.json changes during `vp dev`.
+const iconsPlugin: Plugin = {
+    name: "arbor-icons",
+    buildStart: (): void => {
+        generateIcons()
+    },
+    configureServer: (server): void => {
+        server.watcher.add(ICONS_JSON)
+    },
+    handleHotUpdate: ({ file }): void => {
+        if (file.replace(/\\/g, "/").endsWith("src/renderer/ui/icons.json")) generateIcons()
+    },
+}
 
 export default defineConfig({
     base: "./",
@@ -11,6 +29,7 @@ export default defineConfig({
     },
     test: { include: ["tests/**/*.test.ts"], environment: "node" },
     plugins: [
+        iconsPlugin,
         solid({ start: { app: "src/renderer/App.tsx" } }),
         electron({
             main: {
