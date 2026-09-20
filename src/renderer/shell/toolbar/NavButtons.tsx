@@ -1,6 +1,8 @@
 import type { TabId } from "../../../shared/protocol"
 import { Icon } from "../../ui/Icon"
 
+import "./NavButtons.css"
+
 export const NavButtons = (props: { tabId: TabId | null }) => (
     <div class="nav-buttons">
         <button

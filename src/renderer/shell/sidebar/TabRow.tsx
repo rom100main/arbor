@@ -17,6 +17,8 @@ import {
     type DropPosition,
 } from "./dnd"
 
+import "./TabRow.css"
+
 export const TabRow = (props: { tab: DisplayTab; onRename: () => void }) => {
     const snapshot = useSnapshot()
     const hasChildren = () => snapshot()!.tabs.some((t) => t.parentId === props.tab.id)

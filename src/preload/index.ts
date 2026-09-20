@@ -30,6 +30,8 @@ const api = {
         ipcRenderer.invoke("arbor:container:set-color", containerId, color),
     setContainerIcon: (containerId: ContainerId, icon: ContainerIcon): Promise<void> =>
         ipcRenderer.invoke("arbor:container:set-icon", containerId, icon),
+    reorderContainer: (containerId: ContainerId, toIndex: number): Promise<void> =>
+        ipcRenderer.invoke("arbor:container:reorder", containerId, toIndex),
 
     createTab: (url?: string): Promise<TabId> => ipcRenderer.invoke("arbor:tab:create", url),
     createChildTab: (parentTabId: TabId, url?: string): Promise<TabId> =>

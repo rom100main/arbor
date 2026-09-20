@@ -1,0 +1,17 @@
+.nav-buttons {
+    display: flex;
+    gap: 4px;
+
+    button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        cursor: pointer;
+        background: transparent;
+        border: none;
+        border-radius: var(--radius-md);
+    }
+}

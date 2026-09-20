@@ -1,0 +1,25 @@
+.omnibox-suggestions {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 6px);
+    left: 0;
+    z-index: 100;
+    padding: 4px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-popup);
+}
+
+.omnibox-popup-root {
+    box-sizing: border-box;
+    height: 100vh;
+    padding: 6px;
+    overflow: hidden;
+    background: transparent;
+
+    .omnibox-suggestions {
+        position: static;
+        box-shadow: var(--shadow-popup-strong);
+    }
+}

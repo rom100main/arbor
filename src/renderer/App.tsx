@@ -2,7 +2,7 @@ import { OmniboxPopup } from "./omnibox/OmniboxPopup"
 import { RenameApp } from "./rename/RenameApp"
 import { MainShell } from "./shell/MainShell"
 
-import "./app.css"
+import "./base.css"
 
 export default function App() {
     const appMode = getAppMode()

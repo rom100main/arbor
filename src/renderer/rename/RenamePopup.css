@@ -1,0 +1,119 @@
+.rename-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-overlay);
+}
+
+.rename-popup {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 224px;
+    padding: 12px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-modal);
+}
+
+.rename-label {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-faint);
+}
+
+.rename-input {
+    height: 28px;
+    padding: 0 8px;
+    font-size: var(--font-size-body);
+    user-select: text;
+    outline: none;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+
+    &:focus {
+        border-color: var(--color-accent);
+    }
+}
+
+.rename-colors {
+    display: flex;
+    gap: 6px;
+}
+
+.rename-color {
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    cursor: pointer;
+    border: 2px solid transparent;
+    border-radius: 50%;
+
+    &.selected {
+        border-color: var(--color-text);
+    }
+}
+
+.rename-icons {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 4px;
+}
+
+.rename-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 26px;
+    padding: 0;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+
+    &:hover {
+        color: var(--color-text);
+        background: var(--color-hover);
+    }
+
+    &.selected {
+        color: var(--color-accent-strong);
+        background: var(--color-accent-wash);
+        border-color: var(--color-accent);
+    }
+}
+
+.rename-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+
+    button {
+        padding: 4px 10px;
+        font-size: var(--font-size-md);
+        cursor: pointer;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+
+        &.clear {
+            margin-right: auto;
+            color: var(--color-text-faint);
+            border: none;
+
+            &:hover {
+                color: var(--color-text);
+            }
+        }
+
+        &.primary {
+            color: var(--color-accent-contrast);
+            background: var(--color-accent);
+            border-color: var(--color-accent);
+        }
+    }
+}

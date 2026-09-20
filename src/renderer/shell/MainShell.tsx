@@ -4,6 +4,8 @@ import { initState, useSnapshot } from "./snapshot"
 import { NavButtons } from "./toolbar/NavButtons"
 import { OmniboxInput } from "./toolbar/OmniboxInput"
 
+import "./MainShell.css"
+
 export const MainShell = () => {
     void initState()
     const snapshot = useSnapshot()

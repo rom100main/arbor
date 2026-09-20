@@ -2,6 +2,8 @@ import { Show, createEffect, createSignal } from "solid-js"
 
 import { Icon } from "./Icon"
 
+import "./Favicon.css"
+
 export const Favicon = (props: { url: string | null; size?: number }) => {
     const [failed, setFailed] = createSignal(false)
     createEffect(

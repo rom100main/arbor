@@ -1,9 +1,12 @@
 import type { Component } from "solid-js"
 
+import { isUrlLike } from "../../shared/url"
 import { useSnapshot } from "../shell/snapshot"
 import { Favicon } from "../ui/Favicon"
 import { Icon } from "../ui/Icon"
 import type { Suggestion } from "./suggestions"
+
+import "./SuggestionRow.css"
 
 export const SuggestionRow: Component<{
     suggestion: Suggestion
@@ -25,10 +28,11 @@ export const SuggestionRow: Component<{
                         props.suggestion.target.length > 0
                             ? props.suggestion.target
                             : props.suggestion.query
+                    const isUrl = isUrlLike(props.suggestion.query)
                     return (
                         <>
                             <span class="suggestion-icon">
-                                <Icon name="search" size={13} />
+                                <Icon name={isUrl ? "link" : "search"} size={13} />
                             </span>
                             <span class="suggestion-title">{text}</span>
                         </>

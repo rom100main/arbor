@@ -4,6 +4,8 @@ import { initState, useSnapshot } from "../shell/snapshot"
 import { SuggestionRow } from "./SuggestionRow"
 import { computeSuggestions } from "./suggestions"
 
+import "./OmniboxPopup.css"
+
 /** Rendered inside the frameless omnibox popup window (?omnibox query param). */
 export const OmniboxPopup = () => {
     void initState()

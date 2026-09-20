@@ -1,0 +1,54 @@
+.container-chip {
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: var(--container-chip-size);
+    height: var(--container-chip-size);
+    padding: 0;
+    cursor: pointer;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    transition:
+        background-color 0.15s,
+        transform 0.12s;
+
+    &:hover {
+        transform: scale(1.07);
+    }
+
+    &.active {
+        border-color: transparent;
+    }
+
+    &.drop-target {
+        box-shadow: 0 0 0 2px currentcolor;
+        transform: scale(1.12);
+    }
+
+    &.add {
+        color: var(--color-text-faint);
+    }
+
+    &.drop-before::before,
+    &.drop-after::after {
+        position: absolute;
+        top: 4px;
+        bottom: 4px;
+        width: 2px;
+        pointer-events: none;
+        content: "";
+        background: var(--color-accent);
+        border-radius: 1px;
+    }
+
+    &.drop-before::before {
+        left: -5px;
+    }
+
+    &.drop-after::after {
+        right: -5px;
+    }
+}

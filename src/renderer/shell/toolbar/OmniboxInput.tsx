@@ -1,7 +1,11 @@
-import { createEffect, createSignal } from "solid-js"
+import { createEffect, createSignal, Show } from "solid-js"
 
 import type { TabId } from "../../../shared/protocol"
+import { isUrlLike } from "../../../shared/url"
+import { Icon } from "../../ui/Icon"
 import { requestOmniboxFocus, useOmniboxFocus } from "../focus"
+
+import "./OmniboxInput.css"
 
 export const OmniboxInput = (props: { tabId: TabId | null; url: string }) => {
     const [value, setValue] = createSignal(props.url)
@@ -66,9 +70,14 @@ export const OmniboxInput = (props: { tabId: TabId | null; url: string }) => {
 
     return (
         <div class="omnibox-wrap">
+            <Show when={isUrlLike(value())}>
+                <span class="omnibox-icon">
+                    <Icon name="link" size={14} />
+                </span>
+            </Show>
             <input
                 ref={(el) => (input = el)}
-                class="omnibox"
+                class={{ omnibox: true, "has-icon": isUrlLike(value()) }}
                 type="text"
                 placeholder="Search DuckDuckGo or type a URL"
                 value={value()}

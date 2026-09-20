@@ -1,0 +1,35 @@
+.suggestion-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    height: var(--tab-row-height);
+    padding: 0 10px;
+    font-size: var(--font-size-body);
+    cursor: default;
+    border-radius: var(--radius-md);
+
+    &.highlighted {
+        background: var(--color-hover);
+    }
+}
+
+.suggestion-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    color: var(--color-text-faint);
+}
+
+.suggestion-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.suggestion-dot {
+    flex-shrink: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}

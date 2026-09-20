@@ -3,6 +3,8 @@ import { For, createSignal } from "solid-js"
 import { CONTAINER_COLORS, CONTAINER_ICONS, type RenameTarget } from "../../shared/protocol"
 import { Icon } from "../ui/Icon"
 
+import "./RenamePopup.css"
+
 export const RenamePopup = (props: { target: RenameTarget }) => {
     const isContainer = props.target.kind === "container"
     const [name, setName] = createSignal(
