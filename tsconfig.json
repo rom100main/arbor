@@ -1,0 +1,28 @@
+{
+    "compilerOptions": {
+        "target": "es2023",
+        "module": "esnext",
+        "lib": ["ES2023", "DOM", "DOM.Iterable"],
+        "types": ["vite/client", "node"],
+        "allowArbitraryExtensions": true,
+        "skipLibCheck": true,
+
+        /* Bundler mode */
+        "moduleResolution": "bundler",
+        "allowImportingTsExtensions": true,
+        "verbatimModuleSyntax": true,
+        "moduleDetection": "force",
+        "noEmit": true,
+
+        /* Solid */
+        "jsx": "preserve",
+        "jsxImportSource": "@solidjs/web",
+
+        /* Linting */
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "erasableSyntaxOnly": true,
+        "noFallthroughCasesInSwitch": true
+    },
+    "include": ["src", "tests", "vite.config.ts"]
+}
