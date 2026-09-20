@@ -1,0 +1,9 @@
+{
+    "extends": ["stylelint-config-standard", "stylelint-config-recess-order"],
+    "ignoreFiles": ["dist/**", "src/styles/themes.css"],
+    "rules": {
+        "selector-id-pattern": null,
+        "no-descending-specificity": null,
+        "selector-nested-pattern": "^(&\\S|[^&])"
+    }
+}
