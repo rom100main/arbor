@@ -1,4 +1,4 @@
-import { For, createEffect, createSignal } from "solid-js"
+import { For, createEffect, createMemo, createSignal } from "solid-js"
 
 import { initState, useSnapshot } from "../shell/snapshot"
 import { SuggestionRow } from "./SuggestionRow"
@@ -15,7 +15,8 @@ export const OmniboxPopup = () => {
 
     window.arbor.onOmniboxQuery(setQuery)
 
-    const suggestions = () => computeSuggestions(snapshot(), query())
+    const suggestions = createMemo(() => computeSuggestions(snapshot(), query()))
+    const suggestionCount = createMemo(() => suggestions().length)
 
     const activateCurrent = (): void => {
         const suggestion = suggestions()[selected()]
@@ -36,7 +37,7 @@ export const OmniboxPopup = () => {
     window.arbor.onOmniboxActivateSelected(activateCurrent)
 
     createEffect(
-        () => suggestions().length,
+        () => suggestionCount(),
         () => {
             setSelected(0)
         },
@@ -44,7 +45,7 @@ export const OmniboxPopup = () => {
 
     let card: HTMLDivElement | undefined
     createEffect(
-        () => suggestions().length,
+        () => suggestionCount(),
         (count) => {
             const height = card && count > 0 ? card.offsetHeight : 0
             window.arbor.omniboxSetPopupHeight(height + 12)
