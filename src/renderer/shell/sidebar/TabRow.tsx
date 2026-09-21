@@ -19,13 +19,13 @@ import {
 
 import "./TabRow.css"
 
-export const TabRow = (props: { tab: DisplayTab; onRename: () => void }) => {
+export const TabRow = (props: {
+    tab: DisplayTab
+    hasChildren: boolean
+    collapsed: boolean
+    onRename: () => void
+}) => {
     const snapshot = useSnapshot()
-    const hasChildren = () => snapshot()!.tabs.some((t) => t.parentId === props.tab.id)
-    // The DisplayTab item is reused across commits (stable <For> identity),
-    // so `collapsed` must be read from the live snapshot to stay reactive.
-    const collapsed = () =>
-        snapshot()?.tabs.find((t) => t.id === props.tab.id)?.collapsed ?? props.tab.collapsed
     const label = () => props.tab.userLabel || props.tab.title || props.tab.url
     // The last tab of the last container cannot be closed (domain guard).
     const closeProtected = () => {
@@ -93,19 +93,19 @@ export const TabRow = (props: { tab: DisplayTab; onRename: () => void }) => {
             }}
             onDragEnd={clearDragState}
         >
-            <div class={{ "row-leading": true, "has-children": hasChildren() }}>
+            <div class={{ "row-leading": true, "has-children": props.hasChildren }}>
                 <Favicon url={props.tab.favicon} />
-                <Show when={hasChildren()}>
+                <Show when={props.hasChildren}>
                     <button
                         class="chevron overlay"
                         type="button"
-                        aria-label={collapsed() ? "Expand" : "Collapse"}
+                        aria-label={props.collapsed ? "Expand" : "Collapse"}
                         onClick={(event) => {
                             event.stopPropagation()
-                            void window.arbor.setCollapsed(props.tab.id, !collapsed())
+                            void window.arbor.setCollapsed(props.tab.id, !props.collapsed)
                         }}
                     >
-                        <Icon name={collapsed() ? "chevron-right" : "chevron-down"} size={12} />
+                        <Icon name={props.collapsed ? "chevron-right" : "chevron-down"} size={12} />
                     </button>
                 </Show>
             </div>

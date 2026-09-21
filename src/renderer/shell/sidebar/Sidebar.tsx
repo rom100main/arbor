@@ -2,7 +2,7 @@ import { For, createEffect } from "solid-js"
 
 import { Icon } from "../../ui/Icon"
 import { requestOmniboxFocus } from "../focus"
-import { useActiveContainerTabs, useSnapshot } from "../snapshot"
+import { useActiveContainerTabs, useSnapshot, useTreeMeta } from "../snapshot"
 import { ContainerChip } from "./ContainerChip"
 import { createSwipeTracker } from "./swipe"
 import { TabRow } from "./TabRow"
@@ -12,6 +12,7 @@ import "./Sidebar.css"
 export const Sidebar = () => {
     const snapshot = useSnapshot()
     const activeTabs = useActiveContainerTabs()
+    const treeMeta = useTreeMeta()
 
     let strip: HTMLDivElement | undefined
 
@@ -81,6 +82,8 @@ export const Sidebar = () => {
                     {(tab) => (
                         <TabRow
                             tab={tab}
+                            hasChildren={treeMeta().parentIds.has(tab.id)}
+                            collapsed={treeMeta().collapsedIds.has(tab.id)}
                             onRename={() => window.arbor.openRenameModal({ kind: "tab", tab })}
                         />
                     )}

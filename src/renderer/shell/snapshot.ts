@@ -1,4 +1,4 @@
-import { createSignal } from "solid-js"
+import { createMemo, createSignal } from "solid-js"
 
 import type { BrowserSnapshot, DisplayTab, TabId } from "../../shared/protocol"
 import { displayTabs } from "../../shared/tree-display"
@@ -21,7 +21,7 @@ export const useSnapshot = () => snapshot
 // (the favicon <img> visibly blinks on collapse).
 // Reuse the previous DisplayTab unless a field the row renders changed.
 // `collapsed` and `order` are intentionally excluded:
-// collapsed is read live from the snapshot inside TabRow,
+// collapsed arrives via useTreeMeta,
 // and order only affects the array position,
 // which <For> applies by moving existing nodes.
 const displayCache = new Map<TabId, DisplayTab>()
@@ -56,4 +56,25 @@ export const useActiveContainerTabs = () => {
         if (!snap || snap.activeContainerId === null) return []
         return stableDisplayTabs(displayTabs(snap.tabs, snap.activeContainerId))
     }
+}
+
+export interface TreeMeta {
+    readonly parentIds: ReadonlySet<TabId>
+    readonly collapsedIds: ReadonlySet<TabId>
+}
+
+const EMPTY_META: TreeMeta = { parentIds: new Set(), collapsedIds: new Set() }
+
+export const useTreeMeta = () => {
+    return createMemo((): TreeMeta => {
+        const snap = snapshot()
+        if (!snap) return EMPTY_META
+        const parentIds = new Set<TabId>()
+        const collapsedIds = new Set<TabId>()
+        for (const tab of snap.tabs) {
+            if (tab.parentId !== null) parentIds.add(tab.parentId)
+            if (tab.collapsed) collapsedIds.add(tab.id)
+        }
+        return { parentIds, collapsedIds }
+    })
 }
