@@ -3,15 +3,19 @@ import { BrowserWindow, ipcMain } from "electron"
 
 import type { BrowserSnapshot, OmniboxActivation, RenameTarget, TabId } from "../../shared/protocol"
 import { omniboxTarget } from "../../shared/url"
+import { attachExtensionTab } from "../extensions"
 import { snapshot as toSnapshot, type DomainState } from "../state/state"
 import type { StoreService } from "../state/store"
 import {
     closeRenameModal,
+    hideExtensionsPopup,
     hideOmniboxPopup,
     openRenameModal,
     popupWebContents,
+    setExtensionsPopupHeight,
     setOmniboxPopupHeight,
     showOmniboxPopup,
+    toggleExtensionsPopup,
 } from "../windows/overlays"
 import { destroyView, ensureView, showTab, viewForTab } from "../windows/tab-views"
 
@@ -47,8 +51,13 @@ export const makeOnCommit =
         if (activeTabId !== null && rt.win !== null) {
             const tab = next.tabs.get(activeTabId)
             if (tab && (activeTabId !== rt.previousActiveTab || !viewForTab(activeTabId))) {
-                ensureView({ store: rt.store, getState: () => rt.latest }, tab.id, tab.url)
+                const view = ensureView(
+                    { store: rt.store, getState: () => rt.latest },
+                    tab.id,
+                    tab.url,
+                )
                 showTab(rt.win, tab.id)
+                attachExtensionTab(rt.win, view.webContents)
             }
             rt.previousActiveTab = activeTabId
         }
@@ -129,4 +138,14 @@ export const registerOverlayEvents = (
         openRenameModal(rt.win, target)
     })
     ipcMain.on("arbor:rename-modal:close", () => closeRenameModal())
+    ipcMain.on(
+        "arbor:extensions:toggle",
+        (_event, rect: { x: number; y: number; width: number }) => {
+            if (rt.win) toggleExtensionsPopup(rt.win, rect)
+        },
+    )
+    ipcMain.on("arbor:extensions:close", () => hideExtensionsPopup())
+    ipcMain.on("arbor:extensions:popup-height", (_event, height: number) => {
+        if (rt.win) setExtensionsPopupHeight(rt.win, height)
+    })
 }
