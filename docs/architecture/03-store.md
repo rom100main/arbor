@@ -22,9 +22,9 @@
 
 - **Role**: factory. Builds live `StoreService` from `Ref<DomainState>` + commit hook.
 - **Internals**:
-  - `ref = Ref.make(initialState())`.
-  - `run(op, pick)`: `get(ref)` -> `try(op)` -> `set(ref, next)` -> `onCommit(next)` -> `return pick(next)`.
-  - `runVoid(op) = run(op, () => undefined)`.
+    - `ref = Ref.make(initialState())`.
+    - `run(op, pick)`: `get(ref)` -> `try(op)` -> `set(ref, next)` -> `onCommit(next)` -> `return pick(next)`.
+    - `runVoid(op) = run(op, () => undefined)`.
 - **Law**: `state_{t+1} = op(state_t)` atomically. Every mutation triggers exactly 1 `onCommit`. No silent writes.
 
 # Flow

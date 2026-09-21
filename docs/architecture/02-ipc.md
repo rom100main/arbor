@@ -5,7 +5,7 @@
 - **Transport**: Electron `ipcMain` <-> `ipcRenderer`. Payloads: structured-cloneable values only. No functions, no class instances.
 
 > Electron IPC: `ipcRenderer.invoke` + `ipcMain.handle` for two-way, `ipcRenderer.send` + `ipcMain.on` for one-way, `webContents.send` for main->renderer push.
-> Source: *Electron docs -> ipcMain / ipcRenderer / webContents*.
+> Source: _Electron docs -> ipcMain / ipcRenderer / webContents_.
 
 # Patterns
 

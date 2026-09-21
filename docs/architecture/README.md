@@ -51,5 +51,5 @@ flowchart LR
 # Data Laws
 
 - **Single writer**: `state_{t+1} = op(state_t)` in main only. Renderer holds `snapshot_t`, read-only.
-- **Fan-out**: 1 commit -> *n* windows: `send(arbor:state)` to all `BrowserWindow.getAllWindows()`.
+- **Fan-out**: 1 commit -> _n_ windows: `send(arbor:state)` to all `BrowserWindow.getAllWindows()`.
 - **Isolation**: `session(container_id) = persist:container-{id}`. Cross-container move -> destroy + recreate view.

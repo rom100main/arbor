@@ -6,10 +6,10 @@
 - **Runtime**: Node + Electron. Full OS access: windows, sessions, filesystem, menus.
 - **Entry**: `src/main/index.ts` -> `start()`.
 - **Owns**:
-  - `BrowserStore`: sole mutable state.
-  - `BrowserWindow` instances.
-  - `WebContentsView` instances: 1 per tab.
-  - `ipcMain` handlers.
+    - `BrowserStore`: sole mutable state.
+    - `BrowserWindow` instances.
+    - `WebContentsView` instances: 1 per tab.
+    - `ipcMain` handlers.
 - **Never**: renders sidebar DOM. No SolidJS here.
 
 ## 2. Preload
@@ -18,9 +18,9 @@
 - **Runtime**: isolated bridge. Runs before renderer. Access to both `electron` and `window`.
 - **Exposes**: `contextBridge.exposeInMainWorld("arbor", api)` -> `window.arbor: ArborApi`.
 - **Contains**: no state, no logic. Thin wrappers only:
-  - `invoke(channel, ...args)` for request/response.
-  - `send(channel, ...args)` for fire-and-forget.
-  - `on(channel, cb)` for subscriptions.
+    - `invoke(channel, ...args)` for request/response.
+    - `send(channel, ...args)` for fire-and-forget.
+    - `on(channel, cb)` for subscriptions.
 - **Type contract**: `src/preload/arbor.d.ts` -> `Window.arbor`.
 
 ## 3. Renderer
@@ -36,9 +36,9 @@
 - **Location**: `src/shared/`
 - **Runtime**: none. Imported by main + preload + renderer.
 - **Contents**:
-  - `protocol.ts`: `ContainerId`, `TabId`, `BrowserSnapshot`, `RenameTarget`, `OmniboxActivation`, `CONTAINER_COLORS`, `CONTAINER_ICONS`.
-  - `url.ts`: `omniboxTarget()`, `isUrlLike()`.
-  - `tree-display.ts`: `displayTabs()` -> flat rows + `depth`.
+    - `protocol.ts`: `ContainerId`, `TabId`, `BrowserSnapshot`, `RenameTarget`, `OmniboxActivation`, `CONTAINER_COLORS`, `CONTAINER_ICONS`.
+    - `url.ts`: `omniboxTarget()`, `isUrlLike()`.
+    - `tree-display.ts`: `displayTabs()` -> flat rows + `depth`.
 
 # Process Map
 
