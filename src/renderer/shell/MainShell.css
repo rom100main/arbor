@@ -22,15 +22,30 @@
     border-top: 1px solid var(--color-border);
 }
 
-.extensions button {
+.extensions {
+    position: relative;
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    cursor: pointer;
-    background: transparent;
-    border: none;
-    border-radius: var(--radius-md);
+
+    button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        color: var(--color-text);
+        cursor: pointer;
+        background: transparent;
+        border: none;
+        border-radius: var(--radius-md);
+
+        &:hover {
+            background: var(--color-hover);
+        }
+
+        &.active {
+            background: var(--color-active);
+        }
+    }
 }
