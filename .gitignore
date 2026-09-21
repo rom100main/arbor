@@ -25,3 +25,6 @@ dist-ssr
 
 # Build files
 src/renderer/ui/Icon.tsx
+
+# Dev unpacked extensions
+/extensions
