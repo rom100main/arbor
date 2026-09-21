@@ -1,6 +1,7 @@
 import { Effect } from "effect"
 import { BrowserWindow, app } from "electron"
 
+import { initExtensions } from "./extensions"
 import {
     makeOmniboxActivator,
     makeOnCommit,
@@ -12,6 +13,7 @@ import { initialState } from "./state/state"
 import { BrowserStore, makeStoreLayer } from "./state/store"
 import { installMenu } from "./windows/app-menu"
 import { attachWindowEvents, createWindow } from "./windows/main-window"
+import { tabIdForWebContents, viewForTab } from "./windows/tab-views"
 
 const start = async (): Promise<void> => {
     await app.whenReady()
@@ -33,6 +35,14 @@ const start = async (): Promise<void> => {
     const store = rt.store
 
     registerIpc(store)
+
+    // crx:// protocol + per-container session setup happens lazily from here on.
+    initExtensions({
+        store,
+        getWindow: () => rt.win,
+        viewForTab,
+        tabIdForWebContents,
+    })
 
     rt.rebuildMenu = installMenu({
         store,
