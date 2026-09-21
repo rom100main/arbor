@@ -80,6 +80,83 @@ export const hideOmniboxPopup = (): void => {
     if (popup && !popup.isDestroyed()) popup.hide()
 }
 
+// --- extensions popup
+
+const EXTENSIONS_POPUP_WIDTH = 320
+const EXTENSIONS_POPUP_DEFAULT_HEIGHT = 72
+const EXTENSIONS_POPUP_MAX_HEIGHT = 480
+
+let extensionsPopup: BrowserWindow | null = null
+let extensionsAnchor: { x: number; y: number; width: number } | null = null
+let extensionsPopupHeight = EXTENSIONS_POPUP_DEFAULT_HEIGHT
+
+const repositionExtensionsPopup = (win: ParentWindow): void => {
+    if (!extensionsPopup || extensionsPopup.isDestroyed() || !extensionsAnchor) return
+    const bounds = win.getContentBounds()
+    extensionsPopup.setBounds({
+        x: Math.round(
+            bounds.x + extensionsAnchor.x + extensionsAnchor.width - EXTENSIONS_POPUP_WIDTH,
+        ),
+        y: Math.round(bounds.y + extensionsAnchor.y - extensionsPopupHeight - POPUP_GAP),
+        width: EXTENSIONS_POPUP_WIDTH,
+        height: Math.round(extensionsPopupHeight),
+    })
+}
+
+export const toggleExtensionsPopup = (
+    win: ParentWindow,
+    rect: { x: number; y: number; width: number },
+): void => {
+    const open = extensionsPopup
+    if (open && !open.isDestroyed()) {
+        extensionsPopup = null
+        open.destroy()
+        return
+    }
+    extensionsAnchor = rect
+    extensionsPopupHeight = EXTENSIONS_POPUP_DEFAULT_HEIGHT
+    const bounds = win.getContentBounds()
+    extensionsPopup = new BrowserWindow({
+        x: Math.round(bounds.x + rect.x + rect.width - EXTENSIONS_POPUP_WIDTH),
+        y: Math.round(bounds.y + rect.y - extensionsPopupHeight - POPUP_GAP),
+        width: EXTENSIONS_POPUP_WIDTH,
+        height: Math.round(extensionsPopupHeight),
+        show: false,
+        frame: false,
+        transparent: true,
+        resizable: false,
+        movable: false,
+        minimizable: false,
+        maximizable: false,
+        fullscreenable: false,
+        skipTaskbar: true,
+        focusable: false,
+        hasShadow: false,
+        parent: win,
+        webPreferences: { preload: preloadPath },
+    })
+    extensionsPopup.on("closed", () => {
+        extensionsPopup = null
+    })
+    void loadRenderer(extensionsPopup, "extensions")
+    repositionExtensionsPopup(win)
+    extensionsPopup.showInactive()
+}
+
+export const setExtensionsPopupHeight = (win: ParentWindow, height: number): void => {
+    if (typeof height !== "number" || !Number.isFinite(height) || height <= 0) return
+    extensionsPopupHeight = Math.min(EXTENSIONS_POPUP_MAX_HEIGHT, Math.round(height))
+    repositionExtensionsPopup(win)
+}
+
+export const hideExtensionsPopup = (): void => {
+    const open = extensionsPopup
+    if (open && !open.isDestroyed()) {
+        extensionsPopup = null
+        open.destroy()
+    }
+}
+
 // --- rename modal
 
 let modal: BrowserWindow | null = null

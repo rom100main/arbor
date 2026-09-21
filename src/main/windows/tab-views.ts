@@ -1,8 +1,15 @@
 import { Effect } from "effect"
-import { WebContentsView, session, type BrowserWindow, type Session } from "electron"
+import {
+    WebContentsView,
+    session,
+    type BrowserWindow,
+    type Session,
+    type WebContents,
+} from "electron"
 import buildChromeContextMenu from "electron-chrome-context-menu"
 
 import type { ContainerId } from "../../shared/protocol"
+import { setupSessionExtensions } from "../extensions"
 import type { DomainState } from "../state/state"
 import type { StoreService } from "../state/store"
 
@@ -24,6 +31,7 @@ export const sessionForContainer = (containerId: ContainerId): Session => {
     const existing = partitions.get(containerId)
     if (existing) return existing
     const partition = session.fromPartition(`persist:container-${containerId}`)
+    setupSessionExtensions(partition)
     partitions.set(containerId, partition)
     return partition
 }
@@ -31,6 +39,13 @@ export const sessionForContainer = (containerId: ContainerId): Session => {
 // --- tab views
 
 export const viewForTab = (tabId: string): WebContentsView | undefined => views.get(tabId)
+
+export const tabIdForWebContents = (wc: WebContents): string | null => {
+    for (const [tabId, view] of views) {
+        if (view.webContents === wc) return tabId
+    }
+    return null
+}
 
 const openChildTab = async (
     store: StoreService,
