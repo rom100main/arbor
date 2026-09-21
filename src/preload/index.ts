@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron"
+import { injectBrowserAction } from "electron-chrome-extensions/browser-action"
 
 import type {
     BrowserSnapshot,
@@ -8,6 +9,9 @@ import type {
     RenameTarget,
     TabId,
 } from "../shared/protocol"
+
+// <browser-action-list> element + window.browserAction API (main world injection).
+injectBrowserAction()
 
 const api = {
     getSnapshot: (): Promise<BrowserSnapshot> => ipcRenderer.invoke("arbor:get-snapshot"),
@@ -102,6 +106,11 @@ const api = {
     openRenameModal: (target: RenameTarget): void =>
         ipcRenderer.send("arbor:rename-modal:open", target),
     closeRenameModal: (): void => ipcRenderer.send("arbor:rename-modal:close"),
+    extensionsToggle: (rect: { x: number; y: number; width: number }): void =>
+        ipcRenderer.send("arbor:extensions:toggle", rect),
+    extensionsClose: (): void => ipcRenderer.send("arbor:extensions:close"),
+    extensionsSetPopupHeight: (height: number): void =>
+        ipcRenderer.send("arbor:extensions:popup-height", height),
     onRenameTarget: (callback: (target: RenameTarget) => void): (() => void) => {
         const listener = (_event: IpcRendererEvent, target: RenameTarget): void => callback(target)
         ipcRenderer.on("arbor:rename:target", listener)
