@@ -7,6 +7,7 @@ import { ElectronChromeExtensions } from "electron-chrome-extensions"
 import { installChromeWebStore } from "electron-chrome-web-store"
 
 import type { StoreService } from "./state/store"
+import { attachExtensionPopupPositioning, isExtensionPopupView } from "./windows/overlays"
 import { extensionShimPath } from "./windows/paths"
 
 /** Bridge between the domain store/views and the per-container extension systems. */
@@ -122,6 +123,13 @@ export const setupSessionExtensions = (ses: Session, loadSources = true): void =
             if (!win) throw new Error("No browser window available")
             return win
         },
+    })
+
+    // Re-anchor action popups (chrome.action popups) above the toolbar button
+    // and give them a readable minimum size.
+    extensions.on("browser-action-popup-created", (...args: unknown[]) => {
+        const popup = args[0]
+        if (isExtensionPopupView(popup)) attachExtensionPopupPositioning(popup)
     })
 
     // Stubs for chrome.* events the library lacks
