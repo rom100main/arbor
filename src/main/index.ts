@@ -13,9 +13,47 @@ import { initialState } from "./state/state"
 import { BrowserStore, makeStoreLayer } from "./state/store"
 import { installMenu } from "./windows/app-menu"
 import { attachWindowEvents, createWindow } from "./windows/main-window"
-import { tabIdForWebContents, viewForTab } from "./windows/tab-views"
+import { ensureView, tabIdForWebContents, viewForTab } from "./windows/tab-views"
+
+// Verbose only under `vp dev` (VITE_DEV_SERVER_URL). Packaged/prod: no console.debug noise.
+if (!process.env.VITE_DEV_SERVER_URL) {
+    console.debug = (): void => undefined
+}
+
+/**
+ * Electron's extension loader warns about permission names it does not know
+ * (`webNavigation` is provided by electron-chrome-extensions itself; `privacy` is optional and unimplemented).
+ * Drop only those all-benign warnings so real extension load problems stay visible.
+ */
+const readWarningType = (value: unknown): string => {
+    if (typeof value === "string") return value
+    if (typeof value === "object" && value !== null && "type" in value) {
+        const { type } = value
+        return typeof type === "string" ? type : ""
+    }
+    return ""
+}
+
+const filterBenignExtensionLoadWarnings = (): void => {
+    const original = process.emitWarning.bind(process)
+    process.emitWarning = (warning: string | Error, ...rest: unknown[]): void => {
+        const text = typeof warning === "string" ? warning : (warning?.message ?? "")
+        const name = readWarningType(rest[0])
+        const isExtensionLoad =
+            name === "ExtensionLoadWarning" || text.includes("ExtensionLoadWarning")
+        if (isExtensionLoad) {
+            const unknown = [...text.matchAll(/Permission '([^']+)' is unknown/g)].map((m) => m[1])
+            const benign = new Set(["webNavigation", "privacy"])
+            if (unknown.length > 0 && unknown.every((permission) => benign.has(permission))) {
+                return
+            }
+        }
+        Reflect.apply(original, process, [warning, ...rest])
+    }
+}
 
 const start = async (): Promise<void> => {
+    filterBenignExtensionLoadWarnings()
     await app.whenReady()
 
     const rt: HostRuntime = {
@@ -41,6 +79,7 @@ const start = async (): Promise<void> => {
         store,
         getWindow: () => rt.win,
         viewForTab,
+        ensureView: (tabId, url) => ensureView({ store, getState: () => rt.latest }, tabId, url),
         tabIdForWebContents,
     })
 
