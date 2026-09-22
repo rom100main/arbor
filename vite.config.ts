@@ -33,6 +33,10 @@ export default defineConfig({
         solid({ start: { app: "src/renderer/App.tsx" } }),
         electron({
             main: {
+                // Dev startup without `--no-sandbox`:
+                // Electron skips session-registered preload scripts
+                // (extension SW preloads, MV3 shim) under that flag.
+                onstart: ({ startup }) => void startup(["."]),
                 entry: "src/main/index.ts",
                 vite: { build: { outDir: "dist/electron/main", emptyOutDir: true } },
             },
