@@ -175,8 +175,13 @@ export const isExtensionPopupView = (value: unknown): value is ExtensionPopupVie
 /**
  * Re-anchor action popups above the toolbar button
  * and enforce a readable minimum size.
+ * Routes window.open from the popup through `onWindowOpen`
+ * (some extension falls back to window.open when browser.tabs is missing).
  */
-export const attachExtensionPopupPositioning = (view: ExtensionPopupView): void => {
+export const attachExtensionPopupPositioning = (
+    view: ExtensionPopupView,
+    onWindowOpen?: (url: string) => void,
+): void => {
     const popupWin = view.browserWindow
     if (!popupWin || popupWin.isDestroyed()) return
     const origSetBounds = popupWin.setBounds.bind(popupWin)
@@ -193,6 +198,10 @@ export const attachExtensionPopupPositioning = (view: ExtensionPopupView): void 
         }
         origSetBounds({ x, y, width, height })
     }
+    popupWin.webContents.setWindowOpenHandler(({ url }) => {
+        if (url && url !== "about:blank") onWindowOpen?.(url)
+        return { action: "deny" }
+    })
 }
 
 // --- rename modal
