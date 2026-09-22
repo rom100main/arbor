@@ -15,6 +15,7 @@ interface ExtensionDeps {
     readonly store: StoreService
     readonly getWindow: () => Electron.BrowserWindow | null
     readonly viewForTab: (tabId: string) => Electron.WebContentsView | undefined
+    readonly ensureView: (tabId: string, url: string) => Electron.WebContentsView
     readonly tabIdForWebContents: (wc: WebContents) => string | null
 }
 
@@ -68,6 +69,55 @@ const loadUnpackedExtensions = async (ses: Session): Promise<void> => {
     )
 }
 
+/**
+ * MV3 service workers sometimes fail the first `startWorkerForScope` right after loadExtension
+ * (electron-chrome-web-store swallows that rejection).
+ * Retry a few times and log the real error only if every attempt fails.
+ */
+const startWorkerWithRetry = async (
+    ses: Session,
+    scopes: readonly string[],
+    attemptsLeft: number,
+): Promise<void> => {
+    const scope = scopes[0]
+    try {
+        await ses.serviceWorkers.startWorkerForScope(scope)
+    } catch (error) {
+        if (scopes.length > 1) {
+            await startWorkerWithRetry(ses, scopes.slice(1), attemptsLeft)
+            return
+        }
+        if (attemptsLeft <= 1) throw error
+        await new Promise((resolve) => setTimeout(resolve, 400))
+        await startWorkerWithRetry(ses, scopes, attemptsLeft - 1)
+    }
+}
+
+const startMv3Workers = async (ses: Session, attempts = 3): Promise<void> => {
+    const extensionsApi = ses.extensions
+    if (!extensionsApi) return
+    const startOne = async (extensionId: string, scopes: readonly string[]): Promise<void> => {
+        try {
+            await startWorkerWithRetry(ses, scopes, attempts)
+            console.debug(`[arbor] MV3 worker started for ${extensionId}`)
+        } catch (error) {
+            console.error(`Failed to start worker for extension ${extensionId}:`, error)
+        }
+    }
+    const tasks = extensionsApi.getAllExtensions().flatMap((extension) => {
+        if (extension.manifest.manifest_version !== 3) return []
+        const background: unknown = extension.manifest.background
+        if (typeof background !== "object" || background === null) return []
+        if (!("service_worker" in background)) return []
+        const worker: unknown = background.service_worker
+        if (typeof worker !== "string" || worker.length === 0) return []
+        // electron-chrome-web-store uses no trailing slash; the event bus uses one.
+        const scopes = [`chrome-extension://${extension.id}/`, `chrome-extension://${extension.id}`]
+        return [startOne(extension.id, scopes)]
+    })
+    await Promise.all(tasks)
+}
+
 const loadExtensionSources = async (ses: Session): Promise<void> => {
     // Web Store installs; update checks run per session over the shared store dir.
     try {
@@ -76,6 +126,9 @@ const loadExtensionSources = async (ses: Session): Promise<void> => {
         console.error("Failed to install Chrome Web Store support:", error)
     }
     if (!app.isPackaged) await loadUnpackedExtensions(ses)
+    // Give Electron a beat to finish registering MV3 backgrounds after loadExtension.
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    await startMv3Workers(ses)
 }
 
 /** One ElectronChromeExtensions instance per session, created lazily. */
@@ -99,11 +152,21 @@ export const setupSessionExtensions = (ses: Session, loadSources = true): void =
         // chrome.tabs.create: a new active tab in the active container.
         createTab: async (details) => {
             const url = details.url ?? extensions.getURLOverrides().newtab
-            const tabId = await Effect.runPromise(d.store.createTab(url))
-            const win = d.getWindow()
-            const view = win ? d.viewForTab(tabId) : undefined
-            if (!win || !view) throw new Error(`No view created for tab: ${tabId}`)
-            return [view.webContents, win]
+            try {
+                const tabId = await Effect.runPromise(d.store.createTab(url))
+                const win = d.getWindow()
+                let view = win ? d.viewForTab(tabId) : undefined
+                // onCommit creates the active tab's view; if the commit path was skipped
+                // (e.g. popup opened a tab before the window was attached), force it.
+                if (win && !view) view = d.ensureView(tabId, url)
+                if (!win || !view) {
+                    throw new Error(`No view created for tab: ${tabId}`)
+                }
+                return [view.webContents, win]
+            } catch (error) {
+                console.error(`[arbor] extension tabs.create failed url=${url}:`, error)
+                throw error
+            }
         },
         // chrome.tabs.update({ active: true }).
         selectTab: (tab) => {
@@ -123,13 +186,21 @@ export const setupSessionExtensions = (ses: Session, loadSources = true): void =
             if (!win) throw new Error("No browser window available")
             return win
         },
+        // chrome.permissions.request: auto-grant (no consent dialog in v1).
+        requestPermissions: async (_extension, permissions) => {
+            console.debug("[arbor] auto-grant extension permissions:", permissions)
+            return true
+        },
     })
 
     // Re-anchor action popups (chrome.action popups) above the toolbar button
-    // and give them a readable minimum size.
-    extensions.on("browser-action-popup-created", (...args: unknown[]) => {
-        const popup = args[0]
-        if (isExtensionPopupView(popup)) attachExtensionPopupPositioning(popup)
+    // and give them a readable minimum size. window.open fallback creates a tab.
+    extensions.on("browser-action-popup-created", (...popupEvent: unknown[]) => {
+        const popup = popupEvent[0]
+        if (!isExtensionPopupView(popup)) return
+        attachExtensionPopupPositioning(popup, (url) => {
+            void runQuiet(d.store.createTab(url))
+        })
     })
 
     // Stubs for chrome.* events the library lacks
