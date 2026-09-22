@@ -167,41 +167,31 @@ const EXTENSION_POPUP_GAP = 5
 export interface ExtensionPopupView {
     parent?: Electron.BaseWindow
     browserWindow?: Electron.BrowserWindow
-    setSize: (rect: { width: number; height: number }) => void
-    updatePosition: () => void
 }
 
 export const isExtensionPopupView = (value: unknown): value is ExtensionPopupView =>
-    typeof value === "object" &&
-    value !== null &&
-    "browserWindow" in value &&
-    "setSize" in value &&
-    "updatePosition" in value
+    typeof value === "object" && value !== null && "browserWindow" in value && "parent" in value
 
 /**
  * Re-anchor action popups above the toolbar button
  * and enforce a readable minimum size.
  */
 export const attachExtensionPopupPositioning = (view: ExtensionPopupView): void => {
-    const origSetSize = view.setSize.bind(view)
-    view.setSize = (rect: { width: number; height: number }): void => {
-        origSetSize({
-            width: Math.max(rect.width, EXTENSION_POPUP_MIN_WIDTH),
-            height: Math.max(rect.height, EXTENSION_POPUP_MIN_HEIGHT),
-        })
-    }
-    view.updatePosition = (): void => {
-        const popupWin = view.browserWindow
-        const win = view.parent
-        if (!popupWin || popupWin.isDestroyed() || !win || win.isDestroyed() || !extensionsAnchor)
-            return
-        const content = win.getContentBounds()
-        const size = popupWin.getBounds()
-        popupWin.setBounds({
-            ...size,
-            x: Math.round(content.x + extensionsAnchor.x + extensionsAnchor.width - size.width),
-            y: Math.round(content.y + extensionsAnchor.y - size.height - EXTENSION_POPUP_GAP),
-        })
+    const popupWin = view.browserWindow
+    if (!popupWin || popupWin.isDestroyed()) return
+    const origSetBounds = popupWin.setBounds.bind(popupWin)
+    popupWin.setBounds = (rect: Electron.Rectangle): void => {
+        const width = Math.max(rect.width, EXTENSION_POPUP_MIN_WIDTH)
+        const height = Math.max(rect.height, EXTENSION_POPUP_MIN_HEIGHT)
+        let x = rect.x
+        let y = rect.y
+        const parentWin = view.parent
+        if (extensionsAnchor && parentWin && !parentWin.isDestroyed()) {
+            const content = parentWin.getContentBounds()
+            x = Math.round(content.x + extensionsAnchor.x + extensionsAnchor.width - width)
+            y = Math.round(content.y + extensionsAnchor.y - height - EXTENSION_POPUP_GAP)
+        }
+        origSetBounds({ x, y, width, height })
     }
 }
 
