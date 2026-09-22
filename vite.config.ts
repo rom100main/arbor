@@ -20,6 +20,20 @@ const iconsPlugin: Plugin = {
     },
 }
 
+// electron-chrome-extensions hardcodes roundedCorners:
+// false for action popup windows;
+// the option is creation-only,
+// so patch it during the main process build instead.
+const roundedCrxPopups: Plugin = {
+    name: "arbor-crx-rounded-popups",
+    transform(code, id) {
+        if (id.includes("electron-chrome-extensions") && code.includes("roundedCorners: false")) {
+            return code.replaceAll("roundedCorners: false", "roundedCorners: true")
+        }
+        return null
+    },
+}
+
 export default defineConfig({
     base: "./",
     build: {
@@ -38,7 +52,10 @@ export default defineConfig({
                 // (extension SW preloads, MV3 shim) under that flag.
                 onstart: ({ startup }) => void startup(["."]),
                 entry: "src/main/index.ts",
-                vite: { build: { outDir: "dist/electron/main", emptyOutDir: true } },
+                vite: {
+                    build: { outDir: "dist/electron/main", emptyOutDir: true },
+                    plugins: [roundedCrxPopups],
+                },
             },
             preload: {
                 input: ["src/preload/index.ts", "src/preload/extension-shim.ts"],
