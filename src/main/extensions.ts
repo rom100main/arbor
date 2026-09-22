@@ -138,8 +138,8 @@ export const setupSessionExtensions = (ses: Session, loadSources = true): void =
     configured.add(ses)
     const d = deps
 
-    // Extensions gate on the UA (Proton Pass: /electron/i) and refuse to work
-    // under Electron; match electron-browser-shell's Chrome-like UA.
+    // Extensions gate on the User Agent refuse to work under Electron;
+    // match electron-browser-shell's Chrome-like UA.
     const userAgent = ses
         .getUserAgent()
         .replace(/\sElectron\/\S+/, "")
