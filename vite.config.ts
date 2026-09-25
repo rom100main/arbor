@@ -58,7 +58,11 @@ export default defineConfig({
                 },
             },
             preload: {
-                input: ["src/preload/index.ts", "src/preload/extension-shim.ts"],
+                input: [
+                    "src/preload/index.ts",
+                    "src/preload/extension-shim.ts",
+                    "src/preload/extension-storage-shim.ts",
+                ],
                 vite: {
                     build: {
                         outDir: "dist/electron/preload",
