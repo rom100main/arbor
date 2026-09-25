@@ -1,6 +1,9 @@
+import path from "node:path"
+
 import { Effect } from "effect"
 import { BrowserWindow, app } from "electron"
 
+import { createExtensionStorage, registerExtensionStorageIpc } from "./extension-storage"
 import { initExtensions } from "./extensions"
 import {
     makeOmniboxActivator,
@@ -9,7 +12,8 @@ import {
     type HostRuntime,
 } from "./ipc/events"
 import { registerIpc } from "./ipc/handlers"
-import { initialState } from "./state/state"
+import { createStatePersistence, type StatePersistence } from "./persistence"
+import { initialState, type DomainState } from "./state/state"
 import { BrowserStore, makeStoreLayer } from "./state/store"
 import { installMenu } from "./windows/app-menu"
 import { attachWindowEvents, createWindow } from "./windows/main-window"
@@ -52,23 +56,47 @@ const filterBenignExtensionLoadWarnings = (): void => {
     }
 }
 
+let statePersistence: StatePersistence | null = null
+let extensionStorageFlush: (() => void) | null = null
+
+const flushPersistence = (): void => {
+    statePersistence?.flush()
+    extensionStorageFlush?.()
+}
+
 const start = async (): Promise<void> => {
     filterBenignExtensionLoadWarnings()
     await app.whenReady()
 
+    const userData = app.getPath("userData")
+    const persistence = createStatePersistence(path.join(userData, "state.json"))
+    statePersistence = persistence
+    const initial: DomainState = persistence.load() ?? initialState()
+
+    const extStorage = createExtensionStorage(path.join(userData, "extension-storage.json"))
+    extStorage.load()
+    extensionStorageFlush = () => extStorage.flush()
+    registerExtensionStorageIpc(extStorage)
+
     const rt: HostRuntime = {
         win: null,
         store: null,
-        latest: initialState(),
+        latest: initial,
         previousActiveTab: null,
         lastOmniboxQuery: "",
         rebuildMenu: () => undefined,
     }
 
+    const commit = makeOnCommit(rt)
+    const onCommit = (next: DomainState): void => {
+        commit(next)
+        persistence.schedule(next)
+    }
+
     rt.store = Effect.runSync(
         Effect.gen(function* () {
             return yield* BrowserStore
-        }).pipe(Effect.provide(makeStoreLayer(makeOnCommit(rt)))),
+        }).pipe(Effect.provide(makeStoreLayer(initial, onCommit))),
     )
     const store = rt.store
 
@@ -96,8 +124,13 @@ const start = async (): Promise<void> => {
     const handleOmniboxActivate = makeOmniboxActivator(rt)
     registerOverlayEvents(rt, handleOmniboxActivate)
 
-    // The app always starts with one container holding one empty tab.
-    await Effect.runPromise(store.createContainer())
+    if (initial.containers.length > 0) {
+        // Restored: attach the active tab's view and push state to the window.
+        onCommit(initial)
+    } else {
+        // The app always starts with one container holding one empty tab.
+        await Effect.runPromise(store.createContainer())
+    }
 }
 
 void start()
@@ -106,6 +139,12 @@ app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) void start()
 })
 
+// before-quit covers Cmd+Q and app.quit();
+// window-all-closed covers macOS re-activate
+// (start() reloads from disk, so pending state must be flushed first).
+app.on("before-quit", flushPersistence)
+
 app.on("window-all-closed", () => {
+    flushPersistence()
     if (process.platform !== "darwin") app.quit()
 })

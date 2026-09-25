@@ -10,6 +10,7 @@ import {
     applyExtStorageOp,
     emptyExtStorageAreas,
     fromPersistedExtStorage,
+    parseExtStorageOp,
     toPersistedExtStorage,
     type ExtStorageAreas,
     type ExtStorageOp,
@@ -118,14 +119,12 @@ export const createExtensionStorage = (
     }
 }
 
-const isExtStorageOp = (value: unknown): value is ExtStorageOp =>
-    typeof value === "object" && value !== null && "op" in value
-
 const dispatch = (event: StorageInvokeEvent, op: unknown): unknown => {
     const service = currentService
     if (!service) throw new Error("arbor:ext-storage is not ready")
-    if (!isExtStorageOp(op)) throw new Error("Invalid arbor:ext-storage request")
-    return service.handle(event, op)
+    const decoded = parseExtStorageOp(op)
+    if (!decoded) throw new Error("Invalid arbor:ext-storage request")
+    return service.handle(event, decoded)
 }
 
 /** Frame path: extension pages / popups use ipcRenderer → ipcMain. */

@@ -11,7 +11,7 @@ import {
     switchContainer,
 } from "./containers"
 import { moveTab, moveToContainer, type MoveTabOptions } from "./moves"
-import { initialState, snapshot, type DomainState } from "./state"
+import { snapshot, type DomainState } from "./state"
 import { createChildTab, createTab, renameTab, selectTab, setCollapsed } from "./tabs"
 
 export class DomainError extends Data.TaggedError("DomainError")<{ message: string }> {}
@@ -59,11 +59,14 @@ export interface StoreService {
 
 export class BrowserStore extends Context.Tag("arbor.BrowserStore")<BrowserStore, StoreService>() {}
 
-export const makeStoreLayer = (onCommit: (state: DomainState) => void): Layer.Layer<BrowserStore> =>
+export const makeStoreLayer = (
+    initial: DomainState,
+    onCommit: (state: DomainState) => void,
+): Layer.Layer<BrowserStore> =>
     Layer.effect(
         BrowserStore,
         Effect.gen(function* () {
-            const ref = yield* Ref.make(initialState())
+            const ref = yield* Ref.make(initial)
 
             const run = <A>(
                 op: (state: DomainState) => DomainState,

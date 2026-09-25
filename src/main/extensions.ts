@@ -6,9 +6,10 @@ import { app, session, type Session, type WebContents } from "electron"
 import { ElectronChromeExtensions } from "electron-chrome-extensions"
 import { installChromeWebStore } from "electron-chrome-web-store"
 
+import { bindExtensionStorageToSession } from "./extension-storage"
 import type { StoreService } from "./state/store"
 import { attachExtensionPopupPositioning, isExtensionPopupView } from "./windows/overlays"
-import { extensionShimPath } from "./windows/paths"
+import { extensionShimPath, extensionStorageShimPath } from "./windows/paths"
 
 /** Bridge between the domain store/views and the per-container extension systems. */
 interface ExtensionDeps {
@@ -216,6 +217,22 @@ export const setupSessionExtensions = (ses: Session, loadSources = true): void =
         type: "service-worker",
         filePath: extensionShimPath,
     })
+
+    // Shared chrome.storage between container
+    // (Firefox-style: containers isolate web storage, not extensions).
+    // After both crx + shim so it owns the final `chrome.storage` binding.
+    ses.registerPreloadScript({
+        id: "arbor-ext-storage-frame",
+        type: "frame",
+        filePath: extensionStorageShimPath,
+    })
+    ses.registerPreloadScript({
+        id: "arbor-ext-storage-service-worker",
+        type: "service-worker",
+        filePath: extensionStorageShimPath,
+    })
+    // SW ipcRenderer.invoke rides ServiceWorkerMain.ipc, not ipcMain.
+    bindExtensionStorageToSession(ses)
 
     if (loadSources) void loadExtensionSources(ses)
 }

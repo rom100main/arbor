@@ -17,6 +17,7 @@ const toPromise = async <A>(effect: Effect.Effect<A, DomainError>): Promise<A> =
 type Handler = (event: Electron.IpcMainInvokeEvent, ...args: any[]) => unknown
 
 const handle = (channel: string, handler: Handler): void => {
+    ipcMain.removeHandler(channel)
     ipcMain.handle(channel, async (event, ...args) => handler(event, ...args))
 }
 
