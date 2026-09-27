@@ -5,7 +5,9 @@ import type {
     BrowserSnapshot,
     ContainerIcon,
     ContainerId,
+    ExtensionMenuRequest,
     OmniboxActivation,
+    PermissionPromptRequest,
     RenameTarget,
     TabId,
 } from "../shared/protocol"
@@ -111,6 +113,26 @@ const api = {
     extensionsClose: (): void => ipcRenderer.send("arbor:extensions:close"),
     extensionsSetPopupHeight: (height: number): void =>
         ipcRenderer.send("arbor:extensions:popup-height", height),
+    extensionsMenu: (payload: ExtensionMenuRequest): void =>
+        ipcRenderer.send("arbor:extensions:menu", payload),
+    extensionsAnchor: (payload: {
+        extensionId: string
+        rect: { x: number; y: number; width: number; height: number }
+    }): Promise<void> => ipcRenderer.invoke("arbor:extensions:anchor", payload),
+    onPermissionRequest: (
+        callback: (request: PermissionPromptRequest | null) => void,
+    ): (() => void) => {
+        const listener = (
+            _event: IpcRendererEvent,
+            request: PermissionPromptRequest | null,
+        ): void => callback(request)
+        ipcRenderer.on("arbor:permission:request", listener)
+        return () => {
+            ipcRenderer.removeListener("arbor:permission:request", listener)
+        }
+    },
+    permissionRespond: (allowed: boolean): void =>
+        ipcRenderer.send("arbor:permission:respond", allowed),
     onRenameTarget: (callback: (target: RenameTarget) => void): (() => void) => {
         const listener = (_event: IpcRendererEvent, target: RenameTarget): void => callback(target)
         ipcRenderer.on("arbor:rename:target", listener)
