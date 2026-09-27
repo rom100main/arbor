@@ -18,15 +18,14 @@
     --browser-action-hover-bg: var(--color-hover);
 
     display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
+    flex-flow: row wrap;
     gap: 4px;
     align-items: center;
 }
 
 .extensions-empty {
     padding: 6px 8px;
-    color: var(--color-text-muted);
     font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
     white-space: nowrap;
 }
