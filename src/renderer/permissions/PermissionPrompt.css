@@ -1,0 +1,117 @@
+.permission-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-overlay);
+}
+
+.permission-popup {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 320px;
+    max-height: 70vh;
+    padding: 14px;
+    overflow: auto;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-modal);
+}
+
+.permission-header {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.permission-icon {
+    flex: none;
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+    border-radius: var(--radius-md);
+
+    &.fallback {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: var(--font-size-body);
+        font-weight: 600;
+        color: var(--color-text-muted);
+        background: var(--color-hover);
+    }
+}
+
+.permission-heading {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.permission-title {
+    font-size: var(--font-size-body);
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.permission-summary {
+    font-size: var(--font-size-md);
+    color: var(--color-text-faint);
+}
+
+.permission-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.permission-label {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-faint);
+}
+
+.permission-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 140px;
+    padding: 6px 8px;
+    margin: 0;
+    overflow: auto;
+    font-size: var(--font-size-md);
+    color: var(--color-text-muted);
+    list-style: none;
+    background: var(--color-sidebar-bg);
+    border: 1px solid var(--color-border-soft);
+    border-radius: var(--radius-md);
+
+    li {
+        overflow-wrap: anywhere;
+    }
+}
+
+.permission-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+
+    button {
+        padding: 4px 10px;
+        font-size: var(--font-size-md);
+        cursor: pointer;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+
+        &.primary {
+            color: var(--color-accent-contrast);
+            background: var(--color-accent);
+            border-color: var(--color-accent);
+        }
+    }
+}
