@@ -4,6 +4,7 @@ import { ipcMain } from "electron"
 import type { ContainerIcon, ContainerId, TabId } from "../../shared/protocol"
 import { omniboxTarget } from "../../shared/url"
 import type { DomainError, StoreService } from "../state/store"
+import { setExtensionAnchor } from "../windows/overlays"
 import { viewForTab } from "../windows/tab-views"
 
 const toPromise = async <A>(effect: Effect.Effect<A, DomainError>): Promise<A> => {
@@ -77,4 +78,16 @@ export const registerIpc = (store: StoreService): void => {
         viewForTab(tabId)?.webContents.goForward(),
     )
     handle("arbor:tab:reload", (_event, tabId: TabId) => viewForTab(tabId)?.webContents.reload())
+
+    // Where a pinned toolbar icon sits, so its action popup opens above it.
+    handle(
+        "arbor:extensions:anchor",
+        (
+            _event,
+            payload: {
+                extensionId: string
+                rect: { x: number; y: number; width: number; height: number }
+            },
+        ) => setExtensionAnchor(payload.extensionId, payload.rect),
+    )
 }
