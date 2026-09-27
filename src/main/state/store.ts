@@ -1,6 +1,12 @@
 import { Context, Data, Effect, Layer, Ref } from "effect"
 
-import type { BrowserSnapshot, ContainerIcon, ContainerId, TabId } from "../../shared/protocol"
+import type {
+    BrowserSnapshot,
+    ContainerIcon,
+    ContainerId,
+    ExtensionGrant,
+    TabId,
+} from "../../shared/protocol"
 import { closeTab, reopenTab } from "./close-reopen"
 import {
     createContainer,
@@ -10,6 +16,12 @@ import {
     setContainerIcon,
     switchContainer,
 } from "./containers"
+import {
+    clearExtensionConsent,
+    pinExtension,
+    setExtensionConsent,
+    unpinExtension,
+} from "./extension-state"
 import { moveTab, moveToContainer, type MoveTabOptions } from "./moves"
 import { snapshot, type DomainState } from "./state"
 import { createChildTab, createTab, renameTab, selectTab, setCollapsed } from "./tabs"
@@ -55,6 +67,15 @@ export interface StoreService {
         tabId: TabId,
         meta: { title?: string; url?: string; favicon?: string | null },
     ) => Effect.Effect<void>
+    readonly pinExtension: (extensionId: string) => Effect.Effect<void, DomainError>
+    readonly unpinExtension: (extensionId: string) => Effect.Effect<void, DomainError>
+    readonly setExtensionConsent: (
+        extensionId: string,
+        grant: ExtensionGrant,
+    ) => Effect.Effect<void, DomainError>
+    readonly clearExtensionConsent: (extensionId: string) => Effect.Effect<void, DomainError>
+    /** Consent ledger (install consent + runtime grants); deliberately not in the snapshot. */
+    readonly extensionConsent: Effect.Effect<Record<string, ExtensionGrant>>
 }
 
 export class BrowserStore extends Context.Tag("arbor.BrowserStore")<BrowserStore, StoreService>() {}
@@ -139,6 +160,14 @@ export const makeStoreLayer = (
                         yield* Ref.set(ref, next)
                         onCommit(next)
                     }),
+                pinExtension: (extensionId) => runVoid((state) => pinExtension(state, extensionId)),
+                unpinExtension: (extensionId) =>
+                    runVoid((state) => unpinExtension(state, extensionId)),
+                setExtensionConsent: (extensionId, grant) =>
+                    runVoid((state) => setExtensionConsent(state, extensionId, grant)),
+                clearExtensionConsent: (extensionId) =>
+                    runVoid((state) => clearExtensionConsent(state, extensionId)),
+                extensionConsent: Effect.map(Ref.get(ref), (state) => state.extensionConsent),
             }
 
             return service
