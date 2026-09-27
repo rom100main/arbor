@@ -3,6 +3,7 @@ import type {
     ClosedSubtree,
     ContainerId,
     ContainerMeta,
+    ExtensionGrant,
     TabId,
     TabNode,
 } from "../../shared/protocol"
@@ -12,6 +13,14 @@ export interface DomainState {
     tabs: Map<TabId, TabNode>
     closeHistory: ClosedSubtree[]
     activeContainerId: ContainerId | null
+    /** Extensions whose toolbar button lives between the URL input and the puzzle button. */
+    pinnedExtensionIds: string[]
+    /**
+     * Per-extension consent ledger: install consent plus runtime-granted permissions.
+     * Presence of a key means the user accepted that scope; not part of the snapshot.
+     * Keyed by extension id (unpacked dev installs also key on their source path).
+     */
+    extensionConsent: Record<string, ExtensionGrant>
 }
 
 export class DomainError extends Error {}
@@ -21,6 +30,8 @@ export const initialState = (): DomainState => ({
     tabs: new Map(),
     closeHistory: [],
     activeContainerId: null,
+    pinnedExtensionIds: [],
+    extensionConsent: {},
 })
 
 // --- shared helpers
@@ -94,5 +105,6 @@ export const snapshot = (state: DomainState): BrowserSnapshot => {
         tabs: [...state.tabs.values()],
         activeContainerId: state.activeContainerId,
         activeTabId: active?.activeTabId ?? null,
+        pinnedExtensionIds: [...state.pinnedExtensionIds],
     }
 }

@@ -6,6 +6,7 @@ import {
     type ContainerIcon,
     type ContainerId,
     type ContainerMeta,
+    type ExtensionGrant,
     type TabId,
     type TabNode,
 } from "../../shared/protocol"
@@ -19,13 +20,27 @@ export interface PersistedState {
     containers: ContainerMeta[]
     tabs: TabNode[]
     activeContainerId: ContainerId | null
+    pinnedExtensionIds: string[]
+    extensionConsent: Record<string, ExtensionGrant>
 }
+
+const cloneGrant = (grant: {
+    readonly permissions: readonly string[]
+    readonly origins: readonly string[]
+}): ExtensionGrant => ({
+    permissions: [...grant.permissions],
+    origins: [...grant.origins],
+})
 
 export const toPersisted = (state: DomainState): PersistedState => ({
     version: PERSIST_VERSION,
     containers: state.containers.map((c) => ({ ...c })),
     tabs: [...state.tabs.values()].map((t) => ({ ...t })),
     activeContainerId: state.activeContainerId,
+    pinnedExtensionIds: [...state.pinnedExtensionIds],
+    extensionConsent: Object.fromEntries(
+        Object.entries(state.extensionConsent).map(([id, grant]) => [id, cloneGrant(grant)]),
+    ),
 })
 
 const ContainerIconSchema = Schema.Literal(...CONTAINER_ICONS)
@@ -51,15 +66,26 @@ const TabNodeSchema = Schema.Struct({
     lastActiveAt: orDefault(Schema.JsonNumber, () => 0),
 })
 
+const ExtensionGrantSchema = Schema.Struct({
+    permissions: orDefault(Schema.Array(Schema.String), () => [] as string[]),
+    origins: orDefault(Schema.Array(Schema.String), () => [] as string[]),
+})
+
 const PersistedStateSchema = Schema.Struct({
     version: Schema.Literal(PERSIST_VERSION),
     containers: Schema.Array(Schema.Unknown),
     tabs: Schema.Array(Schema.Unknown),
     activeContainerId: orDefault(Schema.NullOr(Schema.String), () => null),
+    pinnedExtensionIds: orDefault(Schema.Array(Schema.String), () => [] as string[]),
+    extensionConsent: orDefault(
+        Schema.Record({ key: Schema.String, value: Schema.Unknown }),
+        (): Record<string, unknown> => ({}),
+    ),
 })
 
 const parseContainer = decodeOr(ContainerMetaSchema)
 const parseTab = decodeOr(TabNodeSchema)
+const parseGrant = decodeOr(ExtensionGrantSchema)
 const parsePayload = decodeOr(PersistedStateSchema)
 
 /**
@@ -156,10 +182,22 @@ export const fromPersisted = (data: unknown): DomainState | null => {
             ? rawActive
             : liveContainers[0].id
 
+    const pinnedExtensionIds = [...new Set(payload.pinnedExtensionIds)].filter(
+        (id) => id.length > 0,
+    )
+    const extensionConsent: Record<string, ExtensionGrant> = {}
+    for (const [id, raw] of Object.entries(payload.extensionConsent)) {
+        const grant = parseGrant(raw)
+        if (!grant || id.length === 0) continue
+        extensionConsent[id] = cloneGrant(grant)
+    }
+
     return {
         containers: liveContainers,
         tabs: reindexed,
         closeHistory: [],
         activeContainerId,
+        pinnedExtensionIds,
+        extensionConsent,
     }
 }
