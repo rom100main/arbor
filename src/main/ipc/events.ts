@@ -1,9 +1,15 @@
 import { Effect } from "effect"
 import { BrowserWindow, ipcMain } from "electron"
 
-import type { BrowserSnapshot, OmniboxActivation, RenameTarget, TabId } from "../../shared/protocol"
+import type {
+    BrowserSnapshot,
+    ExtensionMenuRequest,
+    OmniboxActivation,
+    RenameTarget,
+    TabId,
+} from "../../shared/protocol"
 import { omniboxTarget } from "../../shared/url"
-import { attachExtensionTab } from "../extensions"
+import { attachExtensionTab, openExtensionMenu } from "../extensions"
 import { snapshot as toSnapshot, type DomainState } from "../state/state"
 import type { StoreService } from "../state/store"
 import {
@@ -12,6 +18,7 @@ import {
     hideOmniboxPopup,
     openRenameModal,
     popupWebContents,
+    respondPermissionPrompt,
     setExtensionsPopupHeight,
     setOmniboxPopupHeight,
     showOmniboxPopup,
@@ -147,5 +154,11 @@ export const registerOverlayEvents = (
     ipcMain.on("arbor:extensions:close", () => hideExtensionsPopup())
     ipcMain.on("arbor:extensions:popup-height", (_event, height: number) => {
         if (rt.win) setExtensionsPopupHeight(rt.win, height)
+    })
+    ipcMain.on("arbor:extensions:menu", (_event, payload: ExtensionMenuRequest) => {
+        void openExtensionMenu(payload)
+    })
+    ipcMain.on("arbor:permission:respond", (_event, allowed: boolean) => {
+        respondPermissionPrompt(allowed)
     })
 }
