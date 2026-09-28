@@ -11,6 +11,7 @@ import {
     emptyExtStorageAreas,
     fromPersistedExtStorage,
     parseExtStorageOp,
+    purgeExtStorage,
     toPersistedExtStorage,
     type ExtStorageAreas,
     type ExtStorageOp,
@@ -30,6 +31,8 @@ export interface ExtensionStorageService {
     readonly handle: (event: StorageInvokeEvent, op: ExtStorageOp) => unknown
     /** Hydrate from disk (call once before the first extension session loads). */
     readonly load: () => void
+    /** Drop an extension's areas (uninstall teardown). */
+    readonly purge: (extensionId: string) => void
     /** Synchronously persist pending local-area writes (quit path). */
     readonly flush: () => void
 }
@@ -77,11 +80,11 @@ export const createExtensionStorage = (
     filePath: string,
     options: ExtensionStorageOptions = {},
 ): ExtensionStorageService => {
-    const extensions = new Map<string, ExtStorageAreas>()
+    let extensions: Record<string, ExtStorageAreas> = {}
     const saver: DebouncedSaver = createDebouncedSaver({
         write: () => {
             try {
-                writeJsonFileAtomic(filePath, toPersistedExtStorage(Object.fromEntries(extensions)))
+                writeJsonFileAtomic(filePath, toPersistedExtStorage(extensions))
             } catch (error) {
                 console.error("[arbor] failed to save extension storage:", error)
             }
@@ -92,11 +95,8 @@ export const createExtensionStorage = (
     })
 
     const areasFor = (extensionId: string): ExtStorageAreas => {
-        let areas = extensions.get(extensionId)
-        if (!areas) {
-            areas = emptyExtStorageAreas()
-            extensions.set(extensionId, areas)
-        }
+        const areas = extensions[extensionId] ?? emptyExtStorageAreas()
+        extensions[extensionId] = areas
         return areas
     }
 
@@ -104,16 +104,21 @@ export const createExtensionStorage = (
         load: () => {
             const restored = fromPersistedExtStorage(readJsonFile(filePath))
             if (!restored) return
-            for (const [id, areas] of Object.entries(restored)) extensions.set(id, areas)
+            for (const [id, areas] of Object.entries(restored)) extensions[id] = areas
         },
         handle: (event, op) => {
             const extensionId = extensionIdOf(event)
             if (!extensionId) throw new Error("arbor:ext-storage requires an extension sender")
             const { areas, result } = applyExtStorageOp(areasFor(extensionId), op)
-            extensions.set(extensionId, areas)
+            extensions[extensionId] = areas
             // `session` is memory-only; only durable areas touch disk.
             if (op.op !== "get" && op.op !== "getBytesInUse") saver.schedule()
             return result
+        },
+        purge: (extensionId) => {
+            const before = extensions
+            extensions = purgeExtStorage(extensions, extensionId)
+            if (extensions !== before) saver.schedule()
         },
         flush: () => saver.flush(),
     }
@@ -125,6 +130,11 @@ const dispatch = (event: StorageInvokeEvent, op: unknown): unknown => {
     const decoded = parseExtStorageOp(op)
     if (!decoded) throw new Error("Invalid arbor:ext-storage request")
     return service.handle(event, decoded)
+}
+
+/** Uninstall teardown: forget the extension's `chrome.storage` areas. */
+export const purgeExtensionStorage = (extensionId: string): void => {
+    currentService?.purge(extensionId)
 }
 
 /** Frame path: extension pages / popups use ipcRenderer → ipcMain. */
