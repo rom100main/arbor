@@ -1,6 +1,6 @@
 import { BrowserWindow, type BrowserWindow as ParentWindow } from "electron"
 
-import type { RenameTarget } from "../../shared/protocol"
+import type { PermissionPromptRequest, RenameTarget } from "../../shared/protocol"
 import { loadRenderer, preloadPath } from "./paths"
 
 // --- omnibox popup
@@ -163,10 +163,21 @@ const EXTENSION_POPUP_MIN_WIDTH = 360
 const EXTENSION_POPUP_MIN_HEIGHT = 480
 const EXTENSION_POPUP_GAP = 5
 
+/** Toolbar anchor for a pinned extension's action popup, in window content coords. */
+type ExtensionAnchor = { x: number; y: number; width: number; height: number }
+
+const extensionAnchors = new Map<string, ExtensionAnchor>()
+
+/** Remember where a pinned toolbar icon sits so its action popup opens above it. */
+export const setExtensionAnchor = (extensionId: string, rect: ExtensionAnchor): void => {
+    extensionAnchors.set(extensionId, rect)
+}
+
 /** Shape of electron-chrome-extensions' PopupView used for re-anchoring. */
 export interface ExtensionPopupView {
     parent?: Electron.BaseWindow
     browserWindow?: Electron.BrowserWindow
+    extensionId?: string
 }
 
 export const isExtensionPopupView = (value: unknown): value is ExtensionPopupView =>
@@ -191,10 +202,14 @@ export const attachExtensionPopupPositioning = (
         let x = rect.x
         let y = rect.y
         const parentWin = view.parent
-        if (extensionsAnchor && parentWin && !parentWin.isDestroyed()) {
+        // Pinned toolbar icon when present, else the puzzle button that lists extensions.
+        const actionAnchor =
+            (view.extensionId ? extensionAnchors.get(view.extensionId) : undefined) ??
+            extensionsAnchor
+        if (actionAnchor && parentWin && !parentWin.isDestroyed()) {
             const content = parentWin.getContentBounds()
-            x = Math.round(content.x + extensionsAnchor.x + extensionsAnchor.width - width)
-            y = Math.round(content.y + extensionsAnchor.y - height - EXTENSION_POPUP_GAP)
+            x = Math.round(content.x + actionAnchor.x + actionAnchor.width - width)
+            y = Math.round(content.y + actionAnchor.y - height - EXTENSION_POPUP_GAP)
         }
         origSetBounds({ x, y, width, height })
     }
@@ -253,4 +268,87 @@ export const openRenameModal = (win: BrowserWindow, target: RenameTarget): void 
     })
     void loadRenderer(modal, "rename")
     modal.show()
+}
+
+// --- permission prompt modal (extension install / permissions.request)
+
+interface PendingPrompt {
+    request: PermissionPromptRequest
+    settle: (allowed: boolean) => void
+}
+
+let permissionModal: BrowserWindow | null = null
+let activePrompt: PendingPrompt | null = null
+let promptParent: BrowserWindow | null = null
+const promptQueue: PendingPrompt[] = []
+
+const showPrompt = (prompt: PendingPrompt): void => {
+    activePrompt = prompt
+    const win = promptParent && !promptParent.isDestroyed() ? promptParent : null
+    const bounds = win?.getContentBounds()
+    permissionModal = new BrowserWindow({
+        x: bounds?.x,
+        y: bounds?.y,
+        width: bounds?.width,
+        height: bounds?.height,
+        show: false,
+        frame: false,
+        transparent: true,
+        resizable: false,
+        movable: false,
+        minimizable: false,
+        maximizable: false,
+        fullscreenable: false,
+        skipTaskbar: true,
+        hasShadow: false,
+        ...(win ? { parent: win } : {}),
+        webPreferences: { preload: preloadPath },
+    })
+    permissionModal.on("closed", () => {
+        permissionModal = null
+        // Closing the dialog without answering is a refusal.
+        settlePrompt(false)
+    })
+    // The renderer registers its request listener during load; replay afterwards.
+    permissionModal.webContents.on("did-finish-load", () => {
+        permissionModal?.webContents.send("arbor:permission:request", activePrompt?.request ?? null)
+    })
+    void loadRenderer(permissionModal, "permission")
+    permissionModal.show()
+}
+
+const settlePrompt = (allowed: boolean): void => {
+    const prompt = activePrompt
+    if (!prompt) return
+    activePrompt = null
+    const promptWindow = permissionModal
+    permissionModal = null
+    if (promptWindow && !promptWindow.isDestroyed()) {
+        // Already closing (or about to): don't let "closed" settle the next answer.
+        promptWindow.removeAllListeners("closed")
+        promptWindow.destroy()
+    }
+    prompt.settle(allowed)
+    const next = promptQueue.shift()
+    if (next) showPrompt(next)
+}
+
+/** Resolves `true` on Allow, `false` on Deny or when the dialog is closed. One at a time. */
+export const openPermissionPrompt = (
+    win: ParentWindow | null,
+    request: PermissionPromptRequest,
+): Promise<boolean> =>
+    new Promise((resolve) => {
+        if (win && !win.isDestroyed()) promptParent = win
+        const prompt: PendingPrompt = { request, settle: resolve }
+        if (activePrompt) {
+            promptQueue.push(prompt)
+            return
+        }
+        showPrompt(prompt)
+    })
+
+/** Answer for the visible prompt (`arbor:permission:respond`). */
+export const respondPermissionPrompt = (allowed: boolean): void => {
+    settlePrompt(allowed)
 }
