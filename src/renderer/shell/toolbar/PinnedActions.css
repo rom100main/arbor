@@ -1,0 +1,50 @@
+.pinned-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.pinned-action {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+
+    &:hover {
+        background: var(--color-hover);
+    }
+}
+
+.pinned-action-icon {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+}
+
+.pinned-action-fallback {
+    font-size: var(--font-size-body);
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+
+.pinned-action-badge {
+    position: absolute;
+    right: 1px;
+    bottom: 1px;
+    max-width: 22px;
+    padding: 0 3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 9px;
+    line-height: 12px;
+    color: var(--color-accent-contrast);
+    white-space: nowrap;
+    border-radius: var(--radius-sm);
+}

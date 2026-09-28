@@ -5,6 +5,7 @@ import { Sidebar } from "./sidebar/Sidebar"
 import { initState, useSnapshot } from "./snapshot"
 import { NavButtons } from "./toolbar/NavButtons"
 import { OmniboxInput } from "./toolbar/OmniboxInput"
+import { PinnedActions } from "./toolbar/PinnedActions"
 
 import "./MainShell.css"
 
@@ -41,6 +42,7 @@ export const MainShell = () => {
             <footer class="toolbar">
                 <NavButtons tabId={activeTabId()} />
                 <OmniboxInput tabId={activeTabId()} url={activeTabUrl()} />
+                <PinnedActions />
                 <div class="extensions">
                     <button
                         type="button"
