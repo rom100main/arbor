@@ -33,11 +33,39 @@ export interface ClosedSubtree {
     containerMetaBefore: ContainerMeta | null
 }
 
+/** A permission scope the user has consented to for one extension. */
+export interface ExtensionGrant {
+    permissions: string[]
+    origins: string[]
+}
+
+export type PermissionPromptKind = "install" | "request"
+
+/** Payload for the Allow / Deny permission modal (`?permission` window). */
+export interface PermissionPromptRequest {
+    kind: PermissionPromptKind
+    id: string
+    name: string
+    permissions: string[]
+    origins: string[]
+    /** `NativeImage.toDataURL()` for install prompts; request prompts use crx:// icons. */
+    icon?: string | null
+}
+
+/** Right-click on an extension icon: open its native menu at the cursor. */
+export interface ExtensionMenuRequest {
+    extensionId: string
+    /** Screen coords (not viewport): what `Menu.popup` expects. */
+    screenX: number
+    screenY: number
+}
+
 export interface BrowserSnapshot {
     containers: ContainerMeta[]
     tabs: TabNode[]
     activeContainerId: ContainerId | null
     activeTabId: TabId | null
+    pinnedExtensionIds: string[]
 }
 
 export interface DisplayTab extends TabNode {

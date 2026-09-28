@@ -61,6 +61,20 @@ export interface ExtStorageAreas {
 
 export const emptyExtStorageAreas = (): ExtStorageAreas => ({ local: {}, session: {} })
 
+/**
+ * Drop one extension's areas entirely (uninstall teardown).
+ * Returns the same object when the id is unknown so callers can skip the write.
+ */
+export const purgeExtStorage = (
+    extensions: Record<string, ExtStorageAreas>,
+    extensionId: string,
+): Record<string, ExtStorageAreas> => {
+    if (!(extensionId in extensions)) return extensions
+    const next = { ...extensions }
+    delete next[extensionId]
+    return next
+}
+
 export const canonicalArea = (area: StorageAreaName): CanonicalArea =>
     area === "session" ? "session" : "local"
 
