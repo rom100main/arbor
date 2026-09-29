@@ -2,13 +2,29 @@ import { existsSync, readdirSync } from "node:fs"
 import path from "node:path"
 
 import { Effect } from "effect"
-import { app, session, type Session, type WebContents } from "electron"
+import { app, Menu, MenuItem, session, type Session, type WebContents } from "electron"
 import { ElectronChromeExtensions } from "electron-chrome-extensions"
-import { installChromeWebStore } from "electron-chrome-web-store"
+import { installChromeWebStore, uninstallExtension } from "electron-chrome-web-store"
 
-import { bindExtensionStorageToSession } from "./extension-storage"
+import type { ExtensionGrant, ExtensionMenuRequest } from "../shared/protocol"
+import { parseManifest, type ParsedManifest } from "./extension-manifest"
+import {
+    emptyGrant,
+    isRequestCovered,
+    manifestGranted,
+    mergeGrant,
+    optionalScope,
+    toPromptRequest,
+} from "./extension-permissions"
+import { bindExtensionStorageToSession, purgeExtensionStorage } from "./extension-storage"
+import { readJsonFile } from "./persistence"
 import type { StoreService } from "./state/store"
-import { attachExtensionPopupPositioning, isExtensionPopupView } from "./windows/overlays"
+import {
+    attachExtensionPopupPositioning,
+    hideExtensionsPopup,
+    isExtensionPopupView,
+    openPermissionPrompt,
+} from "./windows/overlays"
 import { extensionShimPath, extensionStorageShimPath } from "./windows/paths"
 
 /** Bridge between the domain store/views and the per-container extension systems. */
@@ -21,9 +37,12 @@ interface ExtensionDeps {
 }
 
 let deps: ExtensionDeps | null = null
-const configured = new WeakSet<Session>()
+const configured = new Set<Session>()
 
-const runQuiet = async (effect: Effect.Effect<void, unknown>): Promise<void> => {
+/** Every session extensions are wired into (default + one per container). */
+export const extensionSessions = (): Session[] => [...configured]
+
+const runQuiet = async (effect: Effect.Effect<unknown, unknown>): Promise<void> => {
     try {
         await Effect.runPromise(effect)
     } catch {
@@ -44,6 +63,83 @@ export const initExtensions = (d: ExtensionDeps): void => {
     setupSessionExtensions(session.defaultSession, false)
 }
 
+// --- consent (install + permissions.request)
+
+/** Unpacked installs are keyed by source path until `loadExtension` reveals their id. */
+const readUnpackedManifest = (extensionPath: string): ParsedManifest =>
+    parseManifest(readJsonFile(path.join(extensionPath, "manifest.json")))
+
+const consentFor = async (
+    keys: readonly (string | undefined)[],
+): Promise<Record<string, ExtensionGrant>> => {
+    const store = deps?.store
+    if (!store) return {}
+    try {
+        const ledger = await Effect.runPromise(store.extensionConsent)
+        return Object.fromEntries(
+            keys.flatMap((key) => (key && ledger[key] ? [[key, ledger[key]]] : [])),
+        )
+    } catch {
+        return {}
+    }
+}
+
+/** Manifest scope plus everything the user has accepted for this extension. */
+const grantedScope = async (extension: {
+    id: string
+    path?: string
+    manifest: ParsedManifest
+}): Promise<ExtensionGrant> => {
+    const held = await consentFor([extension.id, extension.path])
+    const fromLedger = mergeGrant(
+        held[extension.id] ?? emptyGrant(),
+        (extension.path ? held[extension.path] : undefined) ?? emptyGrant(),
+    )
+    return mergeGrant(manifestGranted(extension.manifest), fromLedger)
+}
+
+/**
+ * Dev-only install consent for an unpacked extension, keyed by its source path.
+ * Concurrent asks for the same path share one prompt (every container session loads these).
+ */
+const installPrompts = new Map<string, Promise<boolean>>()
+
+const ensureUnpackedConsent = (extensionPath: string): Promise<boolean> => {
+    const pending = installPrompts.get(extensionPath)
+    if (pending) return pending
+    const ask = (async (): Promise<boolean> => {
+        try {
+            return await askUnpackedConsent(extensionPath)
+        } finally {
+            installPrompts.delete(extensionPath)
+        }
+    })()
+    installPrompts.set(extensionPath, ask)
+    return ask
+}
+
+const askUnpackedConsent = async (extensionPath: string): Promise<boolean> => {
+    const d = deps
+    if (!d) return false
+    const manifest = readUnpackedManifest(extensionPath)
+    const scope = manifestGranted(manifest)
+    const held = await consentFor([extensionPath])
+    if (held[extensionPath]) return true
+    const allowed = await openPermissionPrompt(d.getWindow(), {
+        kind: "install",
+        id: extensionPath,
+        name: manifest.name || path.basename(extensionPath),
+        permissions: scope.permissions,
+        origins: scope.origins,
+        icon: null,
+    })
+    if (!allowed) return false
+    await runQuiet(d.store.setExtensionConsent(extensionPath, scope))
+    return true
+}
+
+// --- dev unpacked loader
+
 /** Dev-only auto-loader for unpacked extensions in ./extensions at the project root. */
 const unpackedExtensionsDir = (): string => {
     const candidates = [
@@ -62,6 +158,8 @@ const loadUnpackedExtensions = async (ses: Session): Promise<void> => {
     await Promise.all(
         manifestDirs.map(async (extensionPath) => {
             try {
+                // Consent before load: a denied extension never runs, not even its worker.
+                if (!(await ensureUnpackedConsent(extensionPath))) return
                 await ses.extensions.loadExtension(extensionPath, { allowFileAccess: true })
             } catch (error) {
                 console.error(`Failed to load extension ${path.basename(extensionPath)}:`, error)
@@ -122,7 +220,7 @@ const startMv3Workers = async (ses: Session, attempts = 3): Promise<void> => {
 const loadExtensionSources = async (ses: Session): Promise<void> => {
     // Web Store installs; update checks run per session over the shared store dir.
     try {
-        await installChromeWebStore({ session: ses })
+        await installChromeWebStore({ session: ses, beforeInstall: consentStoreInstall })
     } catch (error) {
         console.error("Failed to install Chrome Web Store support:", error)
     }
@@ -130,6 +228,38 @@ const loadExtensionSources = async (ses: Session): Promise<void> => {
     // Give Electron a beat to finish registering MV3 backgrounds after loadExtension.
     await new Promise((resolve) => setTimeout(resolve, 500))
     await startMv3Workers(ses)
+}
+
+/**
+ * Install consent for Web Store installs.
+ * Restored installs load without asking (Chrome parity: "already installed").
+ * `manifest` stays `unknown` because the package's `chrome.runtime.Manifest`
+ * type is not reachable from its public exports.
+ */
+interface StoreInstallDetails {
+    id: string
+    localizedName: string
+    manifest: unknown
+    icon?: { toDataURL?: () => string }
+}
+
+const consentStoreInstall = async (
+    details: StoreInstallDetails,
+): Promise<{ action: "allow" | "deny" }> => {
+    const d = deps
+    if (!d) return { action: "deny" }
+    const manifest = parseManifest(details.manifest)
+    const scope = manifestGranted(manifest)
+    const allowed = await openPermissionPrompt(d.getWindow(), {
+        kind: "install",
+        id: details.id,
+        name: details.localizedName || manifest.name || details.id,
+        permissions: scope.permissions,
+        origins: scope.origins,
+        icon: details.icon?.toDataURL?.() ?? null,
+    })
+    if (allowed) await runQuiet(d.store.setExtensionConsent(details.id, scope))
+    return { action: allowed ? "allow" : "deny" }
 }
 
 /** One ElectronChromeExtensions instance per session, created lazily. */
@@ -187,11 +317,9 @@ export const setupSessionExtensions = (ses: Session, loadSources = true): void =
             if (!win) throw new Error("No browser window available")
             return win
         },
-        // chrome.permissions.request: auto-grant (no consent dialog in v1).
-        requestPermissions: async (_extension, permissions) => {
-            console.debug("[arbor] auto-grant extension permissions:", permissions)
-            return true
-        },
+        // chrome.permissions.request: Allow / Deny over the consent ledger.
+        requestPermissions: async (extension, permissions) =>
+            requestExtensionPermissions(extension, permissions),
     })
 
     // Re-anchor action popups (chrome.action popups) above the toolbar button
@@ -243,4 +371,127 @@ export const attachExtensionTab = (win: Electron.BrowserWindow, wc: WebContents)
     if (!extensions) return
     extensions.addTab(wc, win)
     extensions.selectTab(wc)
+}
+
+// --- permissions.request
+
+/**
+ * Scopes the user already accepted (manifest + consent ledger) come back `true`
+ * without a prompt and the library applies the grant; anything else asks.
+ * Asks the manifest never declared throw, like Chrome.
+ */
+const requestExtensionPermissions = async (
+    extension: Electron.Extension,
+    request: { permissions?: string[]; origins?: string[] },
+): Promise<boolean> => {
+    const d = deps
+    if (!d) return false
+    const manifest = parseManifest(extension.manifest)
+    const held = await grantedScope({ id: extension.id, path: extension.path, manifest })
+    if (isRequestCovered(request, held)) return true
+    if (!isRequestCovered(request, optionalScope(manifest))) {
+        // The library already rejects undeclared API names; this covers origins.
+        throw new Error("Permissions request includes undeclared permission")
+    }
+    const allowed = await openPermissionPrompt(
+        d.getWindow(),
+        toPromptRequest(extension.id, extension.name, request),
+    )
+    if (!allowed) return false
+    const prior = await consentFor([extension.id])
+    await runQuiet(
+        d.store.setExtensionConsent(
+            extension.id,
+            mergeGrant(prior[extension.id] ?? emptyGrant(), request),
+        ),
+    )
+    return true
+}
+
+// --- extension context menu + uninstall
+
+const findExtension = (extensionId: string): Electron.Extension | null => {
+    for (const ses of extensionSessions()) {
+        const extension = ses.extensions?.getExtension(extensionId)
+        if (extension) return extension
+    }
+    return null
+}
+
+const optionsUrlFor = (extension: Electron.Extension): string | null => {
+    const page = parseManifest(extension.manifest).optionsPage
+    return page ? `${extension.url}/${page.replace(/^\//, "")}` : null
+}
+
+/** Native Options / Pin / Uninstall menu at the cursor. */
+export const openExtensionMenu = async ({
+    extensionId,
+    screenX,
+    screenY,
+}: ExtensionMenuRequest): Promise<void> => {
+    const d = deps
+    if (!d) return
+    const extension = findExtension(extensionId)
+    if (!extension) return
+    const snapshot = await Effect.runPromise(d.store.snapshot).catch(() => null)
+    const pinned = snapshot?.pinnedExtensionIds.includes(extensionId) ?? false
+    const optionsUrl = optionsUrlFor(extension)
+    const menu = new Menu()
+    menu.append(
+        new MenuItem({
+            label: "Options",
+            enabled: optionsUrl !== null,
+            click: () => {
+                if (optionsUrl) void runQuiet(d.store.createTab(optionsUrl))
+            },
+        }),
+    )
+    menu.append(new MenuItem({ type: "separator" }))
+    menu.append(
+        new MenuItem({
+            label: pinned ? "Unpin from toolbar" : "Pin to toolbar",
+            click: () => {
+                void runQuiet(
+                    pinned
+                        ? d.store.unpinExtension(extensionId)
+                        : d.store.pinExtension(extensionId),
+                )
+            },
+        }),
+    )
+    menu.append(new MenuItem({ type: "separator" }))
+    menu.append(
+        new MenuItem({
+            label: "Uninstall",
+            click: () => {
+                void uninstallExtensionEverywhere(extensionId)
+            },
+        }),
+    )
+    menu.popup({ window: d.getWindow() ?? undefined, x: screenX, y: screenY })
+}
+
+/**
+ * Full teardown: nothing about the extension survives.
+ * The unpacked source folder is the user's code and is never deleted.
+ */
+export const uninstallExtensionEverywhere = async (extensionId: string): Promise<void> => {
+    const d = deps
+    if (!d) return
+    // Unpacked installs keep a path-keyed consent record; read it before the extension goes.
+    const sourcePath = findExtension(extensionId)?.path ?? null
+    await Promise.all(
+        extensionSessions().map(async (ses) => {
+            try {
+                await uninstallExtension(extensionId, { session: ses })
+            } catch (error) {
+                console.error(`[arbor] failed to uninstall ${extensionId}:`, error)
+            }
+        }),
+    )
+    purgeExtensionStorage(extensionId)
+    await runQuiet(d.store.clearExtensionConsent(extensionId))
+    if (sourcePath) await runQuiet(d.store.clearExtensionConsent(sourcePath))
+    await runQuiet(d.store.unpinExtension(extensionId))
+    hideExtensionsPopup()
 }
