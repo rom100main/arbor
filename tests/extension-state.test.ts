@@ -1,0 +1,73 @@
+import { describe, expect, it } from "vite-plus/test"
+
+import { isRequestCovered, mergeGrant } from "../src/main/extension-permissions"
+import {
+    clearExtensionConsent,
+    pinExtension,
+    setExtensionConsent,
+    unpinExtension,
+} from "../src/main/state/extension-state"
+import { initialState, type DomainState } from "../src/main/state/state"
+
+const seeded = (): DomainState => {
+    let state = initialState()
+    state = setExtensionConsent(state, "ext-aaa", {
+        permissions: ["storage"],
+        origins: ["https://example.com/*"],
+    })
+    return state
+}
+
+describe("pins", () => {
+    it("appends in order and dedupes", () => {
+        let state = initialState()
+        state = pinExtension(state, "ext-bbb")
+        state = pinExtension(state, "ext-aaa")
+        state = pinExtension(state, "ext-bbb")
+        expect(state.pinnedExtensionIds).toEqual(["ext-bbb", "ext-aaa"])
+    })
+
+    it("unpin removes the id and unknown ids are a no-op", () => {
+        let state = pinExtension(initialState(), "ext-aaa")
+        state = unpinExtension(state, "ext-gone")
+        expect(state.pinnedExtensionIds).toEqual(["ext-aaa"])
+        state = unpinExtension(state, "ext-aaa")
+        expect(state.pinnedExtensionIds).toEqual([])
+        expect(unpinExtension(state, "ext-aaa")).toBe(state)
+    })
+})
+
+describe("consent ledger", () => {
+    it("recording a grant replaces the previous scope for that id", () => {
+        let state = seeded()
+        state = setExtensionConsent(state, "ext-aaa", {
+            permissions: ["tabs"],
+            origins: [],
+        })
+        expect(state.extensionConsent["ext-aaa"]).toEqual({ permissions: ["tabs"], origins: [] })
+    })
+
+    it("covers previously accepted optional permissions until the ledger is cleared", () => {
+        const optional = { permissions: ["tabs"], origins: ["https://other.example/*"] }
+        let state = seeded()
+        state = setExtensionConsent(
+            state,
+            "ext-aaa",
+            mergeGrant(state.extensionConsent["ext-aaa"], optional),
+        )
+        const held = state.extensionConsent["ext-aaa"]
+        expect(isRequestCovered(optional, held)).toBe(true)
+
+        state = clearExtensionConsent(state, "ext-aaa")
+        expect(state.extensionConsent).toEqual({})
+        expect(isRequestCovered(optional, state.extensionConsent["ext-aaa"] ?? {})).toBe(false)
+        expect(clearExtensionConsent(state, "ext-aaa")).toBe(state)
+    })
+
+    it("removes only the cleared id", () => {
+        let state = seeded()
+        state = setExtensionConsent(state, "ext-bbb", { permissions: [], origins: [] })
+        state = clearExtensionConsent(state, "ext-aaa")
+        expect(Object.keys(state.extensionConsent)).toEqual(["ext-bbb"])
+    })
+})

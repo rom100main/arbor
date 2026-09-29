@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test"
 
 import { createDebouncedSaver } from "../src/main/persistence"
 import { createContainer, switchContainer } from "../src/main/state/containers"
+import { pinExtension, setExtensionConsent } from "../src/main/state/extension-state"
 import { fromPersisted, PERSIST_VERSION, toPersisted } from "../src/main/state/persist"
 import type { PersistedState } from "../src/main/state/persist"
 import { initialState, type DomainState } from "../src/main/state/state"
@@ -35,6 +36,13 @@ const clonePersisted = (state: DomainState): PersistedState => {
         containers: persisted.containers.map((c) => ({ ...c })),
         tabs: persisted.tabs.map((t) => ({ ...t })),
         activeContainerId: persisted.activeContainerId,
+        pinnedExtensionIds: [...persisted.pinnedExtensionIds],
+        extensionConsent: Object.fromEntries(
+            Object.entries(persisted.extensionConsent).map(([id, grant]) => [
+                id,
+                { permissions: [...grant.permissions], origins: [...grant.origins] },
+            ]),
+        ),
     }
 }
 
@@ -90,6 +98,49 @@ describe("persist round-trip", () => {
             expect(copy.userLabel).toBe(tab.userLabel)
             expect(copy.parentId).toBe(tab.parentId)
         }
+    })
+
+    it("round-trips pinnedExtensionIds and extensionConsent", () => {
+        let state = buildRichState()
+        state = pinExtension(state, "ext-aaa")
+        state = pinExtension(state, "ext-aaa")
+        state = pinExtension(state, "ext-bbb")
+        state = setExtensionConsent(state, "ext-aaa", {
+            permissions: ["storage"],
+            origins: ["https://example.com/*"],
+        })
+        const restored = fromPersisted(toPersisted(state))!
+        expect(restored.pinnedExtensionIds).toEqual(["ext-aaa", "ext-bbb"])
+        expect(restored.extensionConsent).toEqual({
+            "ext-aaa": { permissions: ["storage"], origins: ["https://example.com/*"] },
+        })
+    })
+
+    it("defaults extension fields on legacy payloads", () => {
+        const data = clonePersisted(buildRichState())
+        delete (data as Partial<PersistedState>).pinnedExtensionIds
+        delete (data as Partial<PersistedState>).extensionConsent
+        const restored = fromPersisted(data)!
+        expect(restored.pinnedExtensionIds).toEqual([])
+        expect(restored.extensionConsent).toEqual({})
+    })
+
+    it("drops malformed consent entries and empty pins", () => {
+        const data = clonePersisted(buildRichState())
+        data.pinnedExtensionIds = ["ext-keep", "", "ext-keep"]
+        // A malformed record must not sink the whole payload (as on disk).
+        const restored = fromPersisted({
+            ...data,
+            extensionConsent: {
+                "ext-keep": { permissions: ["storage"], origins: [] },
+                "ext-bad": "nope",
+                "": { permissions: [], origins: [] },
+            },
+        })!
+        expect(restored.pinnedExtensionIds).toEqual(["ext-keep"])
+        expect(restored.extensionConsent).toEqual({
+            "ext-keep": { permissions: ["storage"], origins: [] },
+        })
     })
 })
 
