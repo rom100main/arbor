@@ -11,7 +11,7 @@ English
 
 # Topology
 
-- **Rule**: main owns state + views. Renderer owns pixels. Preload owns bridge. Shared owns types.
+- **Rule**: main owns state + views. Renderer owns pixels. Preload owns bridge. Shared owns both-process code.
 - **Constraint**: renderer -> main only via `window.arbor`. No direct `require("electron")` in renderer.
 
 ```mermaid
@@ -31,7 +31,7 @@ flowchart LR
         Omni["OmniboxPopup<br/>?omnibox"]
         Rename["RenameApp<br/>?rename"]
     end
-    Shared["shared/<br/>protocol.ts + url.ts"]
+    Shared["shared/<br/>both-process code"]
 
     Shell -->|"invoke / send"| API
     Omni -->|"send"| API

@@ -34,11 +34,15 @@
 ## 4. Shared
 
 - **Location**: `src/shared/`
-- **Runtime**: none. Imported by main + preload + renderer.
+- **Runtime**: none. Pure logic + types, no `electron` import.
+- **Membership**: only code loaded into **both** processes, main and renderer (the latter directly or through a preload). Code a single process uses belongs in that process's tree.
 - **Contents**:
     - `protocol.ts`: `ContainerId`, `TabId`, `BrowserSnapshot`, `RenameTarget`, `OmniboxActivation`, `CONTAINER_COLORS`, `CONTAINER_ICONS`.
     - `url.ts`: `omniboxTarget()`, `isUrlLike()`.
     - `tree-display.ts`: `displayTabs()` -> flat rows + `depth`.
+    - `match-patterns.ts`: `originsCoveredBy()` -> Chrome match-pattern subsumption.
+    - `decode.ts`: `orDefault()`, `decodeOr()` -> lenient Effect Schema reads of untrusted JSON.
+    - `extension-storage.ts`: `ExtStorageOp` wire types + pure `chrome.storage` semantics over plain objects.
 
 # Process Map
 
@@ -65,6 +69,9 @@ flowchart TB
         PR["protocol.ts"]
         URL["url.ts"]
         TD["tree-display.ts"]
+        MP["match-patterns.ts"]
+        DEC["decode.ts"]
+        ES["extension-storage.ts"]
     end
 
     S --> H
@@ -83,7 +90,14 @@ flowchart TB
     PR -.-> R
     URL -.-> M
     URL -.-> R
+    TD -.-> M
     TD -.-> R
+    MP -.-> M
+    MP -.-> P
+    DEC -.-> M
+    DEC -.-> P
+    ES -.-> M
+    ES -.-> P
 ```
 
 # Startup Sequence
@@ -111,5 +125,6 @@ sequenceDiagram
 # Rules
 
 - **Import direction**: main -> shared, preload -> shared, renderer -> shared. Never shared -> main.
+- **Shared membership**: `src/shared/` holds only code loaded into both processes. Single-process code lives in `src/main/`, `src/preload/`, or `src/renderer/`.
 - **No bypass**: renderer `import { ipcRenderer } from "electron"` -> forbidden. Use `window.arbor`.
 - **Modes**: `loadRenderer(win)` = main shell. `loadRenderer(win, "omnibox")` = popup. `loadRenderer(win, "rename")` = modal. Same bundle, 3 roots.
