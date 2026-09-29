@@ -7,8 +7,8 @@
  * All of that stays side-effect free here.
  */
 
-import { originsCoveredBy } from "./match-patterns"
-import type { ExtensionGrant, PermissionPromptRequest } from "./protocol"
+import { originsCoveredBy } from "../shared/match-patterns"
+import type { ExtensionGrant, PermissionPromptRequest } from "../shared/protocol"
 
 /** Manifest fields that declare what an extension may do. */
 export interface ManifestPermissions {
