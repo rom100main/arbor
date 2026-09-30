@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test"
 
-import { parseManifest, type ParsedManifest } from "../src/main/extension-manifest"
+import { parseManifest, type ParsedManifest } from "../../src/main/extension/manifest"
 
 const empty: ParsedManifest = {
     name: "",

@@ -3,8 +3,8 @@ import path from "node:path"
 import { Effect } from "effect"
 import { BrowserWindow, app } from "electron"
 
-import { createExtensionStorage, registerExtensionStorageIpc } from "./extension-storage"
-import { initExtensions } from "./extensions"
+import { initExtensions } from "./extension/loader"
+import { createExtensionStorage, registerExtensionStorageIpc } from "./extension/storage"
 import {
     makeOmniboxActivator,
     makeOnCommit,

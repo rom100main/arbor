@@ -18,7 +18,7 @@
 
 import { contextBridge } from "electron"
 
-import { originsCoveredBy } from "../shared/match-patterns"
+import { originsCoveredBy } from "../../shared/match-patterns"
 
 type ApiNamespace = Record<string, Record<string, unknown> | undefined>
 type ExtensionGlobals = {

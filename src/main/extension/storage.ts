@@ -15,13 +15,13 @@ import {
     toPersistedExtStorage,
     type ExtStorageAreas,
     type ExtStorageOp,
-} from "../shared/extension-storage"
+} from "../../shared/extension-storage"
 import {
     createDebouncedSaver,
     readJsonFile,
     writeJsonFileAtomic,
     type DebouncedSaver,
-} from "./persistence"
+} from "../persistence"
 
 /** Frame invoke (extension pages) and service-worker invoke carry different event shapes. */
 type StorageInvokeEvent = IpcMainInvokeEvent | IpcMainServiceWorkerInvokeEvent

@@ -6,8 +6,17 @@ import { app, Menu, MenuItem, session, type Session, type WebContents } from "el
 import { ElectronChromeExtensions } from "electron-chrome-extensions"
 import { installChromeWebStore, uninstallExtension } from "electron-chrome-web-store"
 
-import type { ExtensionGrant, ExtensionMenuRequest } from "../shared/protocol"
-import { parseManifest, type ParsedManifest } from "./extension-manifest"
+import type { ExtensionGrant, ExtensionMenuRequest } from "../../shared/protocol"
+import { readJsonFile } from "../persistence"
+import type { StoreService } from "../state/store"
+import {
+    attachExtensionPopupPositioning,
+    hideExtensionsPopup,
+    isExtensionPopupView,
+    openPermissionPrompt,
+} from "../windows/overlays"
+import { extensionShimPath, extensionStorageShimPath } from "../windows/paths"
+import { parseManifest, type ParsedManifest } from "./manifest"
 import {
     emptyGrant,
     isRequestCovered,
@@ -15,17 +24,8 @@ import {
     mergeGrant,
     optionalScope,
     toPromptRequest,
-} from "./extension-permissions"
-import { bindExtensionStorageToSession, purgeExtensionStorage } from "./extension-storage"
-import { readJsonFile } from "./persistence"
-import type { StoreService } from "./state/store"
-import {
-    attachExtensionPopupPositioning,
-    hideExtensionsPopup,
-    isExtensionPopupView,
-    openPermissionPrompt,
-} from "./windows/overlays"
-import { extensionShimPath, extensionStorageShimPath } from "./windows/paths"
+} from "./permissions"
+import { bindExtensionStorageToSession, purgeExtensionStorage } from "./storage"
 
 /** Bridge between the domain store/views and the per-container extension systems. */
 interface ExtensionDeps {

@@ -8,7 +8,7 @@ import {
     toPersistedExtStorage,
     type ExtStorageAreas,
     type ExtStorageOp,
-} from "../src/shared/extension-storage"
+} from "../../src/shared/extension-storage"
 
 const run = (areas: ExtStorageAreas, ...ops: ExtStorageOp[]) => {
     let current = areas

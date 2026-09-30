@@ -1,12 +1,12 @@
 /**
  * Chrome extension manifest fields Arbor reads.
- * Manifests arrive as `any` at the Electron boundary, 
+ * Manifests arrive as `any` at the Electron boundary,
  * so every field falls back instead of rejecting the record.
  */
 
 import { Schema } from "effect"
 
-import { decodeOr, orDefault } from "../shared/decode"
+import { decodeOr, orDefault } from "../../shared/decode"
 
 /** The slice of a manifest Arbor needs, already defaulted. */
 export interface ParsedManifest {

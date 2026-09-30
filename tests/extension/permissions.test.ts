@@ -5,7 +5,7 @@ import {
     manifestGranted,
     mergeGrant,
     optionalScope,
-} from "../src/main/extension-permissions"
+} from "../../src/main/extension/permissions"
 
 const manifest = {
     permissions: ["storage", "tabs"],

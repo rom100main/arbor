@@ -21,7 +21,7 @@ import type {
     StorageAreaName,
     StorageItems,
     StorageKeySelector,
-} from "../shared/extension-storage"
+} from "../../shared/extension-storage"
 
 /** Result of one storage op, keyed by the op's discriminant. */
 type ExtStorageResult<O extends ExtStorageOp> = O extends { op: "get" }

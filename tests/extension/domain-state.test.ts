@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vite-plus/test"
 
-import { isRequestCovered, mergeGrant } from "../src/main/extension-permissions"
+import { isRequestCovered, mergeGrant } from "../../src/main/extension/permissions"
 import {
     clearExtensionConsent,
     pinExtension,
     setExtensionConsent,
     unpinExtension,
-} from "../src/main/state/extension-state"
-import { initialState, type DomainState } from "../src/main/state/state"
+} from "../../src/main/state/extension-state"
+import { initialState, type DomainState } from "../../src/main/state/state"
 
 const seeded = (): DomainState => {
     let state = initialState()

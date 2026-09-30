@@ -8,6 +8,7 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 export const preloadPath = path.join(here, "../preload/index.cjs")
 export const extensionShimPath = path.join(here, "../preload/extension-shim.cjs")
 export const extensionStorageShimPath = path.join(here, "../preload/extension-storage-shim.cjs")
+
 export const rendererPath = path.join(here, "../../client/index.html")
 
 /** Dev server vs. packaged file loader shared by all windows. */

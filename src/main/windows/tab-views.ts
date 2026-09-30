@@ -9,7 +9,7 @@ import {
 import buildChromeContextMenu from "electron-chrome-context-menu"
 
 import type { ContainerId } from "../../shared/protocol"
-import { setupSessionExtensions } from "../extensions"
+import { setupSessionExtensions } from "../extension/loader"
 import type { DomainState } from "../state/state"
 import type { StoreService } from "../state/store"
 

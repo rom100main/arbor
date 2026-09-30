@@ -9,7 +9,7 @@ import type {
     TabId,
 } from "../../shared/protocol"
 import { omniboxTarget } from "../../shared/url"
-import { attachExtensionTab, openExtensionMenu } from "../extensions"
+import { attachExtensionTab, openExtensionMenu } from "../extension/loader"
 import { snapshot as toSnapshot, type DomainState } from "../state/state"
 import type { StoreService } from "../state/store"
 import {
