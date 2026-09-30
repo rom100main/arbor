@@ -9,7 +9,7 @@ import {
 import buildChromeContextMenu from "electron-chrome-context-menu"
 
 import type { ContainerId } from "../../shared/protocol"
-import { setupSessionExtensions } from "../extension/loader"
+import { extensionsReady, setupSessionExtensions } from "../extension/loader"
 import type { DomainState } from "../state/state"
 import type { StoreService } from "../state/store"
 
@@ -83,8 +83,27 @@ export const ensureView = (deps: ViewDeps, tabId: string, url: string): WebConte
     })
     views.set(tabId, view)
     trackPageMeta(deps.store, tabId, view)
-    void view.webContents.loadURL(url)
+    void loadTabUrl(tabId, tab.containerId, url, view)
     return view
+}
+
+/**
+ * Loads a tab's URL, waiting for the container's extensions first when the URL points at one:
+ * a `chrome-extension://` navigation is refused with ERR_BLOCKED_BY_CLIENT
+ * until its extension is actually installed.
+ * A view torn down while waiting never loads.
+ */
+const loadTabUrl = async (
+    tabId: string,
+    containerId: ContainerId,
+    url: string,
+    view: WebContentsView,
+): Promise<void> => {
+    if (url.startsWith("chrome-extension://")) {
+        await extensionsReady(sessionForContainer(containerId))
+    }
+    if (views.get(tabId) !== view) return
+    await view.webContents.loadURL(url)
 }
 
 export const destroyView = (tabId: string): void => {

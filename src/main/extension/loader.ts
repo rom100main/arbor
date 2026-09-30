@@ -262,6 +262,16 @@ const consentStoreInstall = async (
     return { action: allowed ? "allow" : "deny" }
 }
 
+/**
+ * Resolves once a session's extension sources are installed and its MV3 workers are running.
+ * `chrome-extension://` navigations fail with ERR_BLOCKED_BY_CLIENT until then, so tab loads await this.
+ */
+const sourcesReady = new WeakMap<Session, Promise<void>>()
+
+/** Never rejects: install failures are already logged by `loadExtensionSources`. */
+export const extensionsReady = (ses: Session): Promise<void> =>
+    sourcesReady.get(ses) ?? Promise.resolve()
+
 /** One ElectronChromeExtensions instance per session, created lazily. */
 export const setupSessionExtensions = (ses: Session, loadSources = true): void => {
     if (configured.has(ses)) return
@@ -362,7 +372,7 @@ export const setupSessionExtensions = (ses: Session, loadSources = true): void =
     // SW ipcRenderer.invoke rides ServiceWorkerMain.ipc, not ipcMain.
     bindExtensionStorageToSession(ses)
 
-    if (loadSources) void loadExtensionSources(ses)
+    if (loadSources) sourcesReady.set(ses, loadExtensionSources(ses))
 }
 
 /** Registers a view's webContents as an extension tab and marks it active. */
@@ -420,7 +430,8 @@ const findExtension = (extensionId: string): Electron.Extension | null => {
 
 const optionsUrlFor = (extension: Electron.Extension): string | null => {
     const page = parseManifest(extension.manifest).optionsPage
-    return page ? `${extension.url}/${page.replace(/^\//, "")}` : null
+    if (!page) return null
+    return new URL(page.replace(/^\/+/, ""), extension.url).href
 }
 
 /** Native Options / Pin / Uninstall menu at the cursor. */

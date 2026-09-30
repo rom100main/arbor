@@ -1,4 +1,4 @@
-import { For, Show, createEffect, createSignal } from "solid-js"
+import { For, Show, createEffect, createMemo, createSignal } from "solid-js"
 
 import type { BrowserActionEntry, BrowserActionState } from "../../browser-action"
 import { useSnapshot } from "../snapshot"
@@ -11,10 +11,10 @@ import "./PinnedActions.css"
 export const PinnedActions = () => {
     const snapshot = useSnapshot()
     const pinnedIds = () => snapshot()?.pinnedExtensionIds ?? []
-    const activePartition = () => {
+    const activePartition = createMemo(() => {
         const id = snapshot()?.activeContainerId
         return id ? `persist:container-${id}` : ""
-    }
+    })
 
     const [actions, setActions] = createSignal<BrowserActionState | null>(null)
 
