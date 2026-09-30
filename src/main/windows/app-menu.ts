@@ -130,12 +130,14 @@ const buildTemplate = (deps: MenuDeps): MenuItemConstructorOptions[] => {
                 {
                     label: "Back",
                     accelerator: "CmdOrCtrl+[",
-                    click: () => withActiveView((webContents) => webContents.goBack()),
+                    click: () =>
+                        withActiveView((webContents) => webContents.navigationHistory.goBack()),
                 },
                 {
                     label: "Forward",
                     accelerator: "CmdOrCtrl+]",
-                    click: () => withActiveView((webContents) => webContents.goForward()),
+                    click: () =>
+                        withActiveView((webContents) => webContents.navigationHistory.goForward()),
                 },
             ],
         },

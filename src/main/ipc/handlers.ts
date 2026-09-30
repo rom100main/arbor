@@ -73,9 +73,11 @@ export const registerIpc = (store: StoreService): void => {
         await toPromise(store.updateTabMeta(tabId, { url }))
         await view.webContents.loadURL(url)
     })
-    handle("arbor:tab:back", (_event, tabId: TabId) => viewForTab(tabId)?.webContents.goBack())
+    handle("arbor:tab:back", (_event, tabId: TabId) =>
+        viewForTab(tabId)?.webContents.navigationHistory.goBack(),
+    )
     handle("arbor:tab:forward", (_event, tabId: TabId) =>
-        viewForTab(tabId)?.webContents.goForward(),
+        viewForTab(tabId)?.webContents.navigationHistory.goForward(),
     )
     handle("arbor:tab:reload", (_event, tabId: TabId) => viewForTab(tabId)?.webContents.reload())
 
