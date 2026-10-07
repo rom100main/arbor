@@ -1,7 +1,7 @@
-import { For, Show, createEffect, createMemo, createSignal } from "solid-js"
+import { For, Show, createEffect, createSignal, onCleanup } from "solid-js"
 
-import type { BrowserActionEntry, BrowserActionState } from "../../browser-action"
-import { useSnapshot } from "../snapshot"
+import type { PinnedActionInfo } from "../../../shared/protocol"
+import { useSettings } from "../settings"
 
 import "./PinnedActions.css"
 
@@ -9,143 +9,110 @@ import "./PinnedActions.css"
  * One toolbar button per pinned extension, between the URL input and the puzzle button.
  */
 export const PinnedActions = () => {
-    const snapshot = useSnapshot()
-    const pinnedIds = () => snapshot()?.pinnedExtensionIds ?? []
-    const activePartition = createMemo(() => {
-        const id = snapshot()?.activeContainerId
-        return id ? `persist:container-${id}` : ""
-    })
-
-    const [actions, setActions] = createSignal<BrowserActionState | null>(null)
-
-    // Action state is per partition: pinning is global, the icon reflects the active container.
-    createEffect(
-        () => activePartition(),
-        (partition) => {
-            const api = window.browserAction
-            if (!api || partition === "") {
-                setActions(null)
-                return () => undefined
-            }
-            const onUpdate = (state: BrowserActionState): void => {
-                setActions(state)
-            }
-            const syncState = async (): Promise<void> => {
-                try {
-                    setActions(await api.getState(partition))
-                } catch {
-                    setActions(null)
-                }
-            }
-            api.addEventListener("update", onUpdate)
-            api.addObserver(partition)
-            void syncState()
-            return () => {
-                api.removeEventListener("update", onUpdate)
-                api.removeObserver(partition)
-            }
-        },
-    )
+    const settings = useSettings()
+    const pinnedIds = () => settings().pinnedExtensionIds
 
     return (
         <div class="pinned-actions">
             <For each={pinnedIds()}>
-                {(extensionId) => (
-                    <PinnedAction
-                        extensionId={extensionId}
-                        partition={activePartition()}
-                        tabId={actions()?.activeTabId ?? -1}
-                        action={(actions()?.actions ?? []).find((item) => item.id === extensionId)}
-                    />
-                )}
+                {(extensionId) => <PinnedAction extensionId={extensionId} />}
             </For>
         </div>
     )
 }
 
-const PinnedAction = (props: {
-    extensionId: string
-    partition: string
-    tabId: number
-    action: BrowserActionEntry | undefined
-}) => {
-    let button: HTMLButtonElement | undefined
-    const [iconFailed, setIconFailed] = createSignal(false)
-
-    const iconUrl = (): string => {
-        const params = new URLSearchParams({
-            tabId: String(props.tabId),
-            partition: props.partition,
-        })
-        const modified = props.action?.iconModified
-        if (typeof modified === "number") params.append("t", String(modified))
-        return `crx://extension-icon/${props.extensionId}/32/2?${params.toString()}`
-    }
-
-    const activate = async (): Promise<void> => {
-        if (!button) return
-        const bounds = button.getBoundingClientRect()
-        const rect = {
-            x: bounds.x,
-            y: bounds.y,
-            width: bounds.width,
-            height: bounds.height,
+/**
+ * Runs `task`, discarding its result and logging a failure.
+ * The effect itself has to stay synchronous, so async work is spawned rather than awaited.
+ */
+const spawn = (label: string, task: () => Promise<void>): void => {
+    const run = async (): Promise<void> => {
+        try {
+            await task()
+        } catch (error) {
+            console.error(`[arbor] ${label}:`, error)
         }
-        // Anchor first: the popup positions itself from this rect, not from the puzzle button.
-        await window.arbor.extensionsAnchor({ extensionId: props.extensionId, rect })
-        await window.browserAction?.activate(props.partition, {
-            eventType: "click",
-            extensionId: props.extensionId,
-            tabId: props.tabId,
-            alignment: "top right",
-            anchorRect: rect,
+    }
+    void run()
+}
+
+const PinnedAction = (props: { extensionId: string }) => {
+    const settings = useSettings()
+    const [info, setInfo] = createSignal<PinnedActionInfo | null>(null)
+
+    // Re-read whenever the pinned list is rewritten, so an extension updated on disk is picked up without polling.
+    // Main caches the icon per file.
+    createEffect(
+        () => [props.extensionId, settings().pinnedExtensionIds] as const,
+        ([extensionId]) => {
+            let live = true
+            onCleanup(() => {
+                live = false
+            })
+            spawn("failed to read extension action", async () => {
+                const next = await window.arbor.extensionActionInfo(extensionId)
+                if (live) setInfo(next)
+            })
+        },
+    )
+
+    let button: HTMLButtonElement | undefined
+    const label = () => info()?.title || props.extensionId
+    const popupUrl = () => info()?.popupUrl ?? null
+
+    const activate = (): void => {
+        const url = popupUrl()
+        // No popup declared: the button still shows the extension, as in Chrome.
+        if (!url) return
+        // Record the anchor before opening: the popup positions itself from this rect.
+        if (button) {
+            const bounds = button.getBoundingClientRect()
+            spawn("failed to anchor the action popup", async () => {
+                await window.arbor.extensionsAnchor({
+                    extensionId: props.extensionId,
+                    rect: { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height },
+                })
+                await window.arbor.openExtensionActionPopup(props.extensionId, url)
+            })
+            return
+        }
+        spawn("failed to open the action popup", async () => {
+            await window.arbor.openExtensionActionPopup(props.extensionId, url)
         })
     }
 
     const onContextMenu = (event: MouseEvent): void => {
         event.preventDefault()
         event.stopPropagation()
-        window.arbor.extensionsMenu({
-            extensionId: props.extensionId,
-            screenX: event.screenX,
-            screenY: event.screenY,
+        spawn("failed to open the extension menu", async () => {
+            window.arbor.extensionsMenu({
+                extensionId: props.extensionId,
+                screenX: event.screenX,
+                screenY: event.screenY,
+            })
         })
     }
 
-    // Defensive: a pinned extension without an action would render an empty button.
     return (
-        <Show when={props.action}>
-            <button
-                type="button"
-                class="pinned-action"
-                ref={(el) => (button = el)}
-                aria-label={props.action?.title || props.extensionId}
-                title={props.action?.title || props.extensionId}
-                onClick={() => void activate()}
-                onContextMenu={onContextMenu}
-            >
-                {iconFailed() ? (
+        <button
+            type="button"
+            class="pinned-action"
+            ref={(el) => (button = el)}
+            aria-label={label()}
+            title={label()}
+            onClick={activate}
+            onContextMenu={onContextMenu}
+        >
+            <Show
+                when={info()?.iconDataUrl}
+                fallback={
                     <span class="pinned-action-fallback" aria-hidden="true">
-                        {(props.action?.title?.charAt(0) || "?").toUpperCase()}
+                        {label().charAt(0).toUpperCase()}
                     </span>
-                ) : (
-                    <img
-                        class="pinned-action-icon"
-                        src={iconUrl()}
-                        alt=""
-                        aria-hidden="true"
-                        onError={() => setIconFailed(true)}
-                    />
-                )}
-                <Show when={props.action?.text}>
-                    <span
-                        class="pinned-action-badge"
-                        style={{ "background-color": props.action?.color ?? "var(--color-accent)" }}
-                    >
-                        {props.action?.text}
-                    </span>
-                </Show>
-            </button>
-        </Show>
+                }
+            >
+                {(url) => <img class="pinned-action-icon" src={url()} alt="" aria-hidden="true" />}
+            </Show>
+        </button>
     )
 }

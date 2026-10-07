@@ -72,7 +72,7 @@ export const OmniboxInput = (props: { tabId: TabId | null; url: string }) => {
                 ref={(el) => (input = el)}
                 class={{ omnibox: true }}
                 type="text"
-                placeholder="Search DuckDuckGo or type a URL"
+                placeholder="Search or type a URL"
                 value={value()}
                 onInput={(event) => {
                     const next = event.currentTarget.value

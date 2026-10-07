@@ -6,9 +6,11 @@
     "chevron-down",
     "chevron-right",
     "code",
+    "device-desktop",
     "home",
     "link",
     "mail",
+    "moon",
     "movie",
     "music",
     "news",
@@ -16,8 +18,10 @@
     "puzzle",
     "reload",
     "search",
+    "settings",
     "shopping-cart",
     "star",
+    "sun",
     "world",
     "x"
 ]

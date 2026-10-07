@@ -1,5 +1,6 @@
 import { For, createEffect, createMemo, createSignal } from "solid-js"
 
+import { initSettings, useSettings } from "../shell/settings"
 import { initState, useSnapshot } from "../shell/snapshot"
 import { SuggestionRow } from "./SuggestionRow"
 import { computeSuggestions } from "./suggestions"
@@ -9,13 +10,17 @@ import "./OmniboxPopup.css"
 /** Rendered inside the frameless omnibox popup window (?omnibox query param). */
 export const OmniboxPopup = () => {
     void initState()
+    void initSettings()
     const snapshot = useSnapshot()
+    const settings = useSettings()
     const [query, setQuery] = createSignal("")
     const [selected, setSelected] = createSignal(0)
 
     window.arbor.onOmniboxQuery(setQuery)
 
-    const suggestions = createMemo(() => computeSuggestions(snapshot(), query()))
+    const suggestions = createMemo(() =>
+        computeSuggestions(snapshot(), query(), settings().searchTemplate),
+    )
     const suggestionCount = createMemo(() => suggestions().length)
 
     const activateCurrent = (): void => {

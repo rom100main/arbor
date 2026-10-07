@@ -1,5 +1,6 @@
 import { Show, createEffect, createSignal, onSettled } from "solid-js"
 
+import { applyTheme, initSettings, useSettings } from "../shell/settings"
 import { initState, useSnapshot } from "../shell/snapshot"
 
 import "./ExtensionsPopup.css"
@@ -19,7 +20,13 @@ const actionFromEvent = (event: MouseEvent): HTMLElement | null => {
 /** Rendered inside the frameless extensions popup window (?extensions query param). */
 export const ExtensionsPopup = () => {
     void initState()
+    void initSettings()
     const snapshot = useSnapshot()
+    const settings = useSettings()
+    createEffect(
+        () => settings().theme,
+        (theme) => applyTheme(theme),
+    )
     const activePartition = () => {
         const id = snapshot()?.activeContainerId
         return id ? `persist:container-${id}` : ""
