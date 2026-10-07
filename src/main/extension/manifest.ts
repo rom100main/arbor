@@ -17,9 +17,33 @@ export interface ParsedManifest {
     readonly optional_host_permissions: string[]
     /** Chrome precedence: `options_page` wins over `options_ui.page`; "" when neither is set. */
     readonly optionsPage: string
+    /** `action.default_title`, falling back to `browser_action.default_title`, else the name. */
+    readonly actionTitle: string
+    /**
+     * `action.default_icon` / `browser_action.default_icon`:
+     * a path, or a size-keyed map of paths.
+     * Passed through to the library's action map,
+     * which resolves it against the extension root when serving `crx://extension-icon`.
+     */
+    readonly actionIcon: string | Record<string, string> | null
+    /** `action.default_popup` / `browser_action.default_popup`; "" when neither is set. */
+    readonly actionPopup: string
 }
 
 const StringList = orDefault(Schema.mutable(Schema.Array(Schema.String)), (): string[] => [])
+
+/** A path or a size-keyed map of paths, both of which the library understands. */
+const IconSpec = Schema.NullOr(
+    Schema.Union(Schema.String, Schema.Record({ key: Schema.String, value: Schema.String })),
+)
+
+const emptyActionSpec = () => ({ default_title: "", default_icon: null, default_popup: "" })
+
+const ActionSpec = Schema.Struct({
+    default_title: orDefault(Schema.String, () => ""),
+    default_icon: orDefault(IconSpec, () => null),
+    default_popup: orDefault(Schema.String, () => ""),
+})
 
 const ManifestSchema = Schema.Struct({
     name: orDefault(Schema.String, () => ""),
@@ -31,9 +55,14 @@ const ManifestSchema = Schema.Struct({
     options_ui: orDefault(Schema.Struct({ page: orDefault(Schema.String, () => "") }), () => ({
         page: "",
     })),
+    action: orDefault(ActionSpec, emptyActionSpec),
+    browser_action: orDefault(ActionSpec, emptyActionSpec),
 })
 
 const decodeManifest = decodeOr(ManifestSchema)
+
+/** No manifest available: a seeded action with nothing filled in. */
+export const emptyActionManifest = (): ParsedManifest => emptyManifest()
 
 const emptyManifest = (): ParsedManifest => ({
     name: "",
@@ -42,6 +71,9 @@ const emptyManifest = (): ParsedManifest => ({
     optional_permissions: [],
     optional_host_permissions: [],
     optionsPage: "",
+    actionTitle: "",
+    actionIcon: null,
+    actionPopup: "",
 })
 
 /**
@@ -58,5 +90,10 @@ export const parseManifest = (raw: unknown): ParsedManifest => {
         optional_permissions: manifest.optional_permissions,
         optional_host_permissions: manifest.optional_host_permissions,
         optionsPage: manifest.options_page || manifest.options_ui.page,
+        // MV3 `action` wins over the MV2 `browser_action`, as in Chrome.
+        actionTitle:
+            manifest.action.default_title || manifest.browser_action.default_title || manifest.name,
+        actionIcon: manifest.action.default_icon ?? manifest.browser_action.default_icon,
+        actionPopup: manifest.action.default_popup || manifest.browser_action.default_popup,
     }
 }

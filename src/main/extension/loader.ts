@@ -8,6 +8,7 @@ import { installChromeWebStore, uninstallExtension } from "electron-chrome-web-s
 
 import type { ExtensionGrant, ExtensionMenuRequest } from "../../shared/protocol"
 import { readJsonFile } from "../persistence"
+import type { SettingsStore } from "../settings"
 import type { StoreService } from "../state/store"
 import {
     attachExtensionPopupPositioning,
@@ -30,6 +31,7 @@ import { bindExtensionStorageToSession, purgeExtensionStorage } from "./storage"
 /** Bridge between the domain store/views and the per-container extension systems. */
 interface ExtensionDeps {
     readonly store: StoreService
+    readonly settings: SettingsStore
     readonly getWindow: () => Electron.BrowserWindow | null
     readonly viewForTab: (tabId: string) => Electron.WebContentsView | undefined
     readonly ensureView: (tabId: string, url: string) => Electron.WebContentsView
@@ -60,7 +62,7 @@ const runQuiet = async (effect: Effect.Effect<unknown, unknown>): Promise<void> 
 export const initExtensions = (d: ExtensionDeps): void => {
     deps = d
     ElectronChromeExtensions.handleCRXProtocol(session.defaultSession)
-    setupSessionExtensions(session.defaultSession, false)
+    setupSessionExtensions(session.defaultSession)
 }
 
 // --- consent (install + permissions.request)
@@ -273,7 +275,7 @@ export const extensionsReady = (ses: Session): Promise<void> =>
     sourcesReady.get(ses) ?? Promise.resolve()
 
 /** One ElectronChromeExtensions instance per session, created lazily. */
-export const setupSessionExtensions = (ses: Session, loadSources = true): void => {
+export const setupSessionExtensions = (ses: Session): void => {
     if (configured.has(ses)) return
     if (!deps) throw new Error("initExtensions must run before container sessions are created")
     configured.add(ses)
@@ -372,7 +374,7 @@ export const setupSessionExtensions = (ses: Session, loadSources = true): void =
     // SW ipcRenderer.invoke rides ServiceWorkerMain.ipc, not ipcMain.
     bindExtensionStorageToSession(ses)
 
-    if (loadSources) sourcesReady.set(ses, loadExtensionSources(ses))
+    sourcesReady.set(ses, loadExtensionSources(ses))
 }
 
 /** Registers a view's webContents as an extension tab and marks it active. */
@@ -444,8 +446,7 @@ export const openExtensionMenu = async ({
     if (!d) return
     const extension = findExtension(extensionId)
     if (!extension) return
-    const snapshot = await Effect.runPromise(d.store.snapshot).catch(() => null)
-    const pinned = snapshot?.pinnedExtensionIds.includes(extensionId) ?? false
+    const pinned = d.settings.get().pinnedExtensionIds.includes(extensionId)
     const optionsUrl = optionsUrlFor(extension)
     const menu = new Menu()
     menu.append(
@@ -462,11 +463,8 @@ export const openExtensionMenu = async ({
         new MenuItem({
             label: pinned ? "Unpin from toolbar" : "Pin to toolbar",
             click: () => {
-                void runQuiet(
-                    pinned
-                        ? d.store.unpinExtension(extensionId)
-                        : d.store.pinExtension(extensionId),
-                )
+                if (pinned) d.settings.unpinExtension(extensionId)
+                else d.settings.pinExtension(extensionId)
             },
         }),
     )
@@ -503,6 +501,6 @@ export const uninstallExtensionEverywhere = async (extensionId: string): Promise
     purgeExtensionStorage(extensionId)
     await runQuiet(d.store.clearExtensionConsent(extensionId))
     if (sourcePath) await runQuiet(d.store.clearExtensionConsent(sourcePath))
-    await runQuiet(d.store.unpinExtension(extensionId))
+    d.settings.unpinExtension(extensionId)
     hideExtensionsPopup()
 }
