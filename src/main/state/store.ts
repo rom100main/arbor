@@ -84,12 +84,6 @@ export interface StoreService {
 
 export class BrowserStore extends Context.Tag("arbor.BrowserStore")<BrowserStore, StoreService>() {}
 
-type RunOutcome<A> =
-    | { readonly tag: "ok"; readonly value: A; readonly next: DomainState }
-    | { readonly tag: "noop"; readonly value: A }
-    | { readonly tag: "fail"; readonly error: DomainError }
-    | { readonly tag: "die"; readonly error: unknown }
-
 export const makeStoreLayer = (
     initial: DomainState,
     onCommit: (state: DomainState) => void,
@@ -99,48 +93,45 @@ export const makeStoreLayer = (
         Effect.gen(function* () {
             const ref = yield* Ref.make(initial)
 
-            /** Observe post-commit failures without pretending the mutation rolled back. */
-            const notify = (next: DomainState): void => {
-                try {
-                    onCommit(next)
-                } catch (error) {
-                    console.error("Post-commit observer failed:", error)
-                }
-            }
-
             /** Atomic synchronous transition: domain failures leave state unchanged. */
             const commit = <A>(
                 op: (state: DomainState) => DomainState | TransitionResult<A>,
                 pick: (next: DomainState) => A,
             ): Effect.Effect<A, DomainError> =>
                 Effect.gen(function* () {
-                    const outcome = yield* Ref.modify(
+                    const { value, committed } = yield* Ref.modify(
                         ref,
-                        (state): readonly [RunOutcome<A>, DomainState] => {
-                            try {
-                                const result = op(state)
-                                if (isTransition(result)) {
-                                    return [
-                                        { tag: "ok", value: result.value, next: result.state },
-                                        result.state,
-                                    ]
-                                }
-                                if (result === state) {
-                                    return [{ tag: "noop", value: pick(state) }, state]
-                                }
-                                return [{ tag: "ok", value: pick(result), next: result }, result]
-                            } catch (error) {
-                                if (error instanceof DomainError) {
-                                    return [{ tag: "fail", error }, state]
-                                }
-                                return [{ tag: "die", error }, state]
+                        (
+                            state,
+                        ): readonly [{ value: A; committed: DomainState | null }, DomainState] => {
+                            const result = op(state)
+                            if (isTransition(result)) {
+                                return [
+                                    { value: result.value, committed: result.state },
+                                    result.state,
+                                ]
                             }
+                            if (result === state) {
+                                return [{ value: pick(state), committed: null }, state]
+                            }
+                            return [{ value: pick(result), committed: result }, result]
                         },
+                    ).pipe(
+                        Effect.catchAllDefect((defect) =>
+                            defect instanceof DomainError
+                                ? Effect.fail(defect)
+                                : Effect.die(defect),
+                        ),
                     )
-                    if (outcome.tag === "fail") return yield* Effect.fail(outcome.error)
-                    if (outcome.tag === "die") return yield* Effect.die(outcome.error)
-                    if (outcome.tag === "ok") notify(outcome.next)
-                    return outcome.value
+                    if (committed !== null) {
+                        // Observe post-commit failures without pretending the mutation rolled back.
+                        yield* Effect.sync(() => onCommit(committed)).pipe(
+                            Effect.catchAllCause((cause) =>
+                                Effect.logError("Post-commit observer failed", cause),
+                            ),
+                        )
+                    }
+                    return value
                 })
 
             const runVoid = (op: (state: DomainState) => DomainState) =>

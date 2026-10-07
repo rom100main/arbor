@@ -1,4 +1,4 @@
-import { Schema } from "effect"
+import { Data, Schema } from "effect"
 
 import { decodeOr, orDefault } from "../shared/decode"
 import {
@@ -43,7 +43,11 @@ export const fromPersistedSettings = (data: unknown): Settings | null => {
     }
 }
 
-export class SettingsError extends Error {}
+export class SettingsError extends Data.TaggedError("SettingsError")<{ message: string }> {
+    constructor(message: string) {
+        super({ message })
+    }
+}
 
 export interface SettingsStore {
     /** Current settings; a frozen copy, safe to hand to renderers. */

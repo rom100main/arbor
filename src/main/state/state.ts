@@ -1,3 +1,5 @@
+import { Data } from "effect"
+
 import type {
     BrowserSnapshot,
     ClosedSubtree,
@@ -21,8 +23,10 @@ export interface DomainState {
     extensionConsent: Record<string, ExtensionGrant>
 }
 
-export class DomainError extends Error {
-    readonly _tag = "DomainError"
+export class DomainError extends Data.TaggedError("DomainError")<{ message: string }> {
+    constructor(message: string) {
+        super({ message })
+    }
 }
 
 /** Explicit result of a transition that produces a value alongside the new state. */
