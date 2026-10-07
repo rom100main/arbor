@@ -1,7 +1,7 @@
-import { Effect } from "effect"
 import { Menu, type MenuItemConstructorOptions } from "electron"
 
 import { stepVisibleTab } from "../../shared/tree-display"
+import { runBackground } from "../exec"
 import { snapshot, type DomainState } from "../state/state"
 import type { StoreService } from "../state/store"
 import { viewForTab } from "./tab-views"
@@ -10,11 +10,6 @@ export interface MenuDeps {
     store: StoreService
     getState: () => DomainState
     focusOmnibox: () => void
-}
-
-const run = (effect: Effect.Effect<unknown, unknown>): void => {
-    // runPromiseExit never rejects; failures (e.g. protected-tab close) are discarded.
-    void Effect.runPromiseExit(effect)
 }
 
 export const installMenu = (deps: MenuDeps): (() => void) => {
@@ -42,7 +37,7 @@ const buildTemplate = (deps: MenuDeps): MenuItemConstructorOptions[] => {
         const snap = snapshot(state)
         if (snap.activeContainerId === null) return
         const nextId = stepVisibleTab(state.tabs, snap.activeContainerId, snap.activeTabId, delta)
-        if (nextId !== null) run(store.selectTab(nextId))
+        if (nextId !== null) void runBackground(store.selectTab(nextId))
     }
 
     const containers = getState().containers
@@ -56,7 +51,7 @@ const buildTemplate = (deps: MenuDeps): MenuItemConstructorOptions[] => {
             enabled: index < containers.length,
             click: () => {
                 const container = getState().containers[index]
-                if (container) run(store.switchContainer(container.id))
+                if (container) void runBackground(store.switchContainer(container.id))
             },
         }),
     )
@@ -70,14 +65,14 @@ const buildTemplate = (deps: MenuDeps): MenuItemConstructorOptions[] => {
                     label: "New Tab",
                     accelerator: "CmdOrCtrl+T",
                     click: () => {
-                        run(store.createTab())
+                        void runBackground(store.createTab())
                         focusOmnibox()
                     },
                 },
                 {
                     label: "New Container",
                     accelerator: "CmdOrCtrl+Shift+A",
-                    click: () => run(store.createContainer()),
+                    click: () => void runBackground(store.createContainer()),
                 },
                 {
                     label: "Focus Address Bar",
@@ -91,14 +86,14 @@ const buildTemplate = (deps: MenuDeps): MenuItemConstructorOptions[] => {
                     enabled: !protectedTab,
                     click: () => {
                         const tabId = activeTabId()
-                        if (tabId !== null) run(store.closeTab(tabId))
+                        if (tabId !== null) void runBackground(store.closeTab(tabId))
                     },
                 },
                 {
                     label: "Reopen Closed Tab",
                     accelerator: "CmdOrCtrl+Shift+T",
                     enabled: getState().closeHistory.length > 0,
-                    click: () => run(store.reopenTab()),
+                    click: () => void runBackground(store.reopenTab()),
                 },
                 { type: "separator" },
                 { label: "Next Tab", accelerator: "Ctrl+Tab", click: () => stepTab(1) },

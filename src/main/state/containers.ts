@@ -1,15 +1,35 @@
 import { CONTAINER_COLORS } from "../../shared/protocol"
-import type { ContainerIcon, ContainerId } from "../../shared/protocol"
-import { containerOf, DomainError, touch, withTabs, type DomainState } from "./state"
+import type { ContainerIcon, ContainerId, TabId } from "../../shared/protocol"
+import {
+    containerOf,
+    DomainError,
+    okWith,
+    touch,
+    withTabs,
+    type DomainState,
+    type TransitionResult,
+} from "./state"
 import { createTab } from "./tabs"
 
-export const createContainer = (state: DomainState, name?: string, color?: string): DomainState => {
-    const id = `container-${crypto.randomUUID()}`
+export interface CreateContainerOptions {
+    id?: ContainerId
+    tabId?: TabId
+    now?: number
+    name?: string
+    color?: string
+}
+
+export const createContainer = (
+    state: DomainState,
+    options: CreateContainerOptions = {},
+): TransitionResult<ContainerId> => {
+    const id = options.id ?? `container-${crypto.randomUUID()}`
+    const now = options.now ?? Date.now()
     const usedColors = new Set(state.containers.map((c) => c.color))
     const pickedColor =
-        color ?? CONTAINER_COLORS.find((c) => !usedColors.has(c)) ?? CONTAINER_COLORS[0]
+        options.color ?? CONTAINER_COLORS.find((c) => !usedColors.has(c)) ?? CONTAINER_COLORS[0]
     const resolvedName =
-        name ??
+        options.name ??
         (() => {
             let n = state.containers.length + 1
             while (state.containers.some((c) => c.name === `Container ${n}`)) n += 1
@@ -22,20 +42,25 @@ export const createContainer = (state: DomainState, name?: string, color?: strin
         icon: "world" as ContainerIcon,
         activeTabId: null,
     }
-    return createTab(
+    const tabResult = createTab(
         { ...state, containers: [...state.containers, container] },
-        { containerId: id },
+        { id: options.tabId, now, containerId: id },
     )
+    return okWith(tabResult.state, id)
 }
 
-export const switchContainer = (state: DomainState, containerId: ContainerId): DomainState => {
+export const switchContainer = (
+    state: DomainState,
+    containerId: ContainerId,
+    now?: number,
+): DomainState => {
     const container = containerOf(state, containerId)
     if (container.activeTabId === null) {
         throw new DomainError(`Container ${containerId} has no tabs`)
     }
     const next = withTabs(state, new Map(state.tabs))
     const active = next.tabs.get(container.activeTabId)
-    if (active) next.tabs.set(active.id, touch(active))
+    if (active) next.tabs.set(active.id, touch(active, now))
     return { ...next, activeContainerId: containerId }
 }
 

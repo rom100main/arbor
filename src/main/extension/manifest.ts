@@ -61,9 +61,6 @@ const ManifestSchema = Schema.Struct({
 
 const decodeManifest = decodeOr(ManifestSchema)
 
-/** No manifest available: a seeded action with nothing filled in. */
-export const emptyActionManifest = (): ParsedManifest => emptyManifest()
-
 const emptyManifest = (): ParsedManifest => ({
     name: "",
     permissions: [],

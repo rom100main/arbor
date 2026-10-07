@@ -7,6 +7,7 @@ import { ElectronChromeExtensions } from "electron-chrome-extensions"
 import { installChromeWebStore, uninstallExtension } from "electron-chrome-web-store"
 
 import type { ExtensionGrant, ExtensionMenuRequest } from "../../shared/protocol"
+import { runBackground } from "../exec"
 import { readJsonFile } from "../persistence"
 import type { SettingsStore } from "../settings"
 import type { StoreService } from "../state/store"
@@ -17,6 +18,7 @@ import {
     openPermissionPrompt,
 } from "../windows/overlays"
 import { extensionShimPath, extensionStorageShimPath } from "../windows/paths"
+import { forgetExtensionIcon } from "./action"
 import { parseManifest, type ParsedManifest } from "./manifest"
 import {
     emptyGrant,
@@ -44,13 +46,7 @@ const configured = new Set<Session>()
 /** Every session extensions are wired into (default + one per container). */
 export const extensionSessions = (): Session[] => [...configured]
 
-const runQuiet = async (effect: Effect.Effect<unknown, unknown>): Promise<void> => {
-    try {
-        await Effect.runPromise(effect)
-    } catch {
-        // The tab may already be gone; extension commands are best-effort.
-    }
-}
+const runQuiet = (effect: Effect.Effect<unknown, unknown>): Promise<void> => runBackground(effect)
 
 /**
  * Registers the crx:// protocol on the session that hosts <browser-action-list>
@@ -498,6 +494,7 @@ export const uninstallExtensionEverywhere = async (extensionId: string): Promise
             }
         }),
     )
+    forgetExtensionIcon(extensionId)
     purgeExtensionStorage(extensionId)
     await runQuiet(d.store.clearExtensionConsent(extensionId))
     if (sourcePath) await runQuiet(d.store.clearExtensionConsent(sourcePath))

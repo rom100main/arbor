@@ -66,6 +66,7 @@ export const moveToContainer = (
     const source = containerOf(state, tab.containerId)
 
     const subtree = subtreeOf(state, tabId)
+    const subtreeIds = new Set(subtree.map((n) => n.id))
     const next = withTabs(state, new Map(state.tabs))
     const oldSiblings = siblingsOf(state, tab).filter((s) => s.id !== tab.id)
     for (const updated of reindex(oldSiblings)) next.tabs.set(updated.id, updated)
@@ -85,6 +86,17 @@ export const moveToContainer = (
         if (result.activeContainerId === source.id) {
             const neighbor = containers[index + 1] ?? containers[index - 1]
             result = { ...result, activeContainerId: neighbor?.id ?? null }
+        }
+    } else if (source.activeTabId !== null && subtreeIds.has(source.activeTabId)) {
+        // Repair the source container's active pointer when it referenced the moved subtree.
+        const remaining = [...next.tabs.values()].find(
+            (t) => t.containerId === source.id && !subtreeIds.has(t.id),
+        )
+        result = {
+            ...result,
+            containers: result.containers.map((c) =>
+                c.id === source.id ? { ...c, activeTabId: remaining?.id ?? null } : c,
+            ),
         }
     }
     result = {

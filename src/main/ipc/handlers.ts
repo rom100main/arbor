@@ -1,23 +1,16 @@
-import { Cause, Effect, Exit, Option } from "effect"
+import { Effect } from "effect"
 import { BrowserWindow, ipcMain } from "electron"
 
 import type { ContainerIcon, ContainerId, TabId } from "../../shared/protocol"
 import type { Settings } from "../../shared/settings"
 import { omniboxTarget } from "../../shared/url"
+import { runBackground, runRequest } from "../exec"
 import { pinnedActionInfo } from "../extension/action"
 import type { SettingsStore } from "../settings"
 import type { DomainState } from "../state/state"
-import type { DomainError, StoreService } from "../state/store"
+import type { StoreService } from "../state/store"
 import { openExtensionActionPopup, setExtensionAnchor } from "../windows/overlays"
 import { navigateTab, viewForTab } from "../windows/tab-views"
-
-const toPromise = async <A>(effect: Effect.Effect<A, DomainError>): Promise<A> => {
-    const exit = await Effect.runPromiseExit(effect)
-    if (Exit.isSuccess(exit)) return exit.value
-    const failure = Cause.failureOption(exit.cause)
-    if (Option.isSome(failure)) throw new Error(failure.value.message)
-    throw new Error(Cause.pretty(exit.cause))
-}
 
 type Handler = (event: Electron.IpcMainInvokeEvent, ...args: any[]) => unknown
 
@@ -48,49 +41,49 @@ export const registerIpc = (
         const win = BrowserWindow.fromWebContents(event.sender)
         if (!win) throw new Error("No window to anchor the action popup to")
         openExtensionActionPopup(win, extensionId, popupUrl, (url) => {
-            void toPromise(store.createTab(url))
+            void runBackground(store.createTab(url))
         })
     })
 
     handle("arbor:container:create", (_event, name?: string, color?: string) =>
-        toPromise(store.createContainer(name, color)),
+        runRequest(store.createContainer(name, color)),
     )
     handle("arbor:container:switch", (_event, containerId: ContainerId) =>
-        toPromise(store.switchContainer(containerId)),
+        runRequest(store.switchContainer(containerId)),
     )
     handle("arbor:container:rename", (_event, containerId: ContainerId, name: string) =>
-        toPromise(store.renameContainer(containerId, name)),
+        runRequest(store.renameContainer(containerId, name)),
     )
     handle("arbor:container:set-color", (_event, containerId: ContainerId, color: string) =>
-        toPromise(store.setContainerColor(containerId, color)),
+        runRequest(store.setContainerColor(containerId, color)),
     )
     handle("arbor:container:set-icon", (_event, containerId: ContainerId, icon: ContainerIcon) =>
-        toPromise(store.setContainerIcon(containerId, icon)),
+        runRequest(store.setContainerIcon(containerId, icon)),
     )
     handle("arbor:container:reorder", (_event, containerId: ContainerId, toIndex: number) =>
-        toPromise(store.reorderContainer(containerId, toIndex)),
+        runRequest(store.reorderContainer(containerId, toIndex)),
     )
 
-    handle("arbor:tab:create", (_event, url?: string) => toPromise(store.createTab(url)))
+    handle("arbor:tab:create", (_event, url?: string) => runRequest(store.createTab(url)))
     handle("arbor:tab:create-child", (_event, parentTabId: TabId, url?: string) =>
-        toPromise(store.createChildTab(parentTabId, url)),
+        runRequest(store.createChildTab(parentTabId, url)),
     )
-    handle("arbor:tab:select", (_event, tabId: TabId) => toPromise(store.selectTab(tabId)))
+    handle("arbor:tab:select", (_event, tabId: TabId) => runRequest(store.selectTab(tabId)))
     handle("arbor:tab:set-collapsed", (_event, tabId: TabId, collapsed: boolean) =>
-        toPromise(store.setCollapsed(tabId, collapsed)),
+        runRequest(store.setCollapsed(tabId, collapsed)),
     )
-    handle("arbor:tab:close", (_event, tabId: TabId) => toPromise(store.closeTab(tabId)))
+    handle("arbor:tab:close", (_event, tabId: TabId) => runRequest(store.closeTab(tabId)))
     handle("arbor:tab:rename", (_event, tabId: TabId, label: string | null) =>
-        toPromise(store.renameTab(tabId, label)),
+        runRequest(store.renameTab(tabId, label)),
     )
-    handle("arbor:tab:reopen", () => toPromise(store.reopenTab()))
+    handle("arbor:tab:reopen", () => runRequest(store.reopenTab()))
     handle(
         "arbor:tab:move",
         (_event, options: { tabId: TabId; parentId: TabId | null; index: number }) =>
-            toPromise(store.moveTab(options)),
+            runRequest(store.moveTab(options)),
     )
     handle("arbor:tab:move-to-container", (_event, tabId: TabId, containerId: ContainerId) =>
-        toPromise(store.moveToContainer(tabId, containerId)),
+        runRequest(store.moveToContainer(tabId, containerId)),
     )
 
     handle("arbor:tab:navigate", async (_event, tabId: TabId, input: string) => {

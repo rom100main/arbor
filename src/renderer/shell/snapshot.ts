@@ -5,13 +5,31 @@ import { displayTabs } from "../../shared/tree-display"
 
 const [snapshot, setSnapshot] = createSignal<BrowserSnapshot | null>(null)
 
-let initialized = false
+let initPromise: Promise<void> | null = null
 
-export const initState = async (): Promise<void> => {
-    if (initialized) return
-    initialized = true
-    setSnapshot(await window.arbor.getSnapshot())
-    window.arbor.onState(setSnapshot)
+/**
+ * Subscribe before fetching so a push during the initial read is not lost.
+ * A late initial response never overwrites a newer push.
+ * Failed initialization resets so retry is possible.
+ */
+export const initState = (): Promise<void> => {
+    if (!initPromise) initPromise = doInit()
+    return initPromise
+}
+
+const doInit = async (): Promise<void> => {
+    let pushed = false
+    window.arbor.onState((snap) => {
+        pushed = true
+        setSnapshot(snap)
+    })
+    try {
+        const initial = await window.arbor.getSnapshot()
+        if (!pushed) setSnapshot(initial)
+    } catch (error) {
+        initPromise = null
+        throw error
+    }
 }
 
 export const useSnapshot = () => snapshot

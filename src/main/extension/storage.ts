@@ -8,6 +8,7 @@ import {
 
 import {
     applyExtStorageOp,
+    canonicalArea,
     emptyExtStorageAreas,
     fromPersistedExtStorage,
     parseExtStorageOp,
@@ -111,8 +112,13 @@ export const createExtensionStorage = (
             if (!extensionId) throw new Error("arbor:ext-storage requires an extension sender")
             const { areas, result } = applyExtStorageOp(areasFor(extensionId), op)
             extensions[extensionId] = areas
-            // `session` is memory-only; only durable areas touch disk.
-            if (op.op !== "get" && op.op !== "getBytesInUse") saver.schedule()
+            // `session` is memory-only; only durable (canonical local) areas touch disk.
+            if (
+                op.op !== "get" &&
+                op.op !== "getBytesInUse" &&
+                canonicalArea(op.area) !== "session"
+            )
+                saver.schedule()
             return result
         },
         purge: (extensionId) => {

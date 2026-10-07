@@ -3,28 +3,45 @@ import {
     childrenOf,
     containerOf,
     DomainError,
+    okWith,
     reindex,
     siblingsOf,
     touch,
     withTabs,
     type DomainState,
+    type TransitionResult,
 } from "./state"
 
 export interface CreateTabOptions {
+    id?: TabId
+    now?: number
     containerId?: ContainerId
     url?: string
 }
 
+export interface CreateChildTabOptions {
+    id?: TabId
+    now?: number
+    url?: string
+    /** Background opens must not steal focus from the originating tab. */
+    background?: boolean
+}
+
 /** Manual new tab: sibling inserted right after the active tab. */
-export const createTab = (state: DomainState, options: CreateTabOptions = {}): DomainState => {
+export const createTab = (
+    state: DomainState,
+    options: CreateTabOptions = {},
+): TransitionResult<TabId> => {
     if (state.containers.length === 0) throw new DomainError("No container to create a tab in")
+    const id = options.id ?? `tab-${crypto.randomUUID()}`
+    const now = options.now ?? Date.now()
     const containerId = options.containerId ?? state.activeContainerId ?? state.containers[0].id
     const container = containerOf(state, containerId)
     const anchor =
         container.activeTabId !== null ? state.tabs.get(container.activeTabId) : undefined
 
     const tab: TabNode = {
-        id: `tab-${crypto.randomUUID()}`,
+        id,
         containerId,
         parentId: null,
         order: 0,
@@ -33,7 +50,7 @@ export const createTab = (state: DomainState, options: CreateTabOptions = {}): D
         collapsed: false,
         userLabel: null,
         favicon: null,
-        lastActiveAt: Date.now(),
+        lastActiveAt: now,
     }
 
     let next = withTabs(state, new Map(state.tabs))
@@ -56,46 +73,53 @@ export const createTab = (state: DomainState, options: CreateTabOptions = {}): D
         ),
         activeContainerId: containerId,
     }
-    return next
+    return okWith(next, id)
 }
 
 /** Tab opened by a link (ctrl+click, target=_blank): last child of the parent. */
 export const createChildTab = (
     state: DomainState,
     parentTabId: TabId,
-    url?: string,
-): DomainState => {
+    options: CreateChildTabOptions = {},
+): TransitionResult<TabId> => {
     const parent = state.tabs.get(parentTabId)
     if (!parent) throw new DomainError(`Unknown tab: ${parentTabId}`)
+    const id = options.id ?? `tab-${crypto.randomUUID()}`
+    const now = options.now ?? Date.now()
     const tab: TabNode = {
-        id: `tab-${crypto.randomUUID()}`,
+        id,
         containerId: parent.containerId,
         parentId: parent.id,
         order: 0,
-        url: url ?? "about:blank",
+        url: options.url ?? "about:blank",
         title: "",
         collapsed: false,
         userLabel: null,
         favicon: null,
-        lastActiveAt: Date.now(),
+        lastActiveAt: now,
     }
     const next = withTabs(state, new Map(state.tabs))
     const siblings = childrenOf(state, parent.containerId, parent.id)
     siblings.push(tab)
     for (const updated of reindex(siblings)) next.tabs.set(updated.id, updated)
-    return {
-        ...next,
-        containers: next.containers.map((c) =>
-            c.id === parent.containerId ? { ...c, activeTabId: tab.id } : c,
-        ),
-    }
+    if (options.background) return okWith(next, id)
+    return okWith(
+        {
+            ...next,
+            activeContainerId: parent.containerId,
+            containers: next.containers.map((c) =>
+                c.id === parent.containerId ? { ...c, activeTabId: tab.id } : c,
+            ),
+        },
+        id,
+    )
 }
 
-export const selectTab = (state: DomainState, tabId: TabId): DomainState => {
+export const selectTab = (state: DomainState, tabId: TabId, now?: number): DomainState => {
     const tab = state.tabs.get(tabId)
     if (!tab) throw new DomainError(`Unknown tab: ${tabId}`)
     const next = withTabs(state, new Map(state.tabs))
-    next.tabs.set(tabId, touch(tab))
+    next.tabs.set(tabId, touch(tab, now))
     return {
         ...next,
         activeContainerId: tab.containerId,

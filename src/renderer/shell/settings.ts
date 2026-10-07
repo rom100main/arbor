@@ -4,13 +4,31 @@ import { DEFAULT_SETTINGS, type Settings } from "../../shared/settings"
 
 const [settings, setSettings] = createSignal<Settings>(DEFAULT_SETTINGS)
 
-let initialized = false
+let initPromise: Promise<void> | null = null
 
-export const initSettings = async (): Promise<void> => {
-    if (initialized) return
-    initialized = true
-    setSettings(await window.arbor.getSettings())
-    window.arbor.onSettings(setSettings)
+/**
+ * Subscribe before fetching so a push during the initial read is not lost.
+ * A late initial response never overwrites a newer push.
+ * Failed initialization resets so retry is possible.
+ */
+export const initSettings = (): Promise<void> => {
+    if (!initPromise) initPromise = doInit()
+    return initPromise
+}
+
+const doInit = async (): Promise<void> => {
+    let pushed = false
+    window.arbor.onSettings((next) => {
+        pushed = true
+        setSettings(next)
+    })
+    try {
+        const initial = await window.arbor.getSettings()
+        if (!pushed) setSettings(initial)
+    } catch (error) {
+        initPromise = null
+        throw error
+    }
 }
 
 export const useSettings = () => settings

@@ -3,6 +3,7 @@ import path from "node:path"
 import { Effect } from "effect"
 import { BrowserWindow, app } from "electron"
 
+import { runRequest } from "./exec"
 import { initExtensions } from "./extension/loader"
 import { createExtensionStorage, registerExtensionStorageIpc } from "./extension/storage"
 import {
@@ -13,10 +14,10 @@ import {
     type HostRuntime,
 } from "./ipc/events"
 import { registerIpc } from "./ipc/handlers"
-import { createStatePersistence, type StatePersistence } from "./persistence"
-import { createSettingsStore, type SettingsStore } from "./settings"
+import { createStatePersistence } from "./persistence"
+import { createSettingsStore } from "./settings"
 import { initialState, type DomainState } from "./state/state"
-import { BrowserStore, makeStoreLayer } from "./state/store"
+import { BrowserStore, makeStoreLayer, type StoreService } from "./state/store"
 import { installMenu } from "./windows/app-menu"
 import { registerInternalPages, registerInternalScheme } from "./windows/internal-pages"
 import { attachWindowEvents, createWindow } from "./windows/main-window"
@@ -62,56 +63,59 @@ const filterBenignExtensionLoadWarnings = (): void => {
     }
 }
 
-let statePersistence: StatePersistence | null = null
-let extensionStorageFlush: (() => void) | null = null
-let settingsStore: SettingsStore | null = null
+// --- process-lifetime application
 
-const flushPersistence = (): void => {
-    statePersistence?.flush()
-    extensionStorageFlush?.()
-    settingsStore?.flush()
+interface Application {
+    readonly store: StoreService
+    readonly rt: HostRuntime
+    readonly flush: () => void
+    readonly ensureSeedTab: () => Promise<void>
 }
 
-const start = async (): Promise<void> => {
+let application: Application | null = null
+let booting: Promise<Application> | null = null
+
+const bootApplication = async (): Promise<Application> => {
     filterBenignExtensionLoadWarnings()
     await app.whenReady()
 
     const userData = app.getPath("userData")
     const persistence = createStatePersistence(path.join(userData, "state.json"))
-    statePersistence = persistence
     const initial: DomainState = persistence.load() ?? initialState()
 
     const settings = createSettingsStore(path.join(userData, "settings.json"))
-    settingsStore = settings
     registerSettingsBroadcast(settings)
 
     const extStorage = createExtensionStorage(path.join(userData, "extension-storage.json"))
     extStorage.load()
-    extensionStorageFlush = () => extStorage.flush()
     registerExtensionStorageIpc(extStorage)
+
+    // Mutable ref so the store's onCommit can call the real handler once rt exists.
+    let commitHandler: (next: DomainState) => void = () => undefined
+
+    const store: StoreService = Effect.runSync(
+        Effect.gen(function* () {
+            return yield* BrowserStore
+        }).pipe(
+            Effect.provide(
+                makeStoreLayer(initial, (next) => {
+                    commitHandler(next)
+                    persistence.schedule(next)
+                }),
+            ),
+        ),
+    )
 
     const rt: HostRuntime = {
         win: null,
-        store: null,
+        store,
         settings,
         latest: initial,
         previousActiveTab: null,
         lastOmniboxQuery: "",
         rebuildMenu: () => undefined,
     }
-
-    const commit = makeOnCommit(rt)
-    const onCommit = (next: DomainState): void => {
-        commit(next)
-        persistence.schedule(next)
-    }
-
-    rt.store = Effect.runSync(
-        Effect.gen(function* () {
-            return yield* BrowserStore
-        }).pipe(Effect.provide(makeStoreLayer(initial, onCommit))),
-    )
-    const store = rt.store
+    commitHandler = makeOnCommit(rt)
 
     registerIpc(store, settings, () => rt.latest)
 
@@ -128,40 +132,68 @@ const start = async (): Promise<void> => {
         tabIdForWebContents,
     })
 
+    const handleOmniboxActivate = makeOmniboxActivator(rt)
+    registerOverlayEvents(rt, handleOmniboxActivate)
+
+    const flush = (): void => {
+        persistence.flush()
+        extStorage.flush()
+        settings.flush()
+    }
+
+    const ensureSeedTab = async (): Promise<void> => {
+        if (initial.containers.length > 0) {
+            // Restored: attach the active tab's view and push state to the window.
+            commitHandler(initial)
+        } else {
+            // The app always starts with one container holding one empty tab.
+            await runRequest(store.createContainer())
+        }
+    }
+
+    return { store, rt, flush, ensureSeedTab }
+}
+
+const openMainWindow = async (appInstance: Application): Promise<void> => {
+    const { rt, store, ensureSeedTab } = appInstance
+
     rt.rebuildMenu = installMenu({
         store,
         getState: () => rt.latest,
         focusOmnibox: () => rt.win?.webContents.send("arbor:focus-omnibox"),
     })
 
-    const win = await createWindow(settings.get())
+    const win = await createWindow(rt.settings.get())
     rt.win = win
     attachWindowEvents(win)
 
-    const handleOmniboxActivate = makeOmniboxActivator(rt)
-    registerOverlayEvents(rt, handleOmniboxActivate)
-
-    if (initial.containers.length > 0) {
-        // Restored: attach the active tab's view and push state to the window.
-        onCommit(initial)
-    } else {
-        // The app always starts with one container holding one empty tab.
-        await Effect.runPromise(store.createContainer())
-    }
+    await ensureSeedTab()
 }
 
-void start()
+const ensureApplication = async (): Promise<Application> => {
+    if (application) return application
+    if (!booting) booting = bootApplication()
+    application = await booting
+    return application
+}
+
+const startMainWindow = async (): Promise<void> => {
+    const appInstance = await ensureApplication()
+    await openMainWindow(appInstance)
+}
+
+void startMainWindow()
 
 app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) void start()
+    if (BrowserWindow.getAllWindows().length === 0) void startMainWindow()
 })
 
 // before-quit covers Cmd+Q and app.quit();
 // window-all-closed covers macOS re-activate
-// (start() reloads from disk, so pending state must be flushed first).
-app.on("before-quit", flushPersistence)
+// (state must be flushed before a possible reload from disk).
+app.on("before-quit", () => application?.flush())
 
 app.on("window-all-closed", () => {
-    flushPersistence()
+    application?.flush()
     if (process.platform !== "darwin") app.quit()
 })

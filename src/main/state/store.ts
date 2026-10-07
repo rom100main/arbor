@@ -1,4 +1,4 @@
-import { Context, Data, Effect, Layer, Ref } from "effect"
+import { Context, Effect, Layer, Ref } from "effect"
 
 import type {
     BrowserSnapshot,
@@ -15,13 +15,20 @@ import {
     setContainerColor,
     setContainerIcon,
     switchContainer,
+    type CreateContainerOptions,
 } from "./containers"
 import { clearExtensionConsent, setExtensionConsent } from "./extension-state"
 import { moveTab, moveToContainer, type MoveTabOptions } from "./moves"
-import { snapshot, type DomainState } from "./state"
-import { createChildTab, createTab, renameTab, selectTab, setCollapsed } from "./tabs"
-
-export class DomainError extends Data.TaggedError("DomainError")<{ message: string }> {}
+import { DomainError, snapshot, type DomainState, type TransitionResult } from "./state"
+import {
+    createChildTab,
+    createTab,
+    renameTab,
+    selectTab,
+    setCollapsed,
+    type CreateChildTabOptions,
+    type CreateTabOptions,
+} from "./tabs"
 
 export interface StoreService {
     readonly snapshot: Effect.Effect<BrowserSnapshot>
@@ -47,7 +54,11 @@ export interface StoreService {
         toIndex: number,
     ) => Effect.Effect<void, DomainError>
     readonly createTab: (url?: string) => Effect.Effect<TabId, DomainError>
-    readonly createChildTab: (parentTabId: TabId, url?: string) => Effect.Effect<TabId, DomainError>
+    readonly createChildTab: (
+        parentTabId: TabId,
+        url?: string,
+        background?: boolean,
+    ) => Effect.Effect<TabId, DomainError>
     readonly selectTab: (tabId: TabId) => Effect.Effect<void, DomainError>
     readonly setCollapsed: (tabId: TabId, collapsed: boolean) => Effect.Effect<void, DomainError>
     readonly renameTab: (tabId: TabId, label: string | null) => Effect.Effect<void, DomainError>
@@ -61,7 +72,7 @@ export interface StoreService {
     readonly updateTabMeta: (
         tabId: TabId,
         meta: { title?: string; url?: string; favicon?: string | null },
-    ) => Effect.Effect<void>
+    ) => Effect.Effect<void, DomainError>
     readonly setExtensionConsent: (
         extensionId: string,
         grant: ExtensionGrant,
@@ -73,6 +84,12 @@ export interface StoreService {
 
 export class BrowserStore extends Context.Tag("arbor.BrowserStore")<BrowserStore, StoreService>() {}
 
+type RunOutcome<A> =
+    | { readonly tag: "ok"; readonly value: A; readonly next: DomainState }
+    | { readonly tag: "noop"; readonly value: A }
+    | { readonly tag: "fail"; readonly error: DomainError }
+    | { readonly tag: "die"; readonly error: unknown }
+
 export const makeStoreLayer = (
     initial: DomainState,
     onCommit: (state: DomainState) => void,
@@ -82,76 +99,126 @@ export const makeStoreLayer = (
         Effect.gen(function* () {
             const ref = yield* Ref.make(initial)
 
-            const run = <A>(
-                op: (state: DomainState) => DomainState,
+            /** Observe post-commit failures without pretending the mutation rolled back. */
+            const notify = (next: DomainState): void => {
+                try {
+                    onCommit(next)
+                } catch (error) {
+                    console.error("Post-commit observer failed:", error)
+                }
+            }
+
+            /** Atomic synchronous transition: domain failures leave state unchanged. */
+            const commit = <A>(
+                op: (state: DomainState) => DomainState | TransitionResult<A>,
                 pick: (next: DomainState) => A,
             ): Effect.Effect<A, DomainError> =>
                 Effect.gen(function* () {
-                    const state = yield* Ref.get(ref)
-                    const next = yield* Effect.try({
-                        try: () => op(state),
-                        catch: (error) =>
-                            new DomainError({
-                                message: error instanceof Error ? error.message : String(error),
-                            }),
-                    })
-                    yield* Ref.set(ref, next)
-                    onCommit(next)
-                    return pick(next)
+                    const outcome = yield* Ref.modify(
+                        ref,
+                        (state): readonly [RunOutcome<A>, DomainState] => {
+                            try {
+                                const result = op(state)
+                                if (isTransition(result)) {
+                                    return [
+                                        { tag: "ok", value: result.value, next: result.state },
+                                        result.state,
+                                    ]
+                                }
+                                if (result === state) {
+                                    return [{ tag: "noop", value: pick(state) }, state]
+                                }
+                                return [{ tag: "ok", value: pick(result), next: result }, result]
+                            } catch (error) {
+                                if (error instanceof DomainError) {
+                                    return [{ tag: "fail", error }, state]
+                                }
+                                return [{ tag: "die", error }, state]
+                            }
+                        },
+                    )
+                    if (outcome.tag === "fail") return yield* Effect.fail(outcome.error)
+                    if (outcome.tag === "die") return yield* Effect.die(outcome.error)
+                    if (outcome.tag === "ok") notify(outcome.next)
+                    return outcome.value
                 })
 
             const runVoid = (op: (state: DomainState) => DomainState) =>
-                run<void>(op, () => undefined)
+                commit<void>(op, () => undefined)
 
-            const activeTabOf = (next: DomainState): TabId =>
-                next.containers.find((c) => c.id === next.activeContainerId)!.activeTabId!
+            const now = (): number => Date.now()
+            const tabId = (): TabId => `tab-${crypto.randomUUID()}`
+            const containerId = (): ContainerId => `container-${crypto.randomUUID()}`
 
             const service: StoreService = {
                 snapshot: Effect.map(Ref.get(ref), snapshot),
-                createContainer: (name, color) =>
-                    run<ContainerId>(
-                        (state) => createContainer(state, name, color),
-                        (next) => next.containers[next.containers.length - 1].id,
-                    ),
-                switchContainer: (containerId) =>
-                    runVoid((state) => switchContainer(state, containerId)),
-                renameContainer: (containerId, name) =>
-                    runVoid((state) => renameContainer(state, containerId, name)),
-                setContainerColor: (containerId, color) =>
-                    runVoid((state) => setContainerColor(state, containerId, color)),
-                setContainerIcon: (containerId, icon) =>
-                    runVoid((state) => setContainerIcon(state, containerId, icon)),
-                reorderContainer: (containerId, toIndex) =>
-                    runVoid((state) => reorderContainer(state, containerId, toIndex)),
-                createTab: (url) => run<TabId>((state) => createTab(state, { url }), activeTabOf),
-                createChildTab: (parentTabId, url) =>
-                    run<TabId>((state) => createChildTab(state, parentTabId, url), activeTabOf),
-                selectTab: (tabId) => runVoid((state) => selectTab(state, tabId)),
-                setCollapsed: (tabId, collapsed) =>
-                    runVoid((state) => setCollapsed(state, tabId, collapsed)),
-                renameTab: (tabId, label) => runVoid((state) => renameTab(state, tabId, label)),
-                closeTab: (tabId) => runVoid((state) => closeTab(state, tabId)),
-                reopenTab: () => runVoid((state) => reopenTab(state)),
+                createContainer: (name, color) => {
+                    const id = containerId()
+                    const ts = now()
+                    return commit<ContainerId>(
+                        (state) =>
+                            createContainer(state, {
+                                id,
+                                now: ts,
+                                name,
+                                color,
+                            } satisfies CreateContainerOptions),
+                        () => id,
+                    )
+                },
+                switchContainer: (id) => runVoid((state) => switchContainer(state, id, now())),
+                renameContainer: (id, name) => runVoid((state) => renameContainer(state, id, name)),
+                setContainerColor: (id, color) =>
+                    runVoid((state) => setContainerColor(state, id, color)),
+                setContainerIcon: (id, icon) =>
+                    runVoid((state) => setContainerIcon(state, id, icon)),
+                reorderContainer: (id, toIndex) =>
+                    runVoid((state) => reorderContainer(state, id, toIndex)),
+                createTab: (url) => {
+                    const id = tabId()
+                    const ts = now()
+                    return commit<TabId>(
+                        (state) =>
+                            createTab(state, { id, now: ts, url } satisfies CreateTabOptions),
+                        () => id,
+                    )
+                },
+                createChildTab: (parentTabId, url, background) => {
+                    const id = tabId()
+                    const ts = now()
+                    return commit<TabId>(
+                        (state) =>
+                            createChildTab(state, parentTabId, {
+                                id,
+                                now: ts,
+                                url,
+                                background,
+                            } satisfies CreateChildTabOptions),
+                        () => id,
+                    )
+                },
+                selectTab: (id) => runVoid((state) => selectTab(state, id, now())),
+                setCollapsed: (id, collapsed) =>
+                    runVoid((state) => setCollapsed(state, id, collapsed)),
+                renameTab: (id, label) => runVoid((state) => renameTab(state, id, label)),
+                closeTab: (id) => runVoid((state) => closeTab(state, id, now())),
+                reopenTab: () => runVoid((state) => reopenTab(state, now())),
                 moveTab: (options) => runVoid((state) => moveTab(state, options)),
-                moveToContainer: (tabId, containerId) =>
-                    runVoid((state) => moveToContainer(state, tabId, containerId)),
-                updateTabMeta: (tabId, meta) =>
-                    Effect.gen(function* () {
-                        const state = yield* Ref.get(ref)
-                        const tab = state.tabs.get(tabId)
-                        if (!tab) return
-                        const next: DomainState = {
-                            ...state,
-                            tabs: new Map(state.tabs),
+                moveToContainer: (tab, container) =>
+                    runVoid((state) => moveToContainer(state, tab, container)),
+                updateTabMeta: (id, meta) =>
+                    runVoid((state) => {
+                        const tab = state.tabs.get(id)
+                        if (!tab) return state
+                        const title = meta.title ?? tab.title
+                        const url = meta.url ?? tab.url
+                        const favicon = meta.favicon !== undefined ? meta.favicon : tab.favicon
+                        if (title === tab.title && url === tab.url && favicon === tab.favicon) {
+                            return state
                         }
-                        next.tabs.set(tabId, {
-                            ...tab,
-                            title: meta.title ?? tab.title,
-                            url: meta.url ?? tab.url,
-                            favicon: meta.favicon !== undefined ? meta.favicon : tab.favicon,
-                        })
-                        yield* Ref.set(ref, next)
-                        onCommit(next)
+                        const next: DomainState = { ...state, tabs: new Map(state.tabs) }
+                        next.tabs.set(id, { ...tab, title, url, favicon })
+                        return next
                     }),
                 setExtensionConsent: (extensionId, grant) =>
                     runVoid((state) => setExtensionConsent(state, extensionId, grant)),
@@ -163,3 +230,6 @@ export const makeStoreLayer = (
             return service
         }),
     )
+
+const isTransition = <A>(value: DomainState | TransitionResult<A>): value is TransitionResult<A> =>
+    "state" in value && "value" in value

@@ -1,4 +1,3 @@
-import { Effect } from "effect"
 import {
     WebContentsView,
     session,
@@ -10,6 +9,7 @@ import buildChromeContextMenu from "electron-chrome-context-menu"
 
 import { isInternalUrl } from "../../shared/internal-pages"
 import type { ContainerId } from "../../shared/protocol"
+import { runBackground } from "../exec"
 import { extensionsReady, setupSessionExtensions } from "../extension/loader"
 import type { DomainState } from "../state/state"
 import type { StoreService } from "../state/store"
@@ -86,15 +86,14 @@ export const tabIdForWebContents = (wc: WebContents): string | null => {
     return null
 }
 
-const openChildTab = async (
+const openChildTab = (
     store: StoreService,
     parentTabId: string,
     url: string,
     disposition: string,
-): Promise<void> => {
-    await Effect.runPromise(store.createChildTab(parentTabId, url))
+): void => {
     // Background opens must not steal focus from the originating tab.
-    if (disposition === "background-tab") await Effect.runPromise(store.selectTab(parentTabId))
+    void runBackground(store.createChildTab(parentTabId, url, disposition === "background-tab"))
 }
 
 export const ensureView = (deps: ViewDeps, tabId: string, url: string): WebContentsView => {
@@ -107,7 +106,7 @@ export const ensureView = (deps: ViewDeps, tabId: string, url: string): WebConte
     })
     // target=_blank, ctrl+click and window.open all become child tabs of the opener.
     view.webContents.setWindowOpenHandler(({ url: target, disposition }) => {
-        void openChildTab(deps.store, tabId, target, disposition)
+        openChildTab(deps.store, tabId, target, disposition)
         return { action: "deny" }
     })
     view.webContents.on("context-menu", (_event, params) => {
@@ -115,7 +114,7 @@ export const ensureView = (deps: ViewDeps, tabId: string, url: string): WebConte
             params,
             webContents: view.webContents,
             openLink: (target, disposition) => {
-                void openChildTab(deps.store, tabId, target, disposition)
+                openChildTab(deps.store, tabId, target, disposition)
             },
         })
         menu.popup()
@@ -163,7 +162,7 @@ export const destroyView = (tabId: string): void => {
 export const navigateTab = async (deps: ViewDeps, tabId: string, url: string): Promise<void> => {
     const tab = deps.getState().tabs.get(tabId)
     if (!tab) return
-    await Effect.runPromise(deps.store.updateTabMeta(tabId, { url }))
+    await runBackground(deps.store.updateTabMeta(tabId, { url }))
     if (sessionMismatch(tabId, tab.containerId, url)) return
     await viewForTab(tabId)?.webContents.loadURL(url)
 }
@@ -192,22 +191,18 @@ export const layoutViews = (win: BrowserWindow): void => {
 
 const trackPageMeta = (store: StoreService, tabId: string, view: WebContentsView): void => {
     const { webContents } = view
-    // updateTabMeta builds a lazy Effect, voiding it would discard it unexecuted.
-    const runMeta = (effect: Effect.Effect<void>): void => {
-        void Effect.runPromiseExit(effect)
-    }
     webContents.on("page-title-updated", (_event, title) => {
-        runMeta(store.updateTabMeta(tabId, { title }))
+        void runBackground(store.updateTabMeta(tabId, { title }))
     })
     webContents.on("did-navigate", (_event, url) => {
-        runMeta(store.updateTabMeta(tabId, { url, title: "", favicon: null }))
+        void runBackground(store.updateTabMeta(tabId, { url, title: "", favicon: null }))
     })
     webContents.on("did-navigate-in-page", (_event, url) => {
-        runMeta(store.updateTabMeta(tabId, { url }))
+        void runBackground(store.updateTabMeta(tabId, { url }))
     })
     webContents.on("page-favicon-updated", (_event, icons) => {
         // "data:," is Chromium's marker for "this page has no favicon".
         const favicon = icons.filter((icon) => icon !== "data:,").at(-1) ?? null
-        runMeta(store.updateTabMeta(tabId, { favicon }))
+        void runBackground(store.updateTabMeta(tabId, { favicon }))
     })
 }

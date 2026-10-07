@@ -1,4 +1,3 @@
-import { Effect } from "effect"
 import { BrowserWindow, ipcMain } from "electron"
 
 import type {
@@ -10,6 +9,7 @@ import type {
 } from "../../shared/protocol"
 import { DEFAULT_SEARCH_TEMPLATE } from "../../shared/settings"
 import { omniboxTarget } from "../../shared/url"
+import { runBackground } from "../exec"
 import { attachExtensionTab, openExtensionMenu } from "../extension/loader"
 import type { SettingsStore } from "../settings"
 import { snapshot as toSnapshot, type DomainState } from "../state/state"
@@ -36,11 +36,11 @@ import {
     viewForTab,
 } from "../windows/tab-views"
 
-/** Mutable host runtime owned by index.ts start(). */
+/** Mutable host runtime owned by index.ts boot. */
 export interface HostRuntime {
     win: BrowserWindow | null
-    store: StoreService | null
-    settings: SettingsStore | null
+    store: StoreService
+    settings: SettingsStore
     latest: DomainState
     previousActiveTab: TabId | null
     lastOmniboxQuery: string
@@ -62,7 +62,6 @@ export const registerSettingsBroadcast = (settings: SettingsStore): void => {
 export const makeOnCommit =
     (rt: HostRuntime) =>
     (next: DomainState): void => {
-        if (!rt.store) return
         const previous = rt.latest
         rt.latest = next
 
@@ -105,15 +104,14 @@ export const makeOmniboxActivator =
     async (payload: OmniboxActivation): Promise<void> => {
         const { store } = rt
         if (payload.kind === "tab") {
-            if (store)
-                await Effect.runPromise(store.selectTab(payload.tabId)).catch(() => undefined)
-        } else if (payload.query.trim().length > 0 && store) {
+            void runBackground(store.selectTab(payload.tabId))
+        } else if (payload.query.trim().length > 0) {
             const snapshot = toSnapshot(rt.latest)
             const tabId = snapshot.activeTabId
             if (tabId !== null && viewForTab(tabId)) {
                 const target = omniboxTarget(
                     payload.query,
-                    rt.settings?.get().searchTemplate ?? DEFAULT_SEARCH_TEMPLATE,
+                    rt.settings.get().searchTemplate ?? DEFAULT_SEARCH_TEMPLATE,
                 )
                 await navigateTab({ store, getState: () => rt.latest }, tabId, target)
             }

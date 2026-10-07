@@ -26,18 +26,20 @@ const successorTab = (state: DomainState, removed: TabNode): TabId | null => {
 /**
  * Close semantics:
  * a collapsed tab takes its whole subtree;
- * an expanded tab promotes its children, inheriting its position and order.
+ * an expanded tab promotes its direct children, inheriting its position and order.
  */
-export const closeTab = (state: DomainState, tabId: TabId): DomainState => {
+export const closeTab = (state: DomainState, tabId: TabId, now?: number): DomainState => {
     const tab = state.tabs.get(tabId)
     if (!tab) throw new DomainError(`Unknown tab: ${tabId}`)
     const container = containerOf(state, tab.containerId)
-    if (state.containers.length === 1 && tabCount(state, container.id) === 1) {
-        throw new DomainError("Cannot close the last tab of the last container")
-    }
 
     const descendants = descendantsOf(state, tabId)
     const expands = descendants.length > 0 && !tab.collapsed
+
+    const removedCount = expands ? 1 : 1 + descendants.length
+    if (removedCount >= state.tabs.size) {
+        throw new DomainError("Cannot close the last tab of the last container")
+    }
 
     const siblings = siblingsOf(state, tab)
     const indexBefore = siblings.findIndex((s) => s.id === tabId)
@@ -47,9 +49,15 @@ export const closeTab = (state: DomainState, tabId: TabId): DomainState => {
     for (const node of descendants) next.tabs.delete(node.id)
 
     if (expands) {
-        const promoted = descendants.map((child) => ({ ...child, parentId: tab.parentId }))
+        // Promotion: only direct children inherit the closed tab's position.
+        const directChildren = descendants.filter((child) => child.parentId === tabId)
+        const promoted = directChildren.map((child) => ({ ...child, parentId: tab.parentId }))
         siblings.splice(indexBefore, 1, ...promoted)
         for (const updated of reindex(siblings)) next.tabs.set(updated.id, updated)
+        // Deeper descendants keep their existing parent links.
+        for (const node of descendants) {
+            if (node.parentId !== tabId) next.tabs.set(node.id, node)
+        }
     } else {
         for (const updated of reindex(siblings.filter((s) => s.id !== tabId))) {
             next.tabs.set(updated.id, updated)
@@ -87,7 +95,7 @@ export const closeTab = (state: DomainState, tabId: TabId): DomainState => {
             : successorTab(result, tab)
         if (fallback) {
             const fallbackTab = result.tabs.get(fallback)
-            if (fallbackTab) result.tabs.set(fallback, touch(fallbackTab))
+            if (fallbackTab) result.tabs.set(fallback, touch(fallbackTab, now))
         }
         result = {
             ...result,
@@ -109,10 +117,17 @@ const promotedSuccessor = (
     return siblings[Math.min(indexBefore, siblings.length - 1)]?.id ?? null
 }
 
-/** Reopen the most recently closed subtree at its original position. */
-export const reopenTab = (state: DomainState): DomainState => {
+/**
+ * Reopen the most recently closed subtree at its original position.
+ *
+ * When the original parent has moved to another container or no longer exists,
+ * the reopened root becomes a root in a valid restored/original container.
+ */
+export const reopenTab = (state: DomainState, now?: number): DomainState => {
     const [entry, ...rest] = state.closeHistory
     if (!entry) throw new DomainError("No closed tab to reopen")
+
+    // Restore the container if it was auto-deleted on close.
     if (
         entry.containerMetaBefore !== null &&
         !state.containers.some((c) => c.id === entry.containerId)
@@ -121,24 +136,41 @@ export const reopenTab = (state: DomainState): DomainState => {
         state = { ...state, containers: [...state.containers, restored] }
         if (state.activeContainerId === null) state = { ...state, activeContainerId: restored.id }
     }
-    const container = containerOf(state, entry.containerId)
+
+    // Resolve a valid container: fall back when the original is gone and unrestorable.
+    let containerId = entry.containerId
+    if (!state.containers.some((c) => c.id === containerId)) {
+        containerId = state.activeContainerId ?? state.containers[0]?.id
+        if (!containerId) throw new DomainError("No container to reopen into")
+    }
+
+    // Keep the original parent only when it exists and lives in the same container.
+    const parent = entry.parentIdBefore !== null ? state.tabs.get(entry.parentIdBefore) : undefined
+    const parentId = parent && parent.containerId === containerId ? entry.parentIdBefore : null
+
+    const root: TabNode = { ...entry.nodes[0], containerId, parentId }
+    const descendants = entry.nodes.slice(1).map((node) => ({ ...node, containerId }))
 
     const next = withTabs(state, new Map(state.tabs))
-    const siblings = childrenOf(state, container.id, entry.parentIdBefore)
+
+    // Exclude restored descendants from the sibling list so reindex stays correct
+    // even when a close promoted them into the parent's children.
+    const descendantIds = new Set(entry.nodes.slice(1).map((n) => n.id))
+    const siblings = childrenOf(state, containerId, parentId).filter(
+        (s) => !descendantIds.has(s.id),
+    )
     const index = Math.min(entry.indexBefore, siblings.length)
-    siblings.splice(index, 0, entry.nodes[0])
-    const reindexed = new Map<TabId, TabNode>()
-    for (const updated of reindex(siblings)) reindexed.set(updated.id, updated)
-    for (const node of entry.nodes.slice(1)) reindexed.set(node.id, node)
-    for (const [id, node] of reindexed) next.tabs.set(id, node)
-    next.tabs.set(entry.nodes[0].id, touch(entry.nodes[0]))
+    siblings.splice(index, 0, root)
+    for (const updated of reindex(siblings)) next.tabs.set(updated.id, updated)
+    for (const node of descendants) next.tabs.set(node.id, node)
+    next.tabs.set(root.id, touch(root, now))
 
     return {
         ...next,
         closeHistory: rest,
-        activeContainerId: container.id,
+        activeContainerId: containerId,
         containers: next.containers.map((c) =>
-            c.id === container.id ? { ...c, activeTabId: entry.nodes[0].id } : c,
+            c.id === containerId ? { ...c, activeTabId: root.id } : c,
         ),
     }
 }

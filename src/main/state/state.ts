@@ -21,7 +21,19 @@ export interface DomainState {
     extensionConsent: Record<string, ExtensionGrant>
 }
 
-export class DomainError extends Error {}
+export class DomainError extends Error {
+    readonly _tag = "DomainError"
+}
+
+/** Explicit result of a transition that produces a value alongside the new state. */
+export interface TransitionResult<A> {
+    readonly state: DomainState
+    readonly value: A
+}
+
+export const ok = (state: DomainState): TransitionResult<void> => ({ state, value: undefined })
+
+export const okWith = <A>(state: DomainState, value: A): TransitionResult<A> => ({ state, value })
 
 export const initialState = (): DomainState => ({
     containers: [],
@@ -67,9 +79,10 @@ export const removeContainer = (state: DomainState, containerId: ContainerId): D
 export const tabCount = (state: DomainState, containerId: ContainerId): number =>
     [...state.tabs.values()].filter((t) => t.containerId === containerId).length
 
-const now = (): number => Date.now()
-
-export const touch = (tab: TabNode): TabNode => ({ ...tab, lastActiveAt: now() })
+export const touch = (tab: TabNode, now: number = Date.now()): TabNode => ({
+    ...tab,
+    lastActiveAt: now,
+})
 
 export const descendantsOf = (state: DomainState, tabId: TabId): TabNode[] => {
     const root = state.tabs.get(tabId)

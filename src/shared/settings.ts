@@ -81,8 +81,12 @@ export const normalizeSearchTemplate = (input: string): string | null => {
     // Probe with a real substitution: a template can carry `%s` and still not be a usable URL.
     const probe = searchUrl(withScheme, "arbor")
     if (probe === null) return null
-    const { protocol } = new URL(probe)
-    return protocol === "http:" || protocol === "https:" ? withScheme : null
+    try {
+        const { protocol } = new URL(probe)
+        return protocol === "http:" || protocol === "https:" ? withScheme : null
+    } catch {
+        return null
+    }
 }
 
 /** Substitute the query into a template, or `null` when the template is unusable. */
