@@ -16,12 +16,7 @@ import {
     setContainerIcon,
     switchContainer,
 } from "./containers"
-import {
-    clearExtensionConsent,
-    pinExtension,
-    setExtensionConsent,
-    unpinExtension,
-} from "./extension-state"
+import { clearExtensionConsent, setExtensionConsent } from "./extension-state"
 import { moveTab, moveToContainer, type MoveTabOptions } from "./moves"
 import { snapshot, type DomainState } from "./state"
 import { createChildTab, createTab, renameTab, selectTab, setCollapsed } from "./tabs"
@@ -67,8 +62,6 @@ export interface StoreService {
         tabId: TabId,
         meta: { title?: string; url?: string; favicon?: string | null },
     ) => Effect.Effect<void>
-    readonly pinExtension: (extensionId: string) => Effect.Effect<void, DomainError>
-    readonly unpinExtension: (extensionId: string) => Effect.Effect<void, DomainError>
     readonly setExtensionConsent: (
         extensionId: string,
         grant: ExtensionGrant,
@@ -160,9 +153,6 @@ export const makeStoreLayer = (
                         yield* Ref.set(ref, next)
                         onCommit(next)
                     }),
-                pinExtension: (extensionId) => runVoid((state) => pinExtension(state, extensionId)),
-                unpinExtension: (extensionId) =>
-                    runVoid((state) => unpinExtension(state, extensionId)),
                 setExtensionConsent: (extensionId, grant) =>
                     runVoid((state) => setExtensionConsent(state, extensionId, grant)),
                 clearExtensionConsent: (extensionId) =>

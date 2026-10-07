@@ -20,7 +20,6 @@ export interface PersistedState {
     containers: ContainerMeta[]
     tabs: TabNode[]
     activeContainerId: ContainerId | null
-    pinnedExtensionIds: string[]
     extensionConsent: Record<string, ExtensionGrant>
 }
 
@@ -37,7 +36,6 @@ export const toPersisted = (state: DomainState): PersistedState => ({
     containers: state.containers.map((c) => ({ ...c })),
     tabs: [...state.tabs.values()].map((t) => ({ ...t })),
     activeContainerId: state.activeContainerId,
-    pinnedExtensionIds: [...state.pinnedExtensionIds],
     extensionConsent: Object.fromEntries(
         Object.entries(state.extensionConsent).map(([id, grant]) => [id, cloneGrant(grant)]),
     ),
@@ -76,7 +74,6 @@ const PersistedStateSchema = Schema.Struct({
     containers: Schema.Array(Schema.Unknown),
     tabs: Schema.Array(Schema.Unknown),
     activeContainerId: orDefault(Schema.NullOr(Schema.String), () => null),
-    pinnedExtensionIds: orDefault(Schema.Array(Schema.String), () => [] as string[]),
     extensionConsent: orDefault(
         Schema.Record({ key: Schema.String, value: Schema.Unknown }),
         (): Record<string, unknown> => ({}),
@@ -182,9 +179,6 @@ export const fromPersisted = (data: unknown): DomainState | null => {
             ? rawActive
             : liveContainers[0].id
 
-    const pinnedExtensionIds = [...new Set(payload.pinnedExtensionIds)].filter(
-        (id) => id.length > 0,
-    )
     const extensionConsent: Record<string, ExtensionGrant> = {}
     for (const [id, raw] of Object.entries(payload.extensionConsent)) {
         const grant = parseGrant(raw)
@@ -197,7 +191,6 @@ export const fromPersisted = (data: unknown): DomainState | null => {
         tabs: reindexed,
         closeHistory: [],
         activeContainerId,
-        pinnedExtensionIds,
         extensionConsent,
     }
 }
