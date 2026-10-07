@@ -9,7 +9,69 @@ const empty: ParsedManifest = {
     optional_permissions: [],
     optional_host_permissions: [],
     optionsPage: "",
+    actionTitle: "",
+    actionIcon: null,
+    actionPopup: "",
 }
+
+describe("action fields", () => {
+    it("reads title, icon and popup from an MV3 action", () => {
+        const manifest = parseManifest({
+            name: "Ext",
+            action: {
+                default_title: "Ext title",
+                default_icon: { "16": "icon16.png" },
+                default_popup: "popup.html",
+            },
+        })
+        expect(manifest.actionTitle).toBe("Ext title")
+        expect(manifest.actionIcon).toEqual({ "16": "icon16.png" })
+        expect(manifest.actionPopup).toBe("popup.html")
+    })
+
+    it("accepts a bare icon path as well as a size map", () => {
+        expect(parseManifest({ action: { default_icon: "icon.png" } }).actionIcon).toBe("icon.png")
+    })
+
+    it("falls back to browser_action for an MV2 extension", () => {
+        const manifest = parseManifest({
+            name: "Ext",
+            browser_action: { default_title: "Legacy", default_icon: "legacy.png" },
+        })
+        expect(manifest.actionTitle).toBe("Legacy")
+        expect(manifest.actionIcon).toBe("legacy.png")
+    })
+
+    it("prefers action over browser_action, as Chrome does", () => {
+        const manifest = parseManifest({
+            name: "Ext",
+            action: { default_title: "Modern" },
+            browser_action: { default_title: "Legacy" },
+        })
+        expect(manifest.actionTitle).toBe("Modern")
+    })
+
+    it("falls back to the extension name when no title is declared", () => {
+        expect(parseManifest({ name: "Ext", action: {} }).actionTitle).toBe("Ext")
+    })
+
+    it("repairs a mistyped action without losing it", () => {
+        const manifest = parseManifest({ name: "Ext", action: "nonsense" })
+        expect(manifest.actionTitle).toBe("Ext")
+        expect(manifest.actionIcon).toBeNull()
+    })
+})
+
+/**
+ * `actionTitle` falls back to the extension name, so a manifest that declares a name but no
+ * action is not the empty baseline.
+ */
+const named = (name: string, rest: Partial<ParsedManifest> = {}): ParsedManifest => ({
+    ...empty,
+    name,
+    actionTitle: name,
+    ...rest,
+})
 
 describe("parseManifest", () => {
     it("yields the empty manifest for non-objects", () => {
@@ -21,12 +83,10 @@ describe("parseManifest", () => {
     })
 
     it("defaults absent fields without sinking the rest", () => {
-        expect(parseManifest({ name: "Ext" })).toEqual({ ...empty, name: "Ext" })
-        expect(parseManifest({ permissions: ["storage"], name: "Ext" })).toEqual({
-            ...empty,
-            name: "Ext",
-            permissions: ["storage"],
-        })
+        expect(parseManifest({ name: "Ext" })).toEqual(named("Ext"))
+        expect(parseManifest({ permissions: ["storage"], name: "Ext" })).toEqual(
+            named("Ext", { permissions: ["storage"] }),
+        )
     })
 
     it("falls back on mistyped fields", () => {
@@ -47,14 +107,14 @@ describe("parseManifest", () => {
                 optional_permissions: ["cookies"],
                 optional_host_permissions: ["https://other.example/*"],
             }),
-        ).toEqual({
-            name: "Ext",
-            permissions: ["storage", "tabs"],
-            host_permissions: ["https://example.com/*"],
-            optional_permissions: ["cookies"],
-            optional_host_permissions: ["https://other.example/*"],
-            optionsPage: "",
-        })
+        ).toEqual(
+            named("Ext", {
+                permissions: ["storage", "tabs"],
+                host_permissions: ["https://example.com/*"],
+                optional_permissions: ["cookies"],
+                optional_host_permissions: ["https://other.example/*"],
+            }),
+        )
     })
 
     it("prefers options_page over options_ui.page", () => {

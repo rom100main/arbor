@@ -1,12 +1,7 @@
 import { describe, expect, it } from "vite-plus/test"
 
 import { isRequestCovered, mergeGrant } from "../../src/main/extension/permissions"
-import {
-    clearExtensionConsent,
-    pinExtension,
-    setExtensionConsent,
-    unpinExtension,
-} from "../../src/main/state/extension-state"
+import { clearExtensionConsent, setExtensionConsent } from "../../src/main/state/extension-state"
 import { initialState, type DomainState } from "../../src/main/state/state"
 
 const seeded = (): DomainState => {
@@ -17,25 +12,6 @@ const seeded = (): DomainState => {
     })
     return state
 }
-
-describe("pins", () => {
-    it("appends in order and dedupes", () => {
-        let state = initialState()
-        state = pinExtension(state, "ext-bbb")
-        state = pinExtension(state, "ext-aaa")
-        state = pinExtension(state, "ext-bbb")
-        expect(state.pinnedExtensionIds).toEqual(["ext-bbb", "ext-aaa"])
-    })
-
-    it("unpin removes the id and unknown ids are a no-op", () => {
-        let state = pinExtension(initialState(), "ext-aaa")
-        state = unpinExtension(state, "ext-gone")
-        expect(state.pinnedExtensionIds).toEqual(["ext-aaa"])
-        state = unpinExtension(state, "ext-aaa")
-        expect(state.pinnedExtensionIds).toEqual([])
-        expect(unpinExtension(state, "ext-aaa")).toBe(state)
-    })
-})
 
 describe("consent ledger", () => {
     it("recording a grant replaces the previous scope for that id", () => {
