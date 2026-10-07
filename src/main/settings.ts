@@ -8,7 +8,7 @@ import {
     type Settings,
     type Theme,
 } from "../shared/settings"
-import { createDebouncedSaver, readJsonFile, writeJsonFileAtomic } from "./persistence"
+import { createDebouncedSaver, readJsonFile, writeJsonSafely } from "./persistence"
 
 const ThemeSchema = Schema.Literal(...THEMES)
 
@@ -84,13 +84,7 @@ export const createSettingsStore = (
     const subscribers = new Set<(settings: Settings) => void>()
 
     const saver = createDebouncedSaver({
-        write: () => {
-            try {
-                writeJsonFileAtomic(filePath, current)
-            } catch (error) {
-                console.error("[arbor] failed to save settings:", error)
-            }
-        },
+        write: () => writeJsonSafely(filePath, current, "settings"),
         delayMs: options.debounceMs,
     })
 

@@ -11,11 +11,15 @@ export const readJsonFile = (filePath: string): unknown => {
     }
 }
 
-/** Write via a temp file + rename so a crash mid-save cannot truncate the previous copy. */
-export const writeJsonFileAtomic = (filePath: string, value: unknown): void => {
-    const tmp = `${filePath}.tmp`
-    writeFileSync(tmp, JSON.stringify(value), "utf8")
-    renameSync(tmp, filePath)
+/** Best-effort atomic write (temp file + rename): a failed save never breaks the caller. */
+export const writeJsonSafely = (filePath: string, value: unknown, label: string): void => {
+    try {
+        const tmp = `${filePath}.tmp`
+        writeFileSync(tmp, JSON.stringify(value), "utf8")
+        renameSync(tmp, filePath)
+    } catch (error) {
+        console.error(`[arbor] failed to save ${label}:`, error)
+    }
 }
 
 export interface DebouncedSaver {
@@ -90,12 +94,7 @@ export const createStatePersistence = (
     let latest: DomainState | null = null
     const saver = createDebouncedSaver({
         write: () => {
-            if (!latest) return
-            try {
-                writeJsonFileAtomic(filePath, toPersisted(latest))
-            } catch (error) {
-                console.error("[arbor] failed to save browser state:", error)
-            }
+            if (latest) writeJsonSafely(filePath, toPersisted(latest), "browser state")
         },
         delayMs: options.debounceMs,
     })

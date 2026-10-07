@@ -20,7 +20,7 @@ import {
 import {
     createDebouncedSaver,
     readJsonFile,
-    writeJsonFileAtomic,
+    writeJsonSafely,
     type DebouncedSaver,
 } from "../persistence"
 
@@ -81,13 +81,8 @@ export const createExtensionStorage = (
 ): ExtensionStorageService => {
     let extensions: Record<string, ExtStorageAreas> = {}
     const saver: DebouncedSaver = createDebouncedSaver({
-        write: () => {
-            try {
-                writeJsonFileAtomic(filePath, toPersistedExtStorage(extensions))
-            } catch (error) {
-                console.error("[arbor] failed to save extension storage:", error)
-            }
-        },
+        write: () =>
+            writeJsonSafely(filePath, toPersistedExtStorage(extensions), "extension storage"),
         delayMs: options.debounceMs,
     })
 
