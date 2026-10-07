@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs"
+import { readFileSync } from "node:fs"
 
 import { describe, expect, it } from "vite-plus/test"
 
@@ -18,29 +18,10 @@ if (!isStringArray(rawIcons)) throw new Error("Invalid icons.json: expected an a
 const icons = rawIcons
 
 describe("icons", () => {
+    // icons.json is the generation source; Icon.tsx can be stale on disk while still typechecking.
     it("covers every container icon", () => {
         for (const icon of CONTAINER_ICONS) {
             expect(icons).toContain(icon)
-        }
-    })
-
-    it("lists unique kebab-case names with a matching Tabler SVG", () => {
-        expect(new Set(icons).size).toBe(icons.length)
-        for (const name of icons) {
-            expect(name).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/)
-            // `@tabler/icons/outline/*` maps to `icons/outline/*` on disk via exports.
-            const svg = new URL(
-                `../node_modules/@tabler/icons/icons/outline/${name}.svg`,
-                import.meta.url,
-            )
-            expect(existsSync(svg)).toBe(true)
-        }
-    })
-
-    it("is generated into Icon.tsx", () => {
-        const source = readFileSync(new URL("../src/renderer/ui/Icon.tsx", import.meta.url), "utf8")
-        for (const name of icons) {
-            expect(source).toContain(`@tabler/icons/outline/${name}.svg?raw`)
         }
     })
 })

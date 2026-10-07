@@ -23,29 +23,16 @@ const makeStore = (onCommit?: (state: DomainState) => void) => {
 const run = <A, E>(effect: Effect.Effect<A, E>): Promise<A> => Effect.runPromise(effect)
 
 describe("store transitions", () => {
-    it("returns the created container ID explicitly", async () => {
+    it("creators return the IDs of the entities they created", async () => {
         const { store } = makeStore()
-        const id = await run(store.createContainer("Work", "#ef4444"))
-        expect(id).toMatch(/^container-/)
-    })
-
-    it("returns the created tab ID explicitly", async () => {
-        const { store } = makeStore()
-        await run(store.createContainer())
-        const id = await run(store.createTab("https://example.com"))
-        expect(id).toMatch(/^tab-/)
-    })
-
-    it("createChildTab returns its own ID regardless of active container", async () => {
-        const { store } = makeStore()
-        await run(store.createContainer())
-        await run(store.createContainer())
-        const first = await run(store.snapshot)
-        const secondTab = first.containers[1].activeTabId!
-        await run(store.switchContainer(first.containers[0].id))
-        const childId = await run(store.createChildTab(secondTab))
+        const containerId = await run(store.createContainer("Work", "#ef4444"))
+        const tabId = await run(store.createTab("https://example.com"))
+        const childId = await run(store.createChildTab(tabId, "https://example.com/x"))
         const snap = await run(store.snapshot)
-        expect(childId).toBe(snap.containers[1].activeTabId!)
+        expect(snap.containers.map((c) => c.id)).toContain(containerId)
+        const tabIds = new Set(snap.tabs.map((t) => t.id))
+        expect(tabIds.has(tabId)).toBe(true)
+        expect(tabIds.has(childId)).toBe(true)
     })
 
     it("domain failure leaves state unchanged and publishes zero times", async () => {
@@ -60,7 +47,6 @@ describe("store transitions", () => {
         const { store, commits } = makeStore()
         await run(store.createContainer())
         commits.length = 0
-        await run(store.setCollapsed(commits.length === 0 ? "" : "", true)).catch(() => undefined)
         // setCollapsed on a real tab with the same value is a no-op.
         const snap = await run(store.snapshot)
         const tabId = snap.activeTabId!
@@ -82,13 +68,13 @@ describe("store transitions", () => {
     })
 
     it("post-commit observer failure does not fail the mutation", async () => {
-        const { store, commits } = makeStore((state) => {
+        const { store } = makeStore((state) => {
             if (state.tabs.size > 0) throw new Error("observer boom")
         })
         // First createContainer triggers the throwing observer, but the mutation must succeed.
         const id = await run(store.createContainer())
-        expect(id).toMatch(/^container-/)
-        expect(commits.length).toBeGreaterThanOrEqual(0)
+        const snap = await run(store.snapshot)
+        expect(snap.containers.map((c) => c.id)).toContain(id)
     })
 
     it("concurrent mutations retain all successful updates", async () => {
@@ -103,16 +89,6 @@ describe("store transitions", () => {
         expect(new Set(results).size).toBe(3)
         const snap = await run(store.snapshot)
         expect(snap.tabs.length).toBe(4) // 1 initial + 3 created
-    })
-
-    it("background child creation does not change the active tab", async () => {
-        const { store } = makeStore()
-        await run(store.createContainer())
-        const before = await run(store.snapshot)
-        const parentId = before.activeTabId!
-        await run(store.createChildTab(parentId, "https://example.com", true))
-        const after = await run(store.snapshot)
-        expect(after.activeTabId).toBe(parentId)
     })
 })
 

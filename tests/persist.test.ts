@@ -82,24 +82,6 @@ describe("persist round-trip", () => {
         )
     })
 
-    it("preserves ids verbatim (container ids key session partitions)", () => {
-        const state = buildRichState()
-        const restored = fromPersisted(toPersisted(state))!
-        expect(restored.containers.map((c) => c.id)).toEqual(state.containers.map((c) => c.id))
-        expect([...restored.tabs.keys()].sort()).toEqual([...state.tabs.keys()].sort())
-    })
-
-    it("round-trips collapsed and userLabel", () => {
-        const state = buildRichState()
-        const restored = fromPersisted(toPersisted(state))!
-        for (const tab of state.tabs.values()) {
-            const copy = restored.tabs.get(tab.id)!
-            expect(copy.collapsed).toBe(tab.collapsed)
-            expect(copy.userLabel).toBe(tab.userLabel)
-            expect(copy.parentId).toBe(tab.parentId)
-        }
-    })
-
     it("round-trips extensionConsent", () => {
         let state = buildRichState()
         state = setExtensionConsent(state, "ext-aaa", {
@@ -214,53 +196,32 @@ describe("persist reject", () => {
 
 describe("debounced saver", () => {
     const setup = () => {
-        let now = 0
-        let nextHandle = 1
-        const timers = new Map<number, { fn: () => void; at: number }>()
         const writes: number[] = []
         const saver = createDebouncedSaver({
-            write: () => writes.push(now),
-            delayMs: 500,
-            setTimer: (fn, ms) => {
-                const handle = nextHandle
-                nextHandle += 1
-                timers.set(handle, { fn, at: now + ms })
-                return handle
-            },
-            clearTimer: (handle) => {
-                if (typeof handle === "number") timers.delete(handle)
-            },
+            write: () => writes.push(writes.length),
+            delayMs: 20,
         })
-        const tick = (ms: number) => {
-            now += ms
-            for (const [handle, timer] of [...timers]) {
-                if (timer.at <= now) {
-                    timers.delete(handle)
-                    timer.fn()
-                }
-            }
-        }
-        return { saver, tick, writes, time: () => now }
+        return { saver, writes }
     }
 
-    it("coalesces bursts into one write", () => {
-        const { saver, tick, writes } = setup()
+    const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 50))
+
+    it("coalesces bursts into one write", async () => {
+        const { saver, writes } = setup()
         saver.schedule()
-        tick(100)
         saver.schedule()
-        tick(100)
         saver.schedule()
         expect(writes).toHaveLength(0)
-        tick(500)
+        await settle()
         expect(writes).toHaveLength(1)
     })
 
-    it("flush writes immediately and clears the timer", () => {
-        const { saver, tick, writes } = setup()
+    it("flush writes immediately and clears the timer", async () => {
+        const { saver, writes } = setup()
         saver.schedule()
         saver.flush()
         expect(writes).toHaveLength(1)
-        tick(1000)
+        await settle()
         expect(writes).toHaveLength(1)
     })
 

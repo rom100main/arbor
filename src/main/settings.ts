@@ -62,8 +62,6 @@ export interface SettingsStore {
 
 export interface SettingsStoreOptions {
     debounceMs?: number
-    setTimer?: (fn: () => void, ms: number) => unknown
-    clearTimer?: (handle: unknown) => void
 }
 
 /**
@@ -90,8 +88,6 @@ export const createSettingsStore = (
             }
         },
         delayMs: options.debounceMs,
-        setTimer: options.setTimer,
-        clearTimer: options.clearTimer,
     })
 
     const commit = (next: Settings): Settings => {

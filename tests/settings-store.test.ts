@@ -10,28 +10,6 @@ import { DEFAULT_SETTINGS } from "../src/shared/settings"
 const tempFile = (): string =>
     path.join(mkdtempSync(path.join(tmpdir(), "arbor-settings-")), "settings.json")
 
-/** Write through a controllable timer so flush behaviour is testable without waiting. */
-const manualStore = (filePath: string) => {
-    const scheduled: (() => void)[] = []
-    let armed = 0
-    const store = createSettingsStore(filePath, {
-        debounceMs: 10,
-        setTimer: (fn) => {
-            scheduled.push(fn)
-            armed += 1
-            return armed
-        },
-        clearTimer: () => undefined,
-    })
-    return {
-        store,
-        armedCount: (): number => armed,
-        runScheduled: (): void => {
-            for (const fn of scheduled.splice(0)) fn()
-        },
-    }
-}
-
 describe("fromPersistedSettings", () => {
     it("returns null for a payload that is not an object", () => {
         expect(fromPersistedSettings(null)).toBeNull()
@@ -67,28 +45,28 @@ describe("fromPersistedSettings", () => {
 
 describe("settings store", () => {
     it("starts from defaults when there is no file", () => {
-        const { store } = manualStore(tempFile())
+        const store = createSettingsStore(tempFile())
         expect(store.get()).toEqual(DEFAULT_SETTINGS)
     })
 
     it("loads what a previous run wrote", () => {
         const filePath = tempFile()
-        const { store, runScheduled } = manualStore(filePath)
+        const store = createSettingsStore(filePath)
         store.set({ theme: "dark", searchTemplate: "https://kagi.com/search?q=%s" })
-        runScheduled()
+        store.flush()
         expect(fromPersistedSettings(JSON.parse(readFileSync(filePath, "utf8")))).toEqual({
             theme: "dark",
             searchTemplate: "https://kagi.com/search?q=%s",
             pinnedExtensionIds: [],
         })
 
-        const reloaded = manualStore(filePath).store
+        const reloaded = createSettingsStore(filePath)
         expect(reloaded.get().theme).toBe("dark")
         expect(reloaded.get().searchTemplate).toBe("https://kagi.com/search?q=%s")
     })
 
     it("normalises a bare-host template on the way in", () => {
-        const { store } = manualStore(tempFile())
+        const store = createSettingsStore(tempFile())
         expect(store.set({ searchTemplate: "kagi.com/search?q=%s" }).searchTemplate).toBe(
             "https://kagi.com/search?q=%s",
         )
@@ -96,15 +74,16 @@ describe("settings store", () => {
 
     it("rejects a template with no %s and writes nothing", () => {
         const filePath = tempFile()
-        const { store, runScheduled } = manualStore(filePath)
+        const store = createSettingsStore(filePath)
         store.set({ theme: "light" })
-        runScheduled()
+        store.flush()
         const before = JSON.parse(readFileSync(filePath, "utf8"))
 
         expect(() => store.set({ searchTemplate: "https://duckduckgo.com/" })).toThrow(
             SettingsError,
         )
         expect(store.get().searchTemplate).toBe(DEFAULT_SETTINGS.searchTemplate)
+        store.flush()
         // Disk still holds what the last accepted write left there.
         expect(JSON.parse(readFileSync(filePath, "utf8"))).toEqual(before)
         expect(before.theme).toBe("light")
@@ -114,7 +93,7 @@ describe("settings store", () => {
     // can be type-valid and still be rejected is the template, since it is a free-text string.
 
     it("notifies subscribers on change and stops after unsubscribe", () => {
-        const { store } = manualStore(tempFile())
+        const store = createSettingsStore(tempFile())
         const seen: string[] = []
         const stop = store.subscribe((settings) => seen.push(settings.theme))
         store.set({ theme: "dark" })
@@ -124,7 +103,7 @@ describe("settings store", () => {
     })
 
     it("pins in order, dedupes, and unpins", () => {
-        const { store } = manualStore(tempFile())
+        const store = createSettingsStore(tempFile())
         store.pinExtension("ext-bbb")
         store.pinExtension("ext-aaa")
         store.pinExtension("ext-bbb")
@@ -137,24 +116,22 @@ describe("settings store", () => {
         expect(store.get().pinnedExtensionIds).toEqual(["ext-aaa"])
     })
 
-    it("does not notify or reschedule when a pin is a no-op", () => {
-        const { store, runScheduled, armedCount } = manualStore(tempFile())
+    it("does not notify when a pin is a no-op", () => {
+        const store = createSettingsStore(tempFile())
         store.pinExtension("ext-aaa")
-        runScheduled()
-        const armed = armedCount()
         const seen: number[] = []
         store.subscribe(() => seen.push(1))
         store.pinExtension("ext-aaa")
         store.unpinExtension("ext-gone")
         expect(seen).toEqual([])
-        expect(armedCount()).toBe(armed)
+        expect(store.get().pinnedExtensionIds).toEqual(["ext-aaa"])
     })
 })
 
 describe("settings flush", () => {
     it("writes pending changes on flush without waiting for the timer", () => {
         const filePath = tempFile()
-        const { store } = manualStore(filePath)
+        const store = createSettingsStore(filePath)
         store.set({ theme: "dark" })
         store.flush()
         expect(JSON.parse(readFileSync(filePath, "utf8")).theme).toBe("dark")

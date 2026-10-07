@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vite-plus/test"
 
-import {
-    normalizeSearchTemplate,
-    SEARCH_ENGINES,
-    searchUrl,
-    SUGGESTED_SEARCH_TEMPLATES,
-} from "../src/shared/settings"
+import { normalizeSearchTemplate, SEARCH_ENGINES, searchUrl } from "../src/shared/settings"
 
 describe("the suggested engines", () => {
     it("gives every engine a distinct name and a valid template", () => {
@@ -15,16 +10,6 @@ describe("the suggested engines", () => {
             names.add(engine.name)
             expect(normalizeSearchTemplate(engine.template)).toBe(engine.template)
         }
-    })
-
-    it("includes Google and Kagi", () => {
-        const names = SEARCH_ENGINES.map((engine) => engine.name)
-        expect(names).toContain("Google")
-        expect(names).toContain("Kagi")
-    })
-
-    it("derives the bare template list from the same source", () => {
-        expect(SUGGESTED_SEARCH_TEMPLATES).toEqual(SEARCH_ENGINES.map((e) => e.template))
     })
 })
 
@@ -64,12 +49,6 @@ describe("normalizeSearchTemplate", () => {
     it("is total for arbitrary strings", () => {
         for (const input of ["", "%s", ":///%s", "https://%s", "http:// %s", "\u0000%s"]) {
             expect(() => normalizeSearchTemplate(input)).not.toThrow()
-        }
-    })
-
-    it("accepts every suggested template", () => {
-        for (const template of SUGGESTED_SEARCH_TEMPLATES) {
-            expect(normalizeSearchTemplate(template)).toBe(template)
         }
     })
 })

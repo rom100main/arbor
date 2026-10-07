@@ -30,25 +30,17 @@ export interface DebouncedSaver {
 export interface DebouncedSaverOptions {
     write: () => void
     delayMs?: number
-    setTimer?: (fn: () => void, ms: number) => unknown
-    clearTimer?: (handle: unknown) => void
 }
 
 export const createDebouncedSaver = (options: DebouncedSaverOptions): DebouncedSaver => {
     const delayMs = options.delayMs ?? 500
-    const setTimer = options.setTimer ?? ((fn, ms) => setTimeout(fn, ms))
-    const clearTimer =
-        options.clearTimer ??
-        ((handle) => {
-            Reflect.apply(clearTimeout, undefined, [handle])
-        })
 
-    let handle: unknown = null
+    let handle: ReturnType<typeof setTimeout> | null = null
     let dirty = false
 
     const clear = (): void => {
         if (handle === null) return
-        clearTimer(handle)
+        clearTimeout(handle)
         handle = null
     }
 
@@ -63,7 +55,7 @@ export const createDebouncedSaver = (options: DebouncedSaverOptions): DebouncedS
         schedule: () => {
             dirty = true
             clear()
-            handle = setTimer(run, delayMs)
+            handle = setTimeout(run, delayMs)
         },
         flush: () => {
             clear()
@@ -89,8 +81,6 @@ export interface StatePersistence {
 
 export interface StatePersistenceOptions {
     debounceMs?: number
-    setTimer?: (fn: () => void, ms: number) => unknown
-    clearTimer?: (handle: unknown) => void
 }
 
 export const createStatePersistence = (
@@ -108,8 +98,6 @@ export const createStatePersistence = (
             }
         },
         delayMs: options.debounceMs,
-        setTimer: options.setTimer,
-        clearTimer: options.clearTimer,
     })
 
     return {

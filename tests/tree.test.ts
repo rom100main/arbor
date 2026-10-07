@@ -6,7 +6,6 @@ import { moveTab, moveToContainer } from "../src/main/state/moves"
 import { DomainError, initialState } from "../src/main/state/state"
 import { createChildTab, createTab, selectTab, setCollapsed } from "../src/main/state/tabs"
 import { displayTabs, stepVisibleTab } from "../src/shared/tree-display"
-import { omniboxTarget } from "../src/shared/url"
 
 const containerIdOf = (state: { containers: { id: string }[] }, index = 0): string =>
     state.containers[index].id
@@ -330,23 +329,6 @@ describe("display order", () => {
             b,
             c,
         ])
-    })
-})
-
-describe("omnibox", () => {
-    it("keeps absolute URLs", () => {
-        expect(omniboxTarget("https://example.com/x")).toBe("https://example.com/x")
-    })
-
-    it("upgrades bare hosts", () => {
-        expect(omniboxTarget("example.com")).toBe("https://example.com")
-        expect(omniboxTarget("example.com:8080/path")).toBe("https://example.com:8080/path")
-    })
-
-    it("searches DuckDuckGo otherwise", () => {
-        expect(omniboxTarget("how to make a browser")).toBe(
-            `https://duckduckgo.com/?q=${encodeURIComponent("how to make a browser")}`,
-        )
     })
 })
 

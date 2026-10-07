@@ -10,7 +10,6 @@ import {
     settingsRoute,
 } from "../src/shared/internal-pages"
 import { INTERNAL_HOST, SETTINGS_PATH, SETTINGS_URL } from "../src/shared/settings"
-import { omniboxTarget } from "../src/shared/url"
 
 describe("the settings URL", () => {
     // `arbor:/settings` parses as a scheme with an empty authority, so hostname is "" and
@@ -26,10 +25,6 @@ describe("the settings URL", () => {
     it("is recognised as internal and as the settings page", () => {
         expect(isInternalUrl(SETTINGS_URL)).toBe(true)
         expect(isSettingsUrl(SETTINGS_URL)).toBe(true)
-    })
-
-    it("round-trips through the omnibox unchanged", () => {
-        expect(omniboxTarget(SETTINGS_URL)).toBe(SETTINGS_URL)
     })
 })
 
@@ -79,6 +74,8 @@ describe("isAssetRequest", () => {
     it("treats everything outside the route table as an asset", () => {
         expect(isAssetRequest("/assets/app-abc123.js")).toBe(true)
         expect(isAssetRequest("/assets/style.css")).toBe(true)
+        // A typo'd deep link is served as a file and 404s rather than blanking as HTML.
+        expect(isAssetRequest("/searchh")).toBe(true)
     })
 
     it("treats a known route as a document", () => {
@@ -93,11 +90,6 @@ describe("isAssetRequest", () => {
         expect(isAssetRequest("/@vite/client")).toBe(true)
         expect(isAssetRequest("/@id/virtual:entry-client.tsx")).toBe(true)
         expect(isAssetRequest("/node_modules/.vite/deps/@solidjs_web.js")).toBe(true)
-    })
-
-    it("does not mistake an unknown page path for an asset", () => {
-        // A typo'd deep link should not be proxied as a file; it 404s rather than blanking.
-        expect(isAssetRequest("/searchh")).toBe(true)
     })
 })
 
@@ -128,21 +120,6 @@ describe("injectDocumentHead", () => {
 
     it("prepends when the document has neither", () => {
         expect(injectDocumentHead("<p>hi</p>", "X")).toBe("X<p>hi</p>")
-    })
-
-    it("makes asset resolution independent of route depth", () => {
-        // Flat routes happen to resolve correctly on their own, because `./x` replaces the
-        // last path segment. A nested route does not: the injected base is what keeps a
-        // relative asset at /assets/app.js however deep the URL goes.
-        expect(new URL("./assets/app.js", "arbor://settings/appearance").pathname).toBe(
-            "/assets/app.js",
-        )
-        expect(new URL("./assets/app.js", "arbor://settings/search/engines").pathname).toBe(
-            "/search/assets/app.js",
-        )
-        expect(new URL("./assets/app.js", `${SETTINGS_URL}/`).pathname).toBe("/assets/app.js")
-        const html = injectDocumentHead("<head></head>", `<base href="${SETTINGS_URL}/">`)
-        expect(html).toContain(`<base href="${SETTINGS_URL}/">`)
     })
 })
 

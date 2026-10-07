@@ -40,8 +40,6 @@ export interface ExtensionStorageService {
 
 export interface ExtensionStorageOptions {
     debounceMs?: number
-    setTimer?: (fn: () => void, ms: number) => unknown
-    clearTimer?: (handle: unknown) => void
 }
 
 const EXTENSION_URL = /^chrome-extension:\/\/([^/?#]+)/
@@ -91,8 +89,6 @@ export const createExtensionStorage = (
             }
         },
         delayMs: options.debounceMs,
-        setTimer: options.setTimer,
-        clearTimer: options.clearTimer,
     })
 
     const areasFor = (extensionId: string): ExtStorageAreas => {
