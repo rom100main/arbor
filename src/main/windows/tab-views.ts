@@ -8,10 +8,12 @@ import {
 } from "electron"
 import buildChromeContextMenu from "electron-chrome-context-menu"
 
+import { isInternalUrl } from "../../shared/internal-pages"
 import type { ContainerId } from "../../shared/protocol"
 import { extensionsReady, setupSessionExtensions } from "../extension/loader"
 import type { DomainState } from "../state/state"
 import type { StoreService } from "../state/store"
+import { internalSession } from "./internal-pages"
 
 const SIDEBAR_WIDTH = 240
 const TOOLBAR_HEIGHT = 44
@@ -22,6 +24,16 @@ export interface ViewDeps {
 }
 
 const views = new Map<string, WebContentsView>()
+
+/**
+ * The session a tab loads on: Arbor's own for `arbor://`, its Container's otherwise.
+ *
+ * Each Container gets a private session so cookies, storage and extensions stay separate.
+ * The settings page belongs to no Container,
+ * and it needs Arbor's own session to reach the preload bridge that talks to Arbor.
+ */
+export const sessionForTab = (containerId: ContainerId, url: string): Session =>
+    isInternalUrl(url) ? internalSession() : sessionForContainer(containerId)
 
 // --- per-container sessions
 
@@ -39,6 +51,33 @@ export const sessionForContainer = (containerId: ContainerId): Session => {
 // --- tab views
 
 export const viewForTab = (tabId: string): WebContentsView | undefined => views.get(tabId)
+
+/**
+ * The web contents of tabs showing an Arbor page, the only ones carrying the preload bridge.
+ *
+ * Tabs are `WebContentsView`s rather than windows,
+ * so broadcasting to `BrowserWindow.getAllWindows()` skipped them
+ * and the settings page never heard about settings changes.
+ * The internal session is what identifies them.
+ */
+export const internalViewWebContents = (): WebContents[] => {
+    const ses = internalSession()
+    return [...views.values()]
+        .filter((view) => view.webContents.session === ses)
+        .map((view) => view.webContents)
+}
+
+/**
+ * Whether a tab's live view sits on the wrong session for its URL and must be rebuilt.
+ *
+ * A view's session is fixed when it is constructed, so a tab moving between a web page and
+ * an `arbor://` page cannot reuse its view. Rebuilding costs a brief reload.
+ */
+export const sessionMismatch = (tabId: string, containerId: ContainerId, url: string): boolean => {
+    const view = views.get(tabId)
+    if (!view) return false
+    return view.webContents.session !== sessionForTab(containerId, url)
+}
 
 export const tabIdForWebContents = (wc: WebContents): string | null => {
     for (const [tabId, view] of views) {
@@ -64,7 +103,7 @@ export const ensureView = (deps: ViewDeps, tabId: string, url: string): WebConte
     const tab = deps.getState().tabs.get(tabId)
     if (!tab) throw new Error(`Cannot create view for unknown tab: ${tabId}`)
     const view = new WebContentsView({
-        webPreferences: { session: sessionForContainer(tab.containerId) },
+        webPreferences: { session: sessionForTab(tab.containerId, url) },
     })
     // target=_blank, ctrl+click and window.open all become child tabs of the opener.
     view.webContents.setWindowOpenHandler(({ url: target, disposition }) => {
@@ -111,6 +150,22 @@ export const destroyView = (tabId: string): void => {
     if (!view) return
     views.delete(tabId)
     view.webContents.close()
+}
+
+/**
+ * Record a tab's new URL, then load it.
+ *
+ * Crossing the `arbor://` boundary changes which session the tab needs,
+ * so there the URL is only recorded: `onCommit` then sees the mismatch,
+ * rebuilds the view on the right session, and loads it.
+ * Loading here would target the session just discarded.
+ */
+export const navigateTab = async (deps: ViewDeps, tabId: string, url: string): Promise<void> => {
+    const tab = deps.getState().tabs.get(tabId)
+    if (!tab) return
+    await Effect.runPromise(deps.store.updateTabMeta(tabId, { url }))
+    if (sessionMismatch(tabId, tab.containerId, url)) return
+    await viewForTab(tabId)?.webContents.loadURL(url)
 }
 
 export const showTab = (win: BrowserWindow, tabId: string): void => {
