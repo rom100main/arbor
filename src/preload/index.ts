@@ -8,9 +8,11 @@ import type {
     ExtensionMenuRequest,
     OmniboxActivation,
     PermissionPromptRequest,
+    PinnedActionInfo,
     RenameTarget,
     TabId,
 } from "../shared/protocol"
+import type { Settings } from "../shared/settings"
 
 // <browser-action-list> element + window.browserAction API (main world injection).
 injectBrowserAction()
@@ -138,6 +140,24 @@ const api = {
         ipcRenderer.on("arbor:rename:target", listener)
         return () => {
             ipcRenderer.removeListener("arbor:rename:target", listener)
+        }
+    },
+    /** Title, icon and popup for a pinned extension, read from its manifest. */
+    extensionActionInfo: (extensionId: string): Promise<PinnedActionInfo> =>
+        ipcRenderer.invoke("arbor:extensions:action-info", extensionId),
+    /** Open the action popup above its toolbar button. Toggles when already open. */
+    openExtensionActionPopup: (extensionId: string, popupUrl: string): Promise<void> =>
+        ipcRenderer.invoke("arbor:extensions:action-popup", extensionId, popupUrl),
+
+    getSettings: (): Promise<Settings> => ipcRenderer.invoke("arbor:settings:get"),
+    /** Rejects when a value is rejected (e.g. a search template without `%s`). */
+    setSettings: (patch: Partial<Settings>): Promise<Settings> =>
+        ipcRenderer.invoke("arbor:settings:set", patch),
+    onSettings: (callback: (settings: Settings) => void): (() => void) => {
+        const listener = (_event: IpcRendererEvent, settings: Settings): void => callback(settings)
+        ipcRenderer.on("arbor:settings:changed", listener)
+        return () => {
+            ipcRenderer.removeListener("arbor:settings:changed", listener)
         }
     },
 }
