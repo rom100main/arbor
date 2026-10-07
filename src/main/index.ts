@@ -9,13 +9,16 @@ import {
     makeOmniboxActivator,
     makeOnCommit,
     registerOverlayEvents,
+    registerSettingsBroadcast,
     type HostRuntime,
 } from "./ipc/events"
 import { registerIpc } from "./ipc/handlers"
 import { createStatePersistence, type StatePersistence } from "./persistence"
+import { createSettingsStore, type SettingsStore } from "./settings"
 import { initialState, type DomainState } from "./state/state"
 import { BrowserStore, makeStoreLayer } from "./state/store"
 import { installMenu } from "./windows/app-menu"
+import { registerInternalPages, registerInternalScheme } from "./windows/internal-pages"
 import { attachWindowEvents, createWindow } from "./windows/main-window"
 import { ensureView, tabIdForWebContents, viewForTab } from "./windows/tab-views"
 
@@ -23,6 +26,9 @@ import { ensureView, tabIdForWebContents, viewForTab } from "./windows/tab-views
 if (!process.env.VITE_DEV_SERVER_URL) {
     console.debug = (): void => undefined
 }
+
+// Must precede app.whenReady(): arbor:// needs a real origin for the bundle's module script.
+registerInternalScheme()
 
 /**
  * Electron's extension loader warns about permission names it does not know
@@ -58,10 +64,12 @@ const filterBenignExtensionLoadWarnings = (): void => {
 
 let statePersistence: StatePersistence | null = null
 let extensionStorageFlush: (() => void) | null = null
+let settingsStore: SettingsStore | null = null
 
 const flushPersistence = (): void => {
     statePersistence?.flush()
     extensionStorageFlush?.()
+    settingsStore?.flush()
 }
 
 const start = async (): Promise<void> => {
@@ -73,6 +81,10 @@ const start = async (): Promise<void> => {
     statePersistence = persistence
     const initial: DomainState = persistence.load() ?? initialState()
 
+    const settings = createSettingsStore(path.join(userData, "settings.json"))
+    settingsStore = settings
+    registerSettingsBroadcast(settings)
+
     const extStorage = createExtensionStorage(path.join(userData, "extension-storage.json"))
     extStorage.load()
     extensionStorageFlush = () => extStorage.flush()
@@ -81,6 +93,7 @@ const start = async (): Promise<void> => {
     const rt: HostRuntime = {
         win: null,
         store: null,
+        settings,
         latest: initial,
         previousActiveTab: null,
         lastOmniboxQuery: "",
@@ -100,11 +113,15 @@ const start = async (): Promise<void> => {
     )
     const store = rt.store
 
-    registerIpc(store)
+    registerIpc(store, settings, () => rt.latest)
+
+    // arbor:// internal pages: their own session, so only they carry the preload bridge.
+    registerInternalPages()
 
     // crx:// protocol + per-container session setup happens lazily from here on.
     initExtensions({
         store,
+        settings,
         getWindow: () => rt.win,
         viewForTab,
         ensureView: (tabId, url) => ensureView({ store, getState: () => rt.latest }, tabId, url),
@@ -117,7 +134,7 @@ const start = async (): Promise<void> => {
         focusOmnibox: () => rt.win?.webContents.send("arbor:focus-omnibox"),
     })
 
-    const win = await createWindow()
+    const win = await createWindow(settings.get())
     rt.win = win
     attachWindowEvents(win)
 
