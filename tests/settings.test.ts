@@ -57,6 +57,16 @@ describe("normalizeSearchTemplate", () => {
         expect(normalizeSearchTemplate("not a url %s")).toBeNull()
     })
 
+    it("returns null for a URL with an empty host instead of throwing", () => {
+        expect(normalizeSearchTemplate("https:///?q=%s")).toBeNull()
+    })
+
+    it("is total for arbitrary strings", () => {
+        for (const input of ["", "%s", ":///%s", "https://%s", "http:// %s", "\u0000%s"]) {
+            expect(() => normalizeSearchTemplate(input)).not.toThrow()
+        }
+    })
+
     it("accepts every suggested template", () => {
         for (const template of SUGGESTED_SEARCH_TEMPLATES) {
             expect(normalizeSearchTemplate(template)).toBe(template)

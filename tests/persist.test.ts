@@ -16,14 +16,15 @@ import {
 import type { ContainerMeta, TabNode } from "../src/shared/protocol"
 
 const buildRichState = (): DomainState => {
-    let state = createContainer(initialState(), "Work", "#ef4444")
+    let state = createContainer(initialState(), { name: "Work", color: "#ef4444" }).state
     const rootA = state.containers[0].activeTabId!
-    state = createChildTab(state, rootA, "https://example.com/child")
-    const child = state.containers[0].activeTabId!
+    const childResult = createChildTab(state, rootA, { url: "https://example.com/child" })
+    state = childResult.state
+    const child = childResult.value
     state = setCollapsed(state, rootA, true)
     state = renameTab(state, child, "My label")
-    state = createTab(state, { url: "https://example.org" })
-    state = createContainer(state, "Personal", "#22c55e")
+    state = createTab(state, { url: "https://example.org" }).state
+    state = createContainer(state, { name: "Personal", color: "#22c55e" }).state
     state = switchContainer(state, state.containers[0].id)
     state = selectTab(state, rootA)
     return state
