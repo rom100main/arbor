@@ -1,33 +1,36 @@
 :root {
+    color-scheme: light;
+
     --sidebar-width: 240px;
     --toolbar-height: 44px;
     --font-family: system-ui, -apple-system, sans-serif;
     --font-size-sm: 11px;
     --font-size-md: 12px;
     --font-size-body: 13px;
-    --color-bg: #fff;
-    --color-sidebar-bg: #f6f6f6;
-    --color-toolbar-bg: #f6f6f6;
-    --color-surface: #fff;
-    --color-border: #e0e0e0;
-    --color-border-soft: #e2e2e2;
-    --color-border-dashed: #d0d0d0;
-    --color-text: #1a1a1a;
-    --color-text-muted: #6a6a6a;
-    --color-text-faint: #8a8a8a;
-    --color-text-faintest: #a0a0a0;
-    --color-hover: #ececec;
-    --color-active: #e0e0e0;
-    --color-close-hover: #d4d4d4;
-    --color-accent: #3b82f6;
-    --color-accent-soft: #dcebff;
-    --color-accent-wash: #e8f1fe;
-    --color-accent-strong: #1d4ed8;
-    --color-accent-contrast: #fff;
-    --color-overlay: rgb(15 18 25 / 48%);
-    --shadow-popup: 0 8px 24px rgb(0 0 0 / 12%);
-    --shadow-popup-strong: 0 4px 18px rgb(0 0 0 / 20%);
-    --shadow-modal: 0 12px 32px rgb(0 0 0 / 24%);
+    --color-bg: oklch(100% 0 0deg);
+    --color-sidebar-bg: oklch(97.2% 0.002 250deg);
+    --color-toolbar-bg: oklch(97.2% 0.002 250deg);
+    --color-surface: oklch(100% 0 0deg);
+    --color-border: oklch(90.2% 0.004 250deg);
+    --color-border-soft: oklch(92.5% 0.003 250deg);
+    --color-border-dashed: oklch(84.5% 0.005 250deg);
+    --color-text: oklch(28% 0.012 258deg);
+    --color-text-muted: oklch(49% 0.014 258deg);
+    --color-text-faint: oklch(54.5% 0.014 258deg);
+    --color-text-faintest: oklch(64.5% 0.012 258deg);
+    --color-hover: oklch(94% 0.004 250deg);
+    --color-active: oklch(90% 0.006 250deg);
+    --color-close-hover: oklch(87% 0.006 250deg);
+    --color-accent: oklch(52% 0.17 258deg);
+    --color-accent-soft: oklch(90% 0.06 258deg);
+    --color-accent-wash: oklch(95% 0.035 258deg);
+    --color-accent-strong: oklch(44% 0.16 258deg);
+    --color-accent-solid: oklch(50% 0.17 258deg);
+    --color-accent-contrast: oklch(100% 0 0deg);
+    --color-overlay: oklch(28% 0.02 258deg / 48%);
+    --shadow-popup: 0 8px 24px oklch(28% 0.02 258deg / 12%);
+    --shadow-popup-strong: 0 4px 18px oklch(28% 0.02 258deg / 20%);
+    --shadow-modal: 0 12px 32px oklch(28% 0.02 258deg / 24%);
     --radius-sm: 4px;
     --radius-md: 6px;
     --radius-lg: 8px;
@@ -36,6 +39,35 @@
     --omnibox-height: 30px;
     --container-chip-size: 28px;
     --container-strip-height: 48px;
+}
+
+:root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --color-bg: oklch(18.5% 0.006 258deg);
+    --color-sidebar-bg: oklch(22.2% 0.007 258deg);
+    --color-toolbar-bg: oklch(22.2% 0.007 258deg);
+    --color-surface: oklch(25.3% 0.008 258deg);
+    --color-border: oklch(33% 0.008 258deg);
+    --color-border-soft: oklch(29% 0.008 258deg);
+    --color-border-dashed: oklch(37% 0.01 258deg);
+    --color-text: oklch(94.5% 0.004 258deg);
+    --color-text-muted: oklch(83.8% 0.012 258deg);
+    --color-text-faint: oklch(75.5% 0.012 258deg);
+    --color-text-faintest: oklch(67% 0.012 258deg);
+    --color-hover: oklch(29% 0.009 258deg);
+    --color-active: oklch(34% 0.01 258deg);
+    --color-close-hover: oklch(38% 0.011 258deg);
+    --color-accent: oklch(76.5% 0.12 258deg);
+    --color-accent-soft: oklch(36% 0.07 258deg);
+    --color-accent-wash: oklch(30% 0.05 258deg);
+    --color-accent-strong: oklch(83% 0.11 258deg);
+    --color-accent-solid: oklch(50% 0.15 258deg);
+    --color-accent-contrast: oklch(100% 0 0deg);
+    --color-overlay: oklch(10% 0.01 258deg / 58%);
+    --shadow-popup: 0 8px 24px oklch(0% 0 0deg / 45%);
+    --shadow-popup-strong: 0 4px 18px oklch(0% 0 0deg / 55%);
+    --shadow-modal: 0 12px 32px oklch(0% 0 0deg / 60%);
 }
 
 * {

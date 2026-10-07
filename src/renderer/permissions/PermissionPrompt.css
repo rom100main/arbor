@@ -110,8 +110,8 @@
 
         &.primary {
             color: var(--color-accent-contrast);
-            background: var(--color-accent);
-            border-color: var(--color-accent);
+            background: var(--color-accent-solid);
+            border-color: var(--color-accent-solid);
         }
     }
 }
