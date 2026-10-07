@@ -1,11 +1,15 @@
 import { Cause, Effect, Exit, Option } from "effect"
-import { ipcMain } from "electron"
+import { BrowserWindow, ipcMain } from "electron"
 
 import type { ContainerIcon, ContainerId, TabId } from "../../shared/protocol"
+import type { Settings } from "../../shared/settings"
 import { omniboxTarget } from "../../shared/url"
+import { pinnedActionInfo } from "../extension/action"
+import type { SettingsStore } from "../settings"
+import type { DomainState } from "../state/state"
 import type { DomainError, StoreService } from "../state/store"
-import { setExtensionAnchor } from "../windows/overlays"
-import { viewForTab } from "../windows/tab-views"
+import { openExtensionActionPopup, setExtensionAnchor } from "../windows/overlays"
+import { navigateTab, viewForTab } from "../windows/tab-views"
 
 const toPromise = async <A>(effect: Effect.Effect<A, DomainError>): Promise<A> => {
     const exit = await Effect.runPromiseExit(effect)
@@ -22,8 +26,31 @@ const handle = (channel: string, handler: Handler): void => {
     ipcMain.handle(channel, async (event, ...args) => handler(event, ...args))
 }
 
-export const registerIpc = (store: StoreService): void => {
+export const registerIpc = (
+    store: StoreService,
+    settings: SettingsStore,
+    getState: () => DomainState,
+): void => {
     handle("arbor:get-snapshot", () => Effect.runPromise(store.snapshot))
+    handle("arbor:settings:get", () => settings.get())
+    handle("arbor:settings:set", (_event, patch: Partial<Settings>) => settings.set(patch))
+
+    // The toolbar reads action metadata straight from the extension's manifest:
+    // electron-chrome-extensions cannot serve it,
+    // because it keeps extensions and tabs in one session and Arbor does not.
+    handle("arbor:extensions:action-info", (_event, extensionId: string) =>
+        pinnedActionInfo(extensionId),
+    )
+    handle("arbor:extensions:action-popup", (event, extensionId: string, popupUrl: string) => {
+        // The sender is the window that owns the toolbar,
+        // which is not necessarily the focused one:
+        // once a popup is open, focus belongs to the popup.
+        const win = BrowserWindow.fromWebContents(event.sender)
+        if (!win) throw new Error("No window to anchor the action popup to")
+        openExtensionActionPopup(win, extensionId, popupUrl, (url) => {
+            void toPromise(store.createTab(url))
+        })
+    })
 
     handle("arbor:container:create", (_event, name?: string, color?: string) =>
         toPromise(store.createContainer(name, color)),
@@ -67,11 +94,9 @@ export const registerIpc = (store: StoreService): void => {
     )
 
     handle("arbor:tab:navigate", async (_event, tabId: TabId, input: string) => {
-        const url = omniboxTarget(input)
-        const view = viewForTab(tabId)
-        if (!view) throw new Error(`No view for tab: ${tabId}`)
-        await toPromise(store.updateTabMeta(tabId, { url }))
-        await view.webContents.loadURL(url)
+        const url = omniboxTarget(input, settings.get().searchTemplate)
+        if (!viewForTab(tabId)) throw new Error(`No view for tab: ${tabId}`)
+        await navigateTab({ store, getState }, tabId, url)
     })
     handle("arbor:tab:back", (_event, tabId: TabId) =>
         viewForTab(tabId)?.webContents.navigationHistory.goBack(),

@@ -8,8 +8,10 @@ import type {
     RenameTarget,
     TabId,
 } from "../../shared/protocol"
+import { DEFAULT_SEARCH_TEMPLATE } from "../../shared/settings"
 import { omniboxTarget } from "../../shared/url"
 import { attachExtensionTab, openExtensionMenu } from "../extension/loader"
+import type { SettingsStore } from "../settings"
 import { snapshot as toSnapshot, type DomainState } from "../state/state"
 import type { StoreService } from "../state/store"
 import {
@@ -24,16 +26,36 @@ import {
     showOmniboxPopup,
     toggleExtensionsPopup,
 } from "../windows/overlays"
-import { destroyView, ensureView, showTab, viewForTab } from "../windows/tab-views"
+import {
+    destroyView,
+    ensureView,
+    internalViewWebContents,
+    navigateTab,
+    sessionMismatch,
+    showTab,
+    viewForTab,
+} from "../windows/tab-views"
 
 /** Mutable host runtime owned by index.ts start(). */
 export interface HostRuntime {
     win: BrowserWindow | null
     store: StoreService | null
+    settings: SettingsStore | null
     latest: DomainState
     previousActiveTab: TabId | null
     lastOmniboxQuery: string
     rebuildMenu: () => void
+}
+
+export const registerSettingsBroadcast = (settings: SettingsStore): void => {
+    settings.subscribe((next) => {
+        for (const window of BrowserWindow.getAllWindows()) {
+            window.webContents.send("arbor:settings:changed", next)
+        }
+        for (const wc of internalViewWebContents()) {
+            wc.send("arbor:settings:changed", next)
+        }
+    })
 }
 
 /** State commit -> view sync + broadcast, extracted from index.ts onCommit. */
@@ -47,10 +69,12 @@ export const makeOnCommit =
         for (const tabId of previous.tabs.keys()) {
             if (!next.tabs.has(tabId)) destroyView(tabId)
         }
-        // Cross-container moves must reload under the target container's session.
+        // Cross-container moves must reload under the target container's session,
+        // and so must a tab that navigated to or from an arbor:// internal page.
         for (const [tabId, tab] of next.tabs) {
             const before = previous.tabs.get(tabId)
             if (before && before.containerId !== tab.containerId) destroyView(tabId)
+            else if (sessionMismatch(tabId, tab.containerId, tab.url)) destroyView(tabId)
         }
 
         const snapshot: BrowserSnapshot = toSnapshot(next)
@@ -86,13 +110,12 @@ export const makeOmniboxActivator =
         } else if (payload.query.trim().length > 0 && store) {
             const snapshot = toSnapshot(rt.latest)
             const tabId = snapshot.activeTabId
-            if (tabId !== null) {
-                const target = omniboxTarget(payload.query)
-                const view = viewForTab(tabId)
-                if (view) {
-                    await Effect.runPromise(store.updateTabMeta(tabId, { url: target }))
-                    void view.webContents.loadURL(target)
-                }
+            if (tabId !== null && viewForTab(tabId)) {
+                const target = omniboxTarget(
+                    payload.query,
+                    rt.settings?.get().searchTemplate ?? DEFAULT_SEARCH_TEMPLATE,
+                )
+                await navigateTab({ store, getState: () => rt.latest }, tabId, target)
             }
         }
         hideOmniboxPopup()
