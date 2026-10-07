@@ -127,4 +127,5 @@ sequenceDiagram
 - **Import direction**: main -> shared, preload -> shared, renderer -> shared. Never shared -> main.
 - **Shared membership**: `src/shared/` holds only code loaded into both processes. Single-process code lives in `src/main/`, `src/preload/`, or `src/renderer/`.
 - **No bypass**: renderer `import { ipcRenderer } from "electron"` -> forbidden. Use `window.arbor`.
-- **Modes**: `loadRenderer(win)` = main shell. `loadRenderer(win, "omnibox")` = popup. `loadRenderer(win, "rename")` = modal. Same bundle, 3 roots.
+- **Modes**: `loadRenderer(win)` = main shell. `loadRenderer(win, "omnibox"|"rename"|"extensions"|"permission")` = a popup or modal. Same bundle, one root per mode.
+- **Internal pages**: `arbor://settings` is not a mode. It is served over Arbor's own protocol (`protocol.handle`, see `main/windows/internal-pages.ts`) into a tab's `WebContentsView`, with its route in the path. Its mode is chosen by protocol rather than query string, so it runs on the dedicated internal session and nothing else carries the preload bridge (ADR 0006).
