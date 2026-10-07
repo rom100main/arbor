@@ -1,3 +1,4 @@
+import { Deferred, Effect, Queue } from "effect"
 import { BrowserWindow, session, type BrowserWindow as ParentWindow } from "electron"
 
 import type { PermissionPromptRequest, RenameTarget } from "../../shared/protocol"
@@ -362,21 +363,21 @@ export const openRenameModal = (win: BrowserWindow, target: RenameTarget): void 
 
 // --- permission prompt modal (extension install / permissions.request)
 
-interface PendingPrompt {
-    request: PermissionPromptRequest
-    settle: (allowed: boolean) => void
+interface PromptJob {
+    readonly request: PermissionPromptRequest
+    readonly parent: BrowserWindow | null
+    readonly answer: Deferred.Deferred<boolean>
 }
 
+const promptQueue = Effect.runSync(Queue.unbounded<PromptJob>())
 let permissionModal: BrowserWindow | null = null
-let activePrompt: PendingPrompt | null = null
-let promptParent: BrowserWindow | null = null
-const promptQueue: PendingPrompt[] = []
+let activeAnswer: Deferred.Deferred<boolean> | null = null
 
-const showPrompt = (prompt: PendingPrompt): void => {
-    activePrompt = prompt
-    const win = promptParent && !promptParent.isDestroyed() ? promptParent : null
+const showPrompt = (job: PromptJob): void => {
+    activeAnswer = job.answer
+    const win = job.parent && !job.parent.isDestroyed() ? job.parent : null
     const bounds = win?.getContentBounds()
-    permissionModal = new BrowserWindow({
+    const promptWindow = new BrowserWindow({
         x: bounds?.x,
         y: bounds?.y,
         width: bounds?.width,
@@ -394,51 +395,68 @@ const showPrompt = (prompt: PendingPrompt): void => {
         ...(win ? { parent: win } : {}),
         webPreferences: { preload: preloadPath },
     })
-    permissionModal.on("closed", () => {
-        permissionModal = null
+    permissionModal = promptWindow
+    promptWindow.on("closed", () => {
+        if (permissionModal === promptWindow) {
+            permissionModal = null
+            activeAnswer = null
+        }
         // Closing the dialog without answering is a refusal.
-        settlePrompt(false)
+        // Idempotent: a prior settle via `respondPermissionPrompt` wins.
+        void Effect.runSync(Deferred.succeed(job.answer, false))
     })
     // The renderer registers its request listener during load; replay afterwards.
-    permissionModal.webContents.on("did-finish-load", () => {
-        permissionModal?.webContents.send("arbor:permission:request", activePrompt?.request ?? null)
+    promptWindow.webContents.on("did-finish-load", () => {
+        promptWindow.webContents.send("arbor:permission:request", job.request)
     })
-    void loadRenderer(permissionModal, "permission")
-    permissionModal.show()
+    void loadRenderer(promptWindow, "permission")
+    promptWindow.show()
 }
 
-const settlePrompt = (allowed: boolean): void => {
-    const prompt = activePrompt
-    if (!prompt) return
-    activePrompt = null
-    const promptWindow = permissionModal
-    permissionModal = null
-    if (promptWindow && !promptWindow.isDestroyed()) {
-        // Already closing (or about to): don't let "closed" settle the next answer.
-        promptWindow.removeAllListeners("closed")
-        promptWindow.destroy()
-    }
-    prompt.settle(allowed)
-    const next = promptQueue.shift()
-    if (next) showPrompt(next)
-}
+const runPrompt = (job: PromptJob): Effect.Effect<void> =>
+    Effect.suspend(() => {
+        showPrompt(job)
+        return Deferred.await(job.answer)
+    }).pipe(
+        Effect.asVoid,
+        // Never leave a waiter hanging if window creation fails.
+        Effect.ensuring(Deferred.succeed(job.answer, false)),
+    )
+
+// One prompt at a time: the consumer drains the queue serially.
+Effect.runFork(
+    Effect.forever(
+        Effect.gen(function* () {
+            const job = yield* Queue.take(promptQueue)
+            yield* runPrompt(job).pipe(
+                Effect.catchAllCause((cause) => Effect.logError("Permission prompt failed", cause)),
+            )
+        }),
+    ),
+)
 
 /** Resolves `true` on Allow, `false` on Deny or when the dialog is closed. One at a time. */
 export const openPermissionPrompt = (
     win: ParentWindow | null,
     request: PermissionPromptRequest,
-): Promise<boolean> =>
-    new Promise((resolve) => {
-        if (win && !win.isDestroyed()) promptParent = win
-        const prompt: PendingPrompt = { request, settle: resolve }
-        if (activePrompt) {
-            promptQueue.push(prompt)
-            return
-        }
-        showPrompt(prompt)
+): Effect.Effect<boolean> =>
+    Effect.gen(function* () {
+        const answer = yield* Deferred.make<boolean>()
+        yield* Queue.offer(promptQueue, {
+            request,
+            parent: win && !win.isDestroyed() ? win : null,
+            answer,
+        })
+        return yield* Deferred.await(answer)
     })
 
 /** Answer for the visible prompt (`arbor:permission:respond`). */
 export const respondPermissionPrompt = (allowed: boolean): void => {
-    settlePrompt(allowed)
+    const answer = activeAnswer
+    if (!answer) return
+    activeAnswer = null
+    const promptWindow = permissionModal
+    permissionModal = null
+    void Effect.runSync(Deferred.succeed(answer, allowed))
+    if (promptWindow && !promptWindow.isDestroyed()) promptWindow.destroy()
 }
