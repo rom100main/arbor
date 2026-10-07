@@ -2,35 +2,15 @@ import { createMemo, createSignal } from "solid-js"
 
 import type { BrowserSnapshot, DisplayTab, TabId } from "../../shared/protocol"
 import { displayTabs } from "../../shared/tree-display"
+import { createInit } from "./init-store"
 
 const [snapshot, setSnapshot] = createSignal<BrowserSnapshot | null>(null)
 
-let initPromise: Promise<void> | null = null
-
-/**
- * Subscribe before fetching so a push during the initial read is not lost.
- * A late initial response never overwrites a newer push.
- * Failed initialization resets so retry is possible.
- */
-export const initState = (): Promise<void> => {
-    if (!initPromise) initPromise = doInit()
-    return initPromise
-}
-
-const doInit = async (): Promise<void> => {
-    let pushed = false
-    window.arbor.onState((snap) => {
-        pushed = true
-        setSnapshot(snap)
-    })
-    try {
-        const initial = await window.arbor.getSnapshot()
-        if (!pushed) setSnapshot(initial)
-    } catch (error) {
-        initPromise = null
-        throw error
-    }
-}
+export const initState = createInit<BrowserSnapshot | null>({
+    subscribe: (callback) => window.arbor.onState(callback),
+    fetch: () => window.arbor.getSnapshot(),
+    apply: (value) => setSnapshot(value),
+})
 
 export const useSnapshot = () => snapshot
 

@@ -1,35 +1,15 @@
 import { createSignal } from "solid-js"
 
 import { DEFAULT_SETTINGS, type Settings } from "../../shared/settings"
+import { createInit } from "./init-store"
 
 const [settings, setSettings] = createSignal<Settings>(DEFAULT_SETTINGS)
 
-let initPromise: Promise<void> | null = null
-
-/**
- * Subscribe before fetching so a push during the initial read is not lost.
- * A late initial response never overwrites a newer push.
- * Failed initialization resets so retry is possible.
- */
-export const initSettings = (): Promise<void> => {
-    if (!initPromise) initPromise = doInit()
-    return initPromise
-}
-
-const doInit = async (): Promise<void> => {
-    let pushed = false
-    window.arbor.onSettings((next) => {
-        pushed = true
-        setSettings(next)
-    })
-    try {
-        const initial = await window.arbor.getSettings()
-        if (!pushed) setSettings(initial)
-    } catch (error) {
-        initPromise = null
-        throw error
-    }
-}
+export const initSettings = createInit<Settings>({
+    subscribe: (callback) => window.arbor.onSettings(callback),
+    fetch: () => window.arbor.getSettings(),
+    apply: (value) => setSettings(value),
+})
 
 export const useSettings = () => settings
 
