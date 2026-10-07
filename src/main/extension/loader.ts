@@ -1,7 +1,7 @@
 import { existsSync, readdirSync } from "node:fs"
 import path from "node:path"
 
-import { Effect } from "effect"
+import { Deferred, Effect, Schedule } from "effect"
 import { app, Menu, MenuItem, session, type Session, type WebContents } from "electron"
 import { ElectronChromeExtensions } from "electron-chrome-extensions"
 import { installChromeWebStore, uninstallExtension } from "electron-chrome-web-store"
@@ -46,8 +46,6 @@ const configured = new Set<Session>()
 /** Every session extensions are wired into (default + one per container). */
 export const extensionSessions = (): Session[] => [...configured]
 
-const runQuiet = (effect: Effect.Effect<unknown, unknown>): Promise<void> => runBackground(effect)
-
 /**
  * Registers the crx:// protocol on the session that hosts <browser-action-list>
  * (the main window renderer). Must run after app.whenReady().
@@ -67,141 +65,147 @@ export const initExtensions = (d: ExtensionDeps): void => {
 const readUnpackedManifest = (extensionPath: string): ParsedManifest =>
     parseManifest(readJsonFile(path.join(extensionPath, "manifest.json")))
 
-const consentFor = async (
+const consentFor = (
     keys: readonly (string | undefined)[],
-): Promise<Record<string, ExtensionGrant>> => {
-    const store = deps?.store
-    if (!store) return {}
-    try {
-        const ledger = await Effect.runPromise(store.extensionConsent)
-        return Object.fromEntries(
-            keys.flatMap((key) => (key && ledger[key] ? [[key, ledger[key]]] : [])),
-        )
-    } catch {
-        return {}
-    }
+): Effect.Effect<Record<string, ExtensionGrant>> => {
+    const ledgerEffect: Effect.Effect<Record<string, ExtensionGrant>> =
+        deps?.store?.extensionConsent ?? Effect.succeed({})
+    return ledgerEffect.pipe(
+        Effect.map((ledger) =>
+            Object.fromEntries(
+                keys.flatMap((key) => (key && ledger[key] ? [[key, ledger[key]]] : [])),
+            ),
+        ),
+    )
 }
 
 /** Manifest scope plus everything the user has accepted for this extension. */
-const grantedScope = async (extension: {
+const grantedScope = (extension: {
     id: string
     path?: string
     manifest: ParsedManifest
-}): Promise<ExtensionGrant> => {
-    const held = await consentFor([extension.id, extension.path])
-    const fromLedger = mergeGrant(
-        held[extension.id] ?? emptyGrant(),
-        (extension.path ? held[extension.path] : undefined) ?? emptyGrant(),
+}): Effect.Effect<ExtensionGrant> =>
+    consentFor([extension.id, extension.path]).pipe(
+        Effect.map((held) =>
+            mergeGrant(
+                manifestGranted(extension.manifest),
+                mergeGrant(
+                    held[extension.id] ?? emptyGrant(),
+                    (extension.path ? held[extension.path] : undefined) ?? emptyGrant(),
+                ),
+            ),
+        ),
     )
-    return mergeGrant(manifestGranted(extension.manifest), fromLedger)
-}
 
 /**
  * Dev-only install consent for an unpacked extension, keyed by its source path.
  * Concurrent asks for the same path share one prompt (every container session loads these).
  */
-const installPrompts = new Map<string, Promise<boolean>>()
+const installPrompts = new Map<string, Deferred.Deferred<boolean>>()
 
-const ensureUnpackedConsent = (extensionPath: string): Promise<boolean> => {
-    const pending = installPrompts.get(extensionPath)
-    if (pending) return pending
-    const ask = (async (): Promise<boolean> => {
-        try {
-            return await askUnpackedConsent(extensionPath)
-        } finally {
-            installPrompts.delete(extensionPath)
-        }
-    })()
-    installPrompts.set(extensionPath, ask)
-    return ask
-}
-
-const askUnpackedConsent = async (extensionPath: string): Promise<boolean> => {
-    const d = deps
-    if (!d) return false
-    const manifest = readUnpackedManifest(extensionPath)
-    const scope = manifestGranted(manifest)
-    const held = await consentFor([extensionPath])
-    if (held[extensionPath]) return true
-    const allowed = await openPermissionPrompt(d.getWindow(), {
-        kind: "install",
-        id: extensionPath,
-        name: manifest.name || path.basename(extensionPath),
-        permissions: scope.permissions,
-        origins: scope.origins,
-        icon: null,
+const ensureUnpackedConsent = (extensionPath: string): Effect.Effect<boolean> =>
+    Effect.gen(function* () {
+        const pending = installPrompts.get(extensionPath)
+        if (pending) return yield* Deferred.await(pending)
+        const deferred = yield* Deferred.make<boolean>()
+        installPrompts.set(extensionPath, deferred)
+        return yield* askUnpackedConsent(extensionPath).pipe(
+            Effect.catchAllCause(() => Effect.succeed(false)),
+            Effect.tap((allowed) => Deferred.succeed(deferred, allowed)),
+            // Interruption still settles waiters (`false`) before the entry is dropped.
+            Effect.ensuring(
+                Effect.sync(() => installPrompts.delete(extensionPath)).pipe(
+                    Effect.zipRight(Deferred.succeed(deferred, false)),
+                ),
+            ),
+        )
     })
-    if (!allowed) return false
-    await runQuiet(d.store.setExtensionConsent(extensionPath, scope))
-    return true
-}
+
+const askUnpackedConsent = (extensionPath: string): Effect.Effect<boolean, unknown> =>
+    Effect.gen(function* () {
+        const d = deps
+        if (!d) return false
+        const manifest = readUnpackedManifest(extensionPath)
+        const scope = manifestGranted(manifest)
+        const held = yield* consentFor([extensionPath])
+        if (held[extensionPath]) return true
+        const allowed = yield* Effect.tryPromise(() =>
+            openPermissionPrompt(d.getWindow(), {
+                kind: "install",
+                id: extensionPath,
+                name: manifest.name || path.basename(extensionPath),
+                permissions: scope.permissions,
+                origins: scope.origins,
+                icon: null,
+            }),
+        )
+        if (!allowed) return false
+        yield* d.store.setExtensionConsent(extensionPath, scope).pipe(Effect.ignore)
+        return true
+    })
 
 // --- dev unpacked loader
 
 /** Dev-only auto-loader for unpacked extensions in ./extensions at the project root. */
-const unpackedExtensionsDir = (): string => {
+const unpackedManifestDirs = (): string[] => {
     const candidates = [
         path.join(app.getAppPath(), "extensions"),
         path.join(process.cwd(), "extensions"),
     ]
-    return candidates.find((dir) => existsSync(dir)) ?? candidates[0]
-}
-
-const loadUnpackedExtensions = async (ses: Session): Promise<void> => {
-    const dir = unpackedExtensionsDir()
-    const manifestDirs = readdirSync(dir, { withFileTypes: true })
+    const dir = candidates.find((candidate) => existsSync(candidate)) ?? candidates[0]
+    return readdirSync(dir, { withFileTypes: true })
         .filter((entry) => entry.isDirectory())
         .map((entry) => path.join(dir, entry.name))
         .filter((extensionPath) => existsSync(path.join(extensionPath, "manifest.json")))
-    await Promise.all(
-        manifestDirs.map(async (extensionPath) => {
-            try {
-                // Consent before load: a denied extension never runs, not even its worker.
-                if (!(await ensureUnpackedConsent(extensionPath))) return
-                await ses.extensions.loadExtension(extensionPath, { allowFileAccess: true })
-            } catch (error) {
-                console.error(`Failed to load extension ${path.basename(extensionPath)}:`, error)
-            }
-        }),
-    )
 }
+
+const loadUnpackedExtensions = (ses: Session): Effect.Effect<void> =>
+    Effect.forEach(
+        unpackedManifestDirs(),
+        (extensionPath) =>
+            // Consent before load: a denied extension never runs, not even its worker.
+            ensureUnpackedConsent(extensionPath).pipe(
+                Effect.andThen((allowed) =>
+                    allowed
+                        ? Effect.tryPromise(() =>
+                              ses.extensions.loadExtension(extensionPath, {
+                                  allowFileAccess: true,
+                              }),
+                          )
+                        : Effect.void,
+                ),
+                Effect.catchAllCause((cause) =>
+                    Effect.logError(
+                        `Failed to load extension ${path.basename(extensionPath)}`,
+                        cause,
+                    ),
+                ),
+            ),
+        { concurrency: "unbounded" },
+    )
 
 /**
  * MV3 service workers sometimes fail the first `startWorkerForScope` right after loadExtension
  * (electron-chrome-web-store swallows that rejection).
- * Retry a few times and log the real error only if every attempt fails.
+ * Try each scope spelling, then retry a few times before giving up.
  */
-const startWorkerWithRetry = async (
+const startWorkerWithRetry = (
     ses: Session,
     scopes: readonly string[],
-    attemptsLeft: number,
-): Promise<void> => {
-    const scope = scopes[0]
-    try {
-        await ses.serviceWorkers.startWorkerForScope(scope)
-    } catch (error) {
-        if (scopes.length > 1) {
-            await startWorkerWithRetry(ses, scopes.slice(1), attemptsLeft)
-            return
-        }
-        if (attemptsLeft <= 1) throw error
-        await new Promise((resolve) => setTimeout(resolve, 400))
-        await startWorkerWithRetry(ses, scopes, attemptsLeft - 1)
-    }
-}
+    attempts = 3,
+): Effect.Effect<void, unknown> =>
+    Effect.firstSuccessOf(
+        scopes.map((scope) =>
+            Effect.tryPromise(() => ses.serviceWorkers.startWorkerForScope(scope)),
+        ),
+    ).pipe(Effect.retry(Schedule.recurs(attempts - 1).pipe(Schedule.addDelay(() => "400 millis"))))
 
-const startMv3Workers = async (ses: Session, attempts = 3): Promise<void> => {
+const mv3WorkerJobs = (
+    ses: Session,
+): ReadonlyArray<{ extensionId: string; scopes: readonly string[] }> => {
     const extensionsApi = ses.extensions
-    if (!extensionsApi) return
-    const startOne = async (extensionId: string, scopes: readonly string[]): Promise<void> => {
-        try {
-            await startWorkerWithRetry(ses, scopes, attempts)
-            console.debug(`[arbor] MV3 worker started for ${extensionId}`)
-        } catch (error) {
-            console.error(`Failed to start worker for extension ${extensionId}:`, error)
-        }
-    }
-    const tasks = extensionsApi.getAllExtensions().flatMap((extension) => {
+    if (!extensionsApi) return []
+    return extensionsApi.getAllExtensions().flatMap((extension) => {
         if (extension.manifest.manifest_version !== 3) return []
         const background: unknown = extension.manifest.background
         if (typeof background !== "object" || background === null) return []
@@ -209,24 +213,44 @@ const startMv3Workers = async (ses: Session, attempts = 3): Promise<void> => {
         const worker: unknown = background.service_worker
         if (typeof worker !== "string" || worker.length === 0) return []
         // electron-chrome-web-store uses no trailing slash; the event bus uses one.
-        const scopes = [`chrome-extension://${extension.id}/`, `chrome-extension://${extension.id}`]
-        return [startOne(extension.id, scopes)]
+        return [
+            {
+                extensionId: extension.id,
+                scopes: [
+                    `chrome-extension://${extension.id}/`,
+                    `chrome-extension://${extension.id}`,
+                ] as const,
+            },
+        ]
     })
-    await Promise.all(tasks)
 }
 
-const loadExtensionSources = async (ses: Session): Promise<void> => {
+const startMv3Workers = (ses: Session, attempts = 3): Effect.Effect<void> =>
+    Effect.forEach(
+        mv3WorkerJobs(ses),
+        ({ extensionId, scopes }) =>
+            startWorkerWithRetry(ses, scopes, attempts).pipe(
+                Effect.tap(() => Effect.logDebug(`MV3 worker started for ${extensionId}`)),
+                Effect.catchAllCause((cause) =>
+                    Effect.logError(`Failed to start worker for extension ${extensionId}`, cause),
+                ),
+            ),
+        { concurrency: "unbounded" },
+    )
+
+const loadExtensionSources = (ses: Session): Effect.Effect<void> =>
     // Web Store installs; update checks run per session over the shared store dir.
-    try {
-        await installChromeWebStore({ session: ses, beforeInstall: consentStoreInstall })
-    } catch (error) {
-        console.error("Failed to install Chrome Web Store support:", error)
-    }
-    if (!app.isPackaged) await loadUnpackedExtensions(ses)
-    // Give Electron a beat to finish registering MV3 backgrounds after loadExtension.
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    await startMv3Workers(ses)
-}
+    Effect.tryPromise(() =>
+        installChromeWebStore({ session: ses, beforeInstall: consentStoreInstall }),
+    ).pipe(
+        Effect.catchAllCause((cause) =>
+            Effect.logError("Failed to install Chrome Web Store support", cause),
+        ),
+        Effect.zipRight(app.isPackaged ? Effect.void : loadUnpackedExtensions(ses)),
+        // Give Electron a beat to finish registering MV3 backgrounds after loadExtension.
+        Effect.zipRight(Effect.sleep("500 millis")),
+        Effect.zipRight(startMv3Workers(ses)),
+    )
 
 /**
  * Install consent for Web Store installs.
@@ -241,34 +265,39 @@ interface StoreInstallDetails {
     icon?: { toDataURL?: () => string }
 }
 
-const consentStoreInstall = async (
-    details: StoreInstallDetails,
-): Promise<{ action: "allow" | "deny" }> => {
-    const d = deps
-    if (!d) return { action: "deny" }
-    const manifest = parseManifest(details.manifest)
-    const scope = manifestGranted(manifest)
-    const allowed = await openPermissionPrompt(d.getWindow(), {
-        kind: "install",
-        id: details.id,
-        name: details.localizedName || manifest.name || details.id,
-        permissions: scope.permissions,
-        origins: scope.origins,
-        icon: details.icon?.toDataURL?.() ?? null,
-    })
-    if (allowed) await runQuiet(d.store.setExtensionConsent(details.id, scope))
-    return { action: allowed ? "allow" : "deny" }
-}
+const consentStoreInstall = (details: StoreInstallDetails): Promise<{ action: "allow" | "deny" }> =>
+    Effect.runPromise(
+        Effect.gen(function* () {
+            const d = deps
+            if (!d) return { action: "deny" as const }
+            const manifest = parseManifest(details.manifest)
+            const scope = manifestGranted(manifest)
+            const allowed = yield* Effect.tryPromise(() =>
+                openPermissionPrompt(d.getWindow(), {
+                    kind: "install",
+                    id: details.id,
+                    name: details.localizedName || manifest.name || details.id,
+                    permissions: scope.permissions,
+                    origins: scope.origins,
+                    icon: details.icon?.toDataURL?.() ?? null,
+                }),
+            )
+            if (allowed) yield* d.store.setExtensionConsent(details.id, scope).pipe(Effect.ignore)
+            return { action: allowed ? ("allow" as const) : ("deny" as const) }
+        }),
+    )
 
 /**
  * Resolves once a session's extension sources are installed and its MV3 workers are running.
  * `chrome-extension://` navigations fail with ERR_BLOCKED_BY_CLIENT until then, so tab loads await this.
  */
-const sourcesReady = new WeakMap<Session, Promise<void>>()
+const sourcesReady = new WeakMap<Session, Deferred.Deferred<void>>()
 
 /** Never rejects: install failures are already logged by `loadExtensionSources`. */
-export const extensionsReady = (ses: Session): Promise<void> =>
-    sourcesReady.get(ses) ?? Promise.resolve()
+export const extensionsReady = (ses: Session): Promise<void> => {
+    const ready = sourcesReady.get(ses)
+    return ready ? Effect.runPromise(Deferred.await(ready)) : Promise.resolve()
+}
 
 /** One ElectronChromeExtensions instance per session, created lazily. */
 export const setupSessionExtensions = (ses: Session): void => {
@@ -310,12 +339,12 @@ export const setupSessionExtensions = (ses: Session): void => {
         // chrome.tabs.update({ active: true }).
         selectTab: (tab) => {
             const tabId = d.tabIdForWebContents(tab)
-            if (tabId) void runQuiet(d.store.selectTab(tabId))
+            if (tabId) void runBackground(d.store.selectTab(tabId))
         },
         // chrome.tabs.remove.
         removeTab: (tab) => {
             const tabId = d.tabIdForWebContents(tab)
-            if (tabId) void runQuiet(d.store.closeTab(tabId))
+            if (tabId) void runBackground(d.store.closeTab(tabId))
         },
         // v1 is single-window: chrome.windows.create becomes a new active tab.
         createWindow: async (details) => {
@@ -336,7 +365,7 @@ export const setupSessionExtensions = (ses: Session): void => {
         const popup = popupEvent[0]
         if (!isExtensionPopupView(popup)) return
         attachExtensionPopupPositioning(popup, (url) => {
-            void runQuiet(d.store.createTab(url))
+            void runBackground(d.store.createTab(url))
         })
     })
 
@@ -370,7 +399,16 @@ export const setupSessionExtensions = (ses: Session): void => {
     // SW ipcRenderer.invoke rides ServiceWorkerMain.ipc, not ipcMain.
     bindExtensionStorageToSession(ses)
 
-    sourcesReady.set(ses, loadExtensionSources(ses))
+    const ready = Effect.runSync(Deferred.make<void>())
+    sourcesReady.set(ses, ready)
+    void Effect.runPromise(
+        loadExtensionSources(ses).pipe(
+            Effect.catchAllCause((cause) =>
+                Effect.logError("Failed to load extension sources", cause),
+            ),
+            Effect.ensuring(Deferred.succeed(ready, undefined)),
+        ),
+    )
 }
 
 /** Registers a view's webContents as an extension tab and marks it active. */
@@ -388,33 +426,40 @@ export const attachExtensionTab = (win: Electron.BrowserWindow, wc: WebContents)
  * without a prompt and the library applies the grant; anything else asks.
  * Asks the manifest never declared throw, like Chrome.
  */
-const requestExtensionPermissions = async (
+const requestExtensionPermissions = (
     extension: Electron.Extension,
     request: { permissions?: string[]; origins?: string[] },
-): Promise<boolean> => {
-    const d = deps
-    if (!d) return false
-    const manifest = parseManifest(extension.manifest)
-    const held = await grantedScope({ id: extension.id, path: extension.path, manifest })
-    if (isRequestCovered(request, held)) return true
-    if (!isRequestCovered(request, optionalScope(manifest))) {
-        // The library already rejects undeclared API names; this covers origins.
-        throw new Error("Permissions request includes undeclared permission")
-    }
-    const allowed = await openPermissionPrompt(
-        d.getWindow(),
-        toPromptRequest(extension.id, extension.name, request),
+): Promise<boolean> =>
+    Effect.runPromise(
+        Effect.gen(function* () {
+            const d = deps
+            if (!d) return false
+            const manifest = parseManifest(extension.manifest)
+            const held = yield* grantedScope({ id: extension.id, path: extension.path, manifest })
+            if (isRequestCovered(request, held)) return true
+            if (!isRequestCovered(request, optionalScope(manifest))) {
+                // The library already rejects undeclared API names; this covers origins.
+                return yield* Effect.fail(
+                    new Error("Permissions request includes undeclared permission"),
+                )
+            }
+            const allowed = yield* Effect.tryPromise(() =>
+                openPermissionPrompt(
+                    d.getWindow(),
+                    toPromptRequest(extension.id, extension.name, request),
+                ),
+            )
+            if (!allowed) return false
+            const prior = yield* consentFor([extension.id])
+            yield* d.store
+                .setExtensionConsent(
+                    extension.id,
+                    mergeGrant(prior[extension.id] ?? emptyGrant(), request),
+                )
+                .pipe(Effect.ignore)
+            return true
+        }),
     )
-    if (!allowed) return false
-    const prior = await consentFor([extension.id])
-    await runQuiet(
-        d.store.setExtensionConsent(
-            extension.id,
-            mergeGrant(prior[extension.id] ?? emptyGrant(), request),
-        ),
-    )
-    return true
-}
 
 // --- extension context menu + uninstall
 
@@ -450,7 +495,7 @@ export const openExtensionMenu = async ({
             label: "Options",
             enabled: optionsUrl !== null,
             click: () => {
-                if (optionsUrl) void runQuiet(d.store.createTab(optionsUrl))
+                if (optionsUrl) void runBackground(d.store.createTab(optionsUrl))
             },
         }),
     )
@@ -480,24 +525,32 @@ export const openExtensionMenu = async ({
  * Full teardown: nothing about the extension survives.
  * The unpacked source folder is the user's code and is never deleted.
  */
-export const uninstallExtensionEverywhere = async (extensionId: string): Promise<void> => {
-    const d = deps
-    if (!d) return
-    // Unpacked installs keep a path-keyed consent record; read it before the extension goes.
-    const sourcePath = findExtension(extensionId)?.path ?? null
-    await Promise.all(
-        extensionSessions().map(async (ses) => {
-            try {
-                await uninstallExtension(extensionId, { session: ses })
-            } catch (error) {
-                console.error(`[arbor] failed to uninstall ${extensionId}:`, error)
+export const uninstallExtensionEverywhere = (extensionId: string): Promise<void> =>
+    Effect.runPromise(
+        Effect.gen(function* () {
+            const d = deps
+            if (!d) return
+            // Unpacked installs keep a path-keyed consent record; read it before the extension goes.
+            const sourcePath = findExtension(extensionId)?.path ?? null
+            yield* Effect.forEach(
+                extensionSessions(),
+                (ses) =>
+                    Effect.tryPromise(() => uninstallExtension(extensionId, { session: ses })).pipe(
+                        Effect.catchAllCause((cause) =>
+                            Effect.logError(`Failed to uninstall ${extensionId}`, cause),
+                        ),
+                    ),
+                { concurrency: "unbounded" },
+            )
+            forgetExtensionIcon(extensionId)
+            purgeExtensionStorage(extensionId)
+            yield* d.store.clearExtensionConsent(extensionId).pipe(Effect.ignore)
+            if (sourcePath) {
+                yield* d.store.clearExtensionConsent(sourcePath).pipe(Effect.ignore)
             }
-        }),
+            d.settings.unpinExtension(extensionId)
+            hideExtensionsPopup()
+        }).pipe(
+            Effect.catchAllCause((cause) => Effect.logError("Uninstall workflow failed", cause)),
+        ),
     )
-    forgetExtensionIcon(extensionId)
-    purgeExtensionStorage(extensionId)
-    await runQuiet(d.store.clearExtensionConsent(extensionId))
-    if (sourcePath) await runQuiet(d.store.clearExtensionConsent(sourcePath))
-    d.settings.unpinExtension(extensionId)
-    hideExtensionsPopup()
-}
