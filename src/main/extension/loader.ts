@@ -129,16 +129,14 @@ const askUnpackedConsent = (extensionPath: string): Effect.Effect<boolean, unkno
         const scope = manifestGranted(manifest)
         const held = yield* consentFor([extensionPath])
         if (held[extensionPath]) return true
-        const allowed = yield* Effect.tryPromise(() =>
-            openPermissionPrompt(d.getWindow(), {
-                kind: "install",
-                id: extensionPath,
-                name: manifest.name || path.basename(extensionPath),
-                permissions: scope.permissions,
-                origins: scope.origins,
-                icon: null,
-            }),
-        )
+        const allowed = yield* openPermissionPrompt(d.getWindow(), {
+            kind: "install",
+            id: extensionPath,
+            name: manifest.name || path.basename(extensionPath),
+            permissions: scope.permissions,
+            origins: scope.origins,
+            icon: null,
+        })
         if (!allowed) return false
         yield* d.store.setExtensionConsent(extensionPath, scope).pipe(Effect.ignore)
         return true
@@ -272,16 +270,14 @@ const consentStoreInstall = (details: StoreInstallDetails): Promise<{ action: "a
             if (!d) return { action: "deny" as const }
             const manifest = parseManifest(details.manifest)
             const scope = manifestGranted(manifest)
-            const allowed = yield* Effect.tryPromise(() =>
-                openPermissionPrompt(d.getWindow(), {
-                    kind: "install",
-                    id: details.id,
-                    name: details.localizedName || manifest.name || details.id,
-                    permissions: scope.permissions,
-                    origins: scope.origins,
-                    icon: details.icon?.toDataURL?.() ?? null,
-                }),
-            )
+            const allowed = yield* openPermissionPrompt(d.getWindow(), {
+                kind: "install",
+                id: details.id,
+                name: details.localizedName || manifest.name || details.id,
+                permissions: scope.permissions,
+                origins: scope.origins,
+                icon: details.icon?.toDataURL?.() ?? null,
+            })
             if (allowed) yield* d.store.setExtensionConsent(details.id, scope).pipe(Effect.ignore)
             return { action: allowed ? ("allow" as const) : ("deny" as const) }
         }),
@@ -443,11 +439,9 @@ const requestExtensionPermissions = (
                     new Error("Permissions request includes undeclared permission"),
                 )
             }
-            const allowed = yield* Effect.tryPromise(() =>
-                openPermissionPrompt(
-                    d.getWindow(),
-                    toPromptRequest(extension.id, extension.name, request),
-                ),
+            const allowed = yield* openPermissionPrompt(
+                d.getWindow(),
+                toPromptRequest(extension.id, extension.name, request),
             )
             if (!allowed) return false
             const prior = yield* consentFor([extension.id])
