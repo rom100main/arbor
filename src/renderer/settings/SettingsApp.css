@@ -1,0 +1,200 @@
+.settings-page {
+    display: flex;
+    height: 100%;
+    user-select: text;
+    background: var(--color-bg);
+}
+
+.settings-nav {
+    display: flex;
+    flex: 0 0 200px;
+    flex-direction: column;
+    gap: 2px;
+    padding: 16px 10px;
+    background: var(--color-sidebar-bg);
+    border-right: 1px solid var(--color-border);
+}
+
+.settings-nav-item {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 6px 10px;
+    font-size: var(--font-size-body);
+    color: var(--color-text-muted);
+    text-align: left;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+
+    &:hover {
+        color: var(--color-text);
+        background: var(--color-hover);
+    }
+
+    &.active {
+        font-weight: 500;
+        color: var(--color-accent);
+        background: var(--color-accent-wash);
+    }
+}
+
+.settings-content {
+    flex: 1;
+    padding: 24px 28px;
+    overflow-y: auto;
+
+    h1 {
+        margin: 0 0 20px;
+        font-size: 17px;
+        font-weight: 600;
+        color: var(--color-text);
+    }
+}
+
+.settings-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-width: 520px;
+}
+
+.settings-label {
+    font-size: var(--font-size-md);
+    color: var(--color-text-muted);
+}
+
+.settings-input {
+    padding: 7px 9px;
+    font-family: var(--font-family);
+    font-size: var(--font-size-body);
+    color: var(--color-text);
+    outline: none;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+
+    &:focus {
+        border-color: var(--color-accent);
+        box-shadow: 0 0 0 3px var(--color-accent-wash);
+    }
+
+    &.invalid {
+        border-color: var(--color-accent-strong);
+    }
+}
+
+.settings-error {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-accent-strong);
+}
+
+.settings-hint {
+    margin: 0;
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+    color: var(--color-text-faint);
+
+    code {
+        padding: 1px 4px;
+        font-family: ui-monospace, monospace;
+        color: var(--color-text-muted);
+        background: var(--color-hover);
+        border-radius: var(--radius-sm);
+    }
+}
+
+.settings-theme {
+    display: flex;
+    gap: 8px;
+}
+
+.settings-suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-width: 520px;
+    margin-top: 18px;
+}
+
+.settings-suggestion {
+    padding: 5px 11px;
+    font-family: var(--font-family);
+    font-size: var(--font-size-md);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+
+    &:hover:not(:disabled) {
+        color: var(--color-accent);
+        border-color: var(--color-accent);
+    }
+
+    /* The engine in use: shown, but not clickable again. */
+    &.active {
+        font-weight: 500;
+        color: var(--color-accent);
+        background: var(--color-accent-wash);
+        border-color: var(--color-accent);
+    }
+
+    &:disabled {
+        cursor: default;
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--color-accent);
+        outline-offset: 1px;
+    }
+}
+
+.settings-suggestions-empty {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-faint);
+}
+
+.settings-theme-option {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    width: 96px;
+    padding: 14px 8px;
+    font-size: var(--font-size-md);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+
+    /* The radio is the control; the card is its skin. */
+    input {
+        position: absolute;
+        inset: 0;
+        margin: 0;
+        cursor: pointer;
+        opacity: 0;
+    }
+
+    &:hover {
+        color: var(--color-text);
+        border-color: var(--color-border-dashed);
+    }
+
+    &.active {
+        color: var(--color-accent);
+        border-color: var(--color-accent);
+        box-shadow: 0 0 0 1px var(--color-accent);
+    }
+
+    /* Focus belongs on the radio, so draw the ring on the card. */
+    &:has(input:focus-visible) {
+        box-shadow: 0 0 0 3px var(--color-accent-wash);
+    }
+}
