@@ -52,6 +52,24 @@ export interface PermissionPromptRequest {
     icon?: string | null
 }
 
+/**
+ * A pinned extension's toolbar button, built from its manifest.
+ *
+ * Arbor assembles this itself rather than asking electron-chrome-extensions:
+ * the library keeps extensions and tabs in one session,
+ * and Arbor keeps them apart by design.
+ * See `main/extension/action.ts`.
+ */
+export interface PinnedActionInfo {
+    extensionId: string
+    /** `action.default_title`, else the extension name. */
+    title: string
+    /** Data URL for the action icon, or `null` when no icon file can be resolved. */
+    iconDataUrl: string | null
+    /** Absolute `chrome-extension://` popup URL, or `null` when the action has no popup. */
+    popupUrl: string | null
+}
+
 /** Right-click on an extension icon: open its native menu at the cursor. */
 export interface ExtensionMenuRequest {
     extensionId: string
@@ -65,7 +83,6 @@ export interface BrowserSnapshot {
     tabs: TabNode[]
     activeContainerId: ContainerId | null
     activeTabId: TabId | null
-    pinnedExtensionIds: string[]
 }
 
 export interface DisplayTab extends TabNode {
