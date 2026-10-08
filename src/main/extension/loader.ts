@@ -46,7 +46,8 @@ const configured = new Set<Session>()
 /** Every session extensions are wired into (default + one per container). */
 export const extensionSessions = (): Session[] => [...configured]
 
-export const sessionForExtension = (extensionId: string): Session => {
+export const sessionForExtension = (extensionId: string, preferred?: Session | null): Session => {
+    if (preferred?.extensions?.getExtension(extensionId)) return preferred
     const fallback = session.defaultSession
     if (fallback.extensions?.getExtension(extensionId)) return fallback
     return extensionSessions().find((ses) => ses.extensions?.getExtension(extensionId)) ?? fallback

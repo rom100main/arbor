@@ -231,8 +231,9 @@ export const attachExtensionPopupPositioning = (
 /**
  * A `chrome.action` popup opened by Arbor rather than by electron-chrome-extensions.
  *
- * The library can only open these for extensions and tabs sharing one session;
- * Arbor keeps extensions in the default session and tabs in per-Container sessions, so it cannot.
+ * The library only opens popups from its own surfaces (the extensions list, the chrome.action API);
+ * pinned toolbar buttons are Arbor's UI, so Arbor opens their popups itself,
+ * hosting each on the session its extension instance lives in.
  */
 let actionPopup: BrowserWindow | null = null
 let actionPopupExtensionId: string | null = null

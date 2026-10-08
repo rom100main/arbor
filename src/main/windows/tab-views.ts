@@ -48,6 +48,10 @@ export const sessionForContainer = (containerId: ContainerId): Session => {
     return partition
 }
 
+/** A Container's session when one already exists; never creates one. */
+export const existingSessionForContainer = (containerId: ContainerId): Session | undefined =>
+    partitions.get(containerId)
+
 // --- tab views
 
 export const viewForTab = (tabId: string): WebContentsView | undefined => views.get(tabId)

@@ -11,7 +11,7 @@ import type { SettingsStore } from "../settings"
 import type { DomainState } from "../state/state"
 import type { StoreService } from "../state/store"
 import { openExtensionActionPopup, setExtensionAnchor } from "../windows/overlays"
-import { navigateTab, viewForTab } from "../windows/tab-views"
+import { existingSessionForContainer, navigateTab, viewForTab } from "../windows/tab-views"
 
 type Handler = (event: Electron.IpcMainInvokeEvent, ...args: any[]) => unknown
 
@@ -19,6 +19,12 @@ const handle = (channel: string, handler: Handler): void => {
     ipcMain.removeHandler(channel)
     ipcMain.handle(channel, async (event, ...args) => handler(event, ...args))
 }
+
+const actionPopupSession = (state: DomainState, extensionId: string): Electron.Session =>
+    sessionForExtension(
+        extensionId,
+        state.activeContainerId ? existingSessionForContainer(state.activeContainerId) : undefined,
+    )
 
 export const registerIpc = (
     store: StoreService,
@@ -45,7 +51,7 @@ export const registerIpc = (
             win,
             extensionId,
             popupUrl,
-            sessionForExtension(extensionId),
+            actionPopupSession(getState(), extensionId),
             (url) => {
                 void runBackground(store.createTab(url))
             },
