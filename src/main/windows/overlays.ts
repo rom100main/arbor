@@ -1,5 +1,5 @@
 import { Deferred, Effect, Queue } from "effect"
-import { BrowserWindow, session, type BrowserWindow as ParentWindow } from "electron"
+import { BrowserWindow, type BrowserWindow as ParentWindow } from "electron"
 
 import type { PermissionPromptRequest, RenameTarget } from "../../shared/protocol"
 import { loadRenderer, preloadPath } from "./paths"
@@ -258,6 +258,7 @@ export const openExtensionActionPopup = (
     win: BrowserWindow,
     extensionId: string,
     popupUrl: string,
+    extensionSession: Electron.Session,
     onWindowOpen: (url: string) => void,
 ): void => {
     // Clicking the same button again closes the popup.
@@ -288,7 +289,7 @@ export const openExtensionActionPopup = (
         skipTaskbar: true,
         hasShadow: true,
         parent: win,
-        webPreferences: { session: session.defaultSession },
+        webPreferences: { session: extensionSession },
     })
     actionPopup = actionWin
     actionPopupExtensionId = extensionId

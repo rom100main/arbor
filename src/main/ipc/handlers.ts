@@ -6,6 +6,7 @@ import type { Settings } from "../../shared/settings"
 import { omniboxTarget } from "../../shared/url"
 import { runBackground, runRequest } from "../exec"
 import { pinnedActionInfo } from "../extension/action"
+import { sessionForExtension } from "../extension/loader"
 import type { SettingsStore } from "../settings"
 import type { DomainState } from "../state/state"
 import type { StoreService } from "../state/store"
@@ -40,9 +41,15 @@ export const registerIpc = (
         // once a popup is open, focus belongs to the popup.
         const win = BrowserWindow.fromWebContents(event.sender)
         if (!win) throw new Error("No window to anchor the action popup to")
-        openExtensionActionPopup(win, extensionId, popupUrl, (url) => {
-            void runBackground(store.createTab(url))
-        })
+        openExtensionActionPopup(
+            win,
+            extensionId,
+            popupUrl,
+            sessionForExtension(extensionId),
+            (url) => {
+                void runBackground(store.createTab(url))
+            },
+        )
     })
 
     handle("arbor:container:create", (_event, name?: string, color?: string) =>

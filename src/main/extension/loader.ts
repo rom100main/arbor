@@ -46,6 +46,12 @@ const configured = new Set<Session>()
 /** Every session extensions are wired into (default + one per container). */
 export const extensionSessions = (): Session[] => [...configured]
 
+export const sessionForExtension = (extensionId: string): Session => {
+    const fallback = session.defaultSession
+    if (fallback.extensions?.getExtension(extensionId)) return fallback
+    return extensionSessions().find((ses) => ses.extensions?.getExtension(extensionId)) ?? fallback
+}
+
 /**
  * Registers the crx:// protocol on the session that hosts <browser-action-list>
  * (the main window renderer). Must run after app.whenReady().
@@ -198,43 +204,63 @@ const startWorkerWithRetry = (
         ),
     ).pipe(Effect.retry(Schedule.recurs(attempts - 1).pipe(Schedule.addDelay(() => "400 millis"))))
 
-const mv3WorkerJobs = (
-    ses: Session,
-): ReadonlyArray<{ extensionId: string; scopes: readonly string[] }> => {
-    const extensionsApi = ses.extensions
-    if (!extensionsApi) return []
-    return extensionsApi.getAllExtensions().flatMap((extension) => {
-        if (extension.manifest.manifest_version !== 3) return []
-        const background: unknown = extension.manifest.background
-        if (typeof background !== "object" || background === null) return []
-        if (!("service_worker" in background)) return []
-        const worker: unknown = background.service_worker
-        if (typeof worker !== "string" || worker.length === 0) return []
-        // electron-chrome-web-store uses no trailing slash; the event bus uses one.
-        return [
-            {
-                extensionId: extension.id,
-                scopes: [
-                    `chrome-extension://${extension.id}/`,
-                    `chrome-extension://${extension.id}`,
-                ] as const,
-            },
-        ]
-    })
+/** Scopes an MV3 background worker runs under; both spellings seen in the wild. */
+const workerScopes = (extensionId: string): readonly string[] => [
+    // electron-chrome-web-store uses no trailing slash; the event bus uses one.
+    `chrome-extension://${extensionId}/`,
+    `chrome-extension://${extensionId}`,
+]
+
+const hasMv3Worker = (extension: Electron.Extension): boolean => {
+    if (extension.manifest.manifest_version !== 3) return false
+    const background: unknown = extension.manifest.background
+    if (typeof background !== "object" || background === null) return false
+    if (!("service_worker" in background)) return false
+    const worker: unknown = background.service_worker
+    return typeof worker === "string" && worker.length > 0
 }
+
+const startMv3WorkerFor = (
+    ses: Session,
+    extension: Electron.Extension,
+    attempts = 3,
+): Effect.Effect<void, unknown> =>
+    hasMv3Worker(extension)
+        ? startWorkerWithRetry(ses, workerScopes(extension.id), attempts).pipe(
+              Effect.tap(() => Effect.logDebug(`MV3 worker started for ${extension.id}`)),
+          )
+        : Effect.void
 
 const startMv3Workers = (ses: Session, attempts = 3): Effect.Effect<void> =>
     Effect.forEach(
-        mv3WorkerJobs(ses),
-        ({ extensionId, scopes }) =>
-            startWorkerWithRetry(ses, scopes, attempts).pipe(
-                Effect.tap(() => Effect.logDebug(`MV3 worker started for ${extensionId}`)),
+        ses.extensions?.getAllExtensions() ?? [],
+        (extension) =>
+            startMv3WorkerFor(ses, extension, attempts).pipe(
                 Effect.catchAllCause((cause) =>
-                    Effect.logError(`Failed to start worker for extension ${extensionId}`, cause),
+                    Effect.logError(`Failed to start worker for extension ${extension.id}`, cause),
                 ),
             ),
         { concurrency: "unbounded" },
     )
+
+const loadExtensionEverywhere = (source: Session, extension: Electron.Extension): void => {
+    for (const target of configured) {
+        if (target === source) continue
+        void Effect.runPromise(
+            Effect.gen(function* () {
+                const api = target.extensions
+                // Loaded here already (startup restore or a racing copy): nothing to do.
+                if (!api || api.getExtension(extension.id)) return
+                yield* Effect.tryPromise(() => api.loadExtension(extension.path))
+                yield* startMv3WorkerFor(target, extension)
+            }).pipe(
+                Effect.catchAllCause((cause) =>
+                    Effect.logError(`Failed to load extension ${extension.id} everywhere`, cause),
+                ),
+            ),
+        )
+    }
+}
 
 const loadExtensionSources = (ses: Session): Effect.Effect<void> =>
     // Web Store installs; update checks run per session over the shared store dir.
@@ -367,6 +393,12 @@ export const setupSessionExtensions = (ses: Session): void => {
         attachExtensionPopupPositioning(popup, (url) => {
             void runBackground(d.store.createTab(url))
         })
+    })
+
+    // Load new extensions (store installs, unpacked drops) into every session,
+    // so the running app matches what a relaunch would restore.
+    ses.extensions?.on("extension-loaded", (_event, extension) => {
+        loadExtensionEverywhere(ses, extension)
     })
 
     // Stubs for chrome.* events the library lacks
