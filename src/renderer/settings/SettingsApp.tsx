@@ -200,7 +200,7 @@ const AppearanceSection = () => {
                 </For>
             </div>
             <p class="settings-hint">
-                System follows your operating system. Arbor's own interface follows this choice;
+                System follows your operating system. Arbor's own interface follows this choice but
                 websites keep following the system.
             </p>
         </section>

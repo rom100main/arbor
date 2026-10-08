@@ -1,5 +1,3 @@
-import { onCleanup } from "solid-js"
-
 import { SETTINGS_URL } from "../../shared/settings"
 import { Icon } from "../ui/Icon"
 import { Sidebar } from "./sidebar/Sidebar"
@@ -20,15 +18,6 @@ export const MainShell = () => {
     }
 
     let button: HTMLButtonElement | undefined
-    // Clicking anywhere outside the button dismisses the extensions popup.
-    const onDocClick = (event: MouseEvent): void => {
-        const target = event.target
-        if (target instanceof Node && button && !button.contains(target)) {
-            window.arbor.extensionsClose()
-        }
-    }
-    document.addEventListener("click", onDocClick)
-    onCleanup(() => document.removeEventListener("click", onDocClick))
 
     const toggleExtensions = (): void => {
         if (!button) return

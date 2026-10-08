@@ -91,6 +91,18 @@ let extensionsPopup: BrowserWindow | null = null
 let extensionsAnchor: { x: number; y: number; width: number } | null = null
 let extensionsPopupHeight = EXTENSIONS_POPUP_DEFAULT_HEIGHT
 
+/** When a popup closed because focus moved away; gates an immediate toggle reopen. */
+let extensionsDismissedAt = 0
+const DISMISS_WINDOW_MS = 400
+
+const closeExtensionsPopup = (markDismissed = false): void => {
+    if (extensionsPopup && !extensionsPopup.isDestroyed()) {
+        if (markDismissed) extensionsDismissedAt = Date.now()
+        extensionsPopup.destroy()
+    }
+    extensionsPopup = null
+}
+
 const repositionExtensionsPopup = (win: ParentWindow): void => {
     if (!extensionsPopup || extensionsPopup.isDestroyed() || !extensionsAnchor) return
     const bounds = win.getContentBounds()
@@ -110,10 +122,11 @@ export const toggleExtensionsPopup = (
 ): void => {
     const open = extensionsPopup
     if (open && !open.isDestroyed()) {
-        extensionsPopup = null
-        open.destroy()
+        closeExtensionsPopup()
         return
     }
+    // Clicking the puzzle button to close an open popup races with its blur-close.
+    if (Date.now() - extensionsDismissedAt < DISMISS_WINDOW_MS) return
     extensionsAnchor = rect
     extensionsPopupHeight = EXTENSIONS_POPUP_DEFAULT_HEIGHT
     const bounds = win.getContentBounds()
@@ -131,7 +144,6 @@ export const toggleExtensionsPopup = (
         maximizable: false,
         fullscreenable: false,
         skipTaskbar: true,
-        focusable: false,
         hasShadow: false,
         parent: win,
         webPreferences: { preload: preloadPath },
@@ -139,9 +151,10 @@ export const toggleExtensionsPopup = (
     extensionsPopup.on("closed", () => {
         extensionsPopup = null
     })
+    extensionsPopup.on("blur", () => closeExtensionsPopup(true))
     void loadRenderer(extensionsPopup, "extensions")
     repositionExtensionsPopup(win)
-    extensionsPopup.showInactive()
+    extensionsPopup.show()
 }
 
 export const setExtensionsPopupHeight = (win: ParentWindow, height: number): void => {
@@ -151,11 +164,7 @@ export const setExtensionsPopupHeight = (win: ParentWindow, height: number): voi
 }
 
 export const hideExtensionsPopup = (): void => {
-    const open = extensionsPopup
-    if (open && !open.isDestroyed()) {
-        extensionsPopup = null
-        open.destroy()
-    }
+    closeExtensionsPopup()
 }
 
 // --- extension action popups (chrome.action popup windows)
@@ -240,7 +249,6 @@ let actionPopupExtensionId: string | null = null
 
 let dismissedAt = 0
 let dismissedExtensionId: string | null = null
-const DISMISS_WINDOW_MS = 400
 
 const closeExtensionActionPopup = (extensionId?: string, markDismissed = false): void => {
     // records the close, so the click that caused it is not mistaken for a reopen
