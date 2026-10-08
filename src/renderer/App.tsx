@@ -5,10 +5,13 @@ import { PermissionApp } from "./permissions/PermissionApp"
 import { RenameApp } from "./rename/RenameApp"
 import { SettingsApp } from "./settings/SettingsApp"
 import { MainShell } from "./shell/MainShell"
+import { initSettings } from "./shell/settings"
 
 import "./base.css"
 
 export default function App() {
+    // Every mode shares one bootstrap: settings hydration also applies the theme.
+    void initSettings()
     const appMode = getAppMode()
     if (appMode === "omnibox") return <OmniboxPopup />
     if (appMode === "rename") return <RenameApp />

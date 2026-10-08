@@ -1,8 +1,7 @@
-import { createEffect, onCleanup } from "solid-js"
+import { onCleanup } from "solid-js"
 
 import { SETTINGS_URL } from "../../shared/settings"
 import { Icon } from "../ui/Icon"
-import { applyTheme, initSettings, useSettings, watchSystemTheme } from "./settings"
 import { Sidebar } from "./sidebar/Sidebar"
 import { initState, useSnapshot } from "./snapshot"
 import { NavButtons } from "./toolbar/NavButtons"
@@ -13,20 +12,12 @@ import "./MainShell.css"
 
 export const MainShell = () => {
     void initState()
-    void initSettings()
     const snapshot = useSnapshot()
-    const settings = useSettings()
     const activeTabId = () => snapshot()?.activeTabId ?? null
     const activeTabUrl = () => {
         const snap = snapshot()
         return snap?.tabs.find((t) => t.id === snap.activeTabId)?.url ?? ""
     }
-
-    createEffect(
-        () => settings().theme,
-        (theme) => applyTheme(theme),
-    )
-    watchSystemTheme(() => settings().theme)
 
     let button: HTMLButtonElement | undefined
     // Clicking anywhere outside the button dismisses the extensions popup.

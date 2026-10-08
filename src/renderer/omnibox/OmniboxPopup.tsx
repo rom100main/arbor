@@ -1,6 +1,6 @@
 import { For, createEffect, createMemo, createSignal } from "solid-js"
 
-import { initSettings, useSettings } from "../shell/settings"
+import { useSettings } from "../shell/settings"
 import { initState, useSnapshot } from "../shell/snapshot"
 import { SuggestionRow } from "./SuggestionRow"
 import { computeSuggestions } from "./suggestions"
@@ -10,7 +10,6 @@ import "./OmniboxPopup.css"
 /** Rendered inside the frameless omnibox popup window (?omnibox query param). */
 export const OmniboxPopup = () => {
     void initState()
-    void initSettings()
     const snapshot = useSnapshot()
     const settings = useSettings()
     const [query, setQuery] = createSignal("")

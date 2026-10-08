@@ -2,7 +2,7 @@ import { For, Match, Show, Switch, createEffect, createMemo, createSignal, untra
 
 import { settingsRoute, type SettingsRoute } from "../../shared/internal-pages"
 import { SEARCH_ENGINES, SETTINGS_URL, THEMES, type Theme } from "../../shared/settings"
-import { applyTheme, initSettings, useSettings, watchSystemTheme } from "../shell/settings"
+import { useSettings } from "../shell/settings"
 import { Icon, type IconName } from "../ui/Icon"
 
 import "./SettingsApp.css"
@@ -32,15 +32,7 @@ const routeUrl = (route: SettingsRoute): string => `${SETTINGS_URL}/${route}`
  * Its route is the path, so the page has real URLs and a working back button.
  */
 export const SettingsApp = () => {
-    void initSettings()
-    const settings = useSettings()
     const [route, setRoute] = createSignal<SettingsRoute>(settingsRoute(window.location.href))
-
-    createEffect(
-        () => settings().theme,
-        (theme) => applyTheme(theme),
-    )
-    watchSystemTheme(() => settings().theme)
 
     window.addEventListener("popstate", () => setRoute(settingsRoute(window.location.href)))
     const navigate = (next: SettingsRoute): void => {
