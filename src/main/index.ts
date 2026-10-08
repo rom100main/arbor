@@ -160,7 +160,13 @@ const openMainWindow = async (appInstance: Application): Promise<void> => {
     rt.rebuildMenu = installMenu({
         store,
         getState: () => rt.latest,
-        focusOmnibox: () => rt.win?.webContents.send("arbor:focus-omnibox"),
+        focusOmnibox: () => {
+            const win = rt.win
+            if (!win) return
+            win.focus()
+            win.webContents.focus()
+            win.webContents.send("arbor:focus-omnibox")
+        },
     })
 
     const win = await createWindow(rt.settings.get())
