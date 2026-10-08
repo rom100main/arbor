@@ -2,7 +2,7 @@ import { existsSync, readdirSync } from "node:fs"
 import path from "node:path"
 
 import { Deferred, Effect, Schedule } from "effect"
-import { app, Menu, MenuItem, session, type Session, type WebContents } from "electron"
+import { app, ipcMain, Menu, MenuItem, session, type Session, type WebContents } from "electron"
 import { ElectronChromeExtensions } from "electron-chrome-extensions"
 import { installChromeWebStore, uninstallExtension } from "electron-chrome-web-store"
 
@@ -18,7 +18,7 @@ import {
     openPermissionPrompt,
 } from "../windows/overlays"
 import { extensionShimPath, extensionStorageShimPath } from "../windows/paths"
-import { forgetExtensionIcon } from "./action"
+import { forgetExtensionIcon, manifestFor } from "./action"
 import { parseManifest, type ParsedManifest } from "./manifest"
 import {
     emptyGrant,
@@ -244,10 +244,14 @@ const loadExtensionSources = (ses: Session): Effect.Effect<void> =>
         Effect.catchAllCause((cause) =>
             Effect.logError("Failed to install Chrome Web Store support", cause),
         ),
+        // The library registers `chrome.management.uninstall` before it can fail;
+        // replace it either way so a Web Store "Remove" shares Arbor's teardown.
+        Effect.zipRight(Effect.sync(routeWebStoreUninstall)),
         Effect.zipRight(app.isPackaged ? Effect.void : loadUnpackedExtensions(ses)),
         // Give Electron a beat to finish registering MV3 backgrounds after loadExtension.
         Effect.zipRight(Effect.sleep("500 millis")),
         Effect.zipRight(startMv3Workers(ses)),
+        Effect.zipRight(Effect.sync(pruneMissingPins)),
     )
 
 /**
@@ -465,6 +469,42 @@ const findExtension = (extensionId: string): Electron.Extension | null => {
     return null
 }
 
+/**
+ * Pins are restored from settings; drop any whose extension is gone.
+ * Covers removals Arbor never saw (files deleted by hand, older builds).
+ */
+const pruneMissingPins = (): void => {
+    const d = deps
+    if (!d) return
+    for (const extensionId of [...d.settings.get().pinnedExtensionIds]) {
+        const live = findExtension(extensionId) !== null || manifestFor(extensionId) !== null
+        if (!live) d.settings.unpinExtension(extensionId)
+    }
+}
+
+const WEBSTORE_ORIGIN = "https://chromewebstore.google.com"
+
+/**
+ * `electron-chrome-web-store` handles `chrome.management.uninstall` itself
+ * and only removes the extension, leaving pins (and storage, and consent) behind.
+ * Swap in a handler that routes through the full teardown.
+ * Idempotent: the library registers its handler once per session, we re-replace after each.
+ */
+const routeWebStoreUninstall = (): void => {
+    ipcMain.removeHandler("chrome.management.uninstall")
+    ipcMain.handle("chrome.management.uninstall", async (event, extensionId: unknown) => {
+        const origin = event.senderFrame?.origin ?? ""
+        if (!origin.startsWith(WEBSTORE_ORIGIN)) return "unknown_error"
+        if (typeof extensionId !== "string" || extensionId.length === 0) return "unknown_error"
+        await uninstallExtensionEverywhere(extensionId)
+        const sender = event.sender
+        queueMicrotask(() => {
+            if (!sender.isDestroyed()) sender.send("chrome.management.onUninstalled", extensionId)
+        })
+        return "success"
+    })
+}
+
 const optionsUrlFor = (extension: Electron.Extension): string | null => {
     const page = parseManifest(extension.manifest).optionsPage
     if (!page) return null
@@ -480,8 +520,19 @@ export const openExtensionMenu = async ({
     const d = deps
     if (!d) return
     const extension = findExtension(extensionId)
-    if (!extension) return
     const pinned = d.settings.get().pinnedExtensionIds.includes(extensionId)
+    if (!extension) {
+        if (!pinned) return
+        const ghostMenu = new Menu()
+        ghostMenu.append(
+            new MenuItem({
+                label: "Unpin from toolbar",
+                click: () => d.settings.unpinExtension(extensionId),
+            }),
+        )
+        ghostMenu.popup({ window: d.getWindow() ?? undefined, x: screenX, y: screenY })
+        return
+    }
     const optionsUrl = optionsUrlFor(extension)
     const menu = new Menu()
     menu.append(
