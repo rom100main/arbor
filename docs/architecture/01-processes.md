@@ -8,7 +8,7 @@
 - **Owns**:
     - `BrowserStore`: sole mutable state.
     - `BrowserWindow` instances.
-    - `WebContentsView` instances: 1 per tab.
+    - `WebContentsView` instances: 1 per tab, plus the shell view hosting `MainShell`.
     - `ipcMain` handlers.
 - **Never**: renders sidebar DOM. No SolidJS here.
 

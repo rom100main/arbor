@@ -49,13 +49,13 @@ sequenceDiagram
     M->>W: send("arbor:omnibox:query", query)
 ```
 
-- **Channels**: `arbor:omnibox:update`, `arbor:omnibox:popup-height`, `arbor:omnibox:activate`, `arbor:omnibox:move-selection`, `arbor:omnibox:activate-selected`, `arbor:rename-modal:open`, `arbor:rename-modal:close`.
+- **Channels**: `arbor:omnibox:update`, `arbor:omnibox:popup-height`, `arbor:omnibox:activate`, `arbor:omnibox:move-selection`, `arbor:omnibox:activate-selected`, `arbor:rename-modal:open`, `arbor:rename-modal:close`, `arbor:shell:raise`.
 
 ## 3. Push
 
 - **Use**: main -> renderer broadcast. State commits, focus requests, popup navigation.
 - **Primitives**: `win.webContents.send(channel, payload)` -> `ipcRenderer.on(channel, cb)` wrapped in preload.
-- **Fan-out**: `for (w of getAllWindows()) w.send("arbor:state", snapshot)`. Popup and modal stay in sync without extra fetch.
+- **Fan-out**: `for (w of getAllWindows()) w.send("arbor:state", snapshot)`, plus the shell view (`shellWebContents()`), which is a view rather than a window. Popup and modal stay in sync without extra fetch.
 
 ```mermaid
 flowchart LR
