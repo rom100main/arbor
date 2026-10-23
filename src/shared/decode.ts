@@ -1,22 +1,23 @@
-import { Either, Schema } from "effect"
+import { Option, Result, Schema, SchemaGetter } from "effect"
 
 /**
  * Field-level defaulting for untrusted JSON:
  * an absent or mistyped value falls back to `fallback` instead of failing the whole record.
  * Keeps the surrounding record strict (a bad `id` still rejects it) while optional fields stay forgiving.
  */
-export const orDefault = <A, I>(
-    schema: Schema.Schema<A, I>,
-    fallback: () => A,
-): Schema.Schema<A, unknown> =>
-    Schema.transform(Schema.Unknown, schema, {
-        decode: (value) => {
-            const result = Schema.decodeUnknownEither(schema)(value)
-            return Either.isRight(result) ? result.right : fallback()
-        },
-        encode: (value) => value,
-        strict: false,
-    })
+export const orDefault = <S extends Schema.ConstraintDecoder<unknown>>(
+    schema: S,
+    fallback: () => S["Type"],
+) =>
+    Schema.optionalKey(Schema.Unknown).pipe(
+        Schema.decodeTo(Schema.toType(schema), {
+            decode: SchemaGetter.transformOptional((value) => {
+                const result = Schema.decodeUnknownResult(schema)(Option.getOrUndefined(value))
+                return Option.some(Result.isSuccess(result) ? result.success : fallback())
+            }),
+            encode: SchemaGetter.passthroughSupertype(),
+        }),
+    )
 
 /**
  * Record-level parsing:
@@ -24,8 +25,8 @@ export const orDefault = <A, I>(
  * so callers can skip one bad entry instead of dropping the whole payload.
  */
 export const decodeOr =
-    <A, I>(schema: Schema.Schema<A, I>) =>
-    (value: unknown): A | null => {
-        const result = Schema.decodeUnknownEither(schema)(value)
-        return Either.isRight(result) ? result.right : null
+    <S extends Schema.ConstraintDecoder<unknown>>(schema: S) =>
+    (value: unknown): S["Type"] | null => {
+        const result = Schema.decodeUnknownResult(schema)(value)
+        return Result.isSuccess(result) ? result.success : null
     }

@@ -19,14 +19,20 @@ export type ExtStorageOp =
     | { op: "clear"; area: StorageAreaName }
     | { op: "getBytesInUse"; area: StorageAreaName; keys?: StorageKeySelector }
 
-const StorageAreaNameSchema = Schema.Literal("local", "session", "sync", "managed")
-const StorageItemsSchema = Schema.Record({ key: Schema.String, value: Schema.Unknown })
-const KeyListSchema = Schema.Union(Schema.String, Schema.mutable(Schema.Array(Schema.String)))
-const StorageKeysSchema = Schema.NullishOr(
-    Schema.Union(Schema.String, Schema.mutable(Schema.Array(Schema.String)), StorageItemsSchema),
+const StorageAreaNameSchema = Schema.Literals(["local", "session", "sync", "managed"])
+const StorageItemsSchema = Schema.Record(Schema.String, Schema.Unknown)
+const KeyListSchema = Schema.Union([Schema.String, Schema.mutable(Schema.Array(Schema.String))])
+const StorageKeysSchema = Schema.optionalKey(
+    Schema.NullishOr(
+        Schema.Union([
+            Schema.String,
+            Schema.mutable(Schema.Array(Schema.String)),
+            StorageItemsSchema,
+        ]),
+    ),
 )
 
-export const ExtStorageOpSchema = Schema.Union(
+export const ExtStorageOpSchema = Schema.Union([
     Schema.Struct({
         op: Schema.Literal("get"),
         area: StorageAreaNameSchema,
@@ -48,7 +54,7 @@ export const ExtStorageOpSchema = Schema.Union(
         area: StorageAreaNameSchema,
         keys: StorageKeysSchema,
     }),
-)
+])
 
 /** IPC boundary: `null` unless `value` is a well-formed storage op. */
 export const parseExtStorageOp: (value: unknown) => ExtStorageOp | null =
@@ -156,7 +162,7 @@ export interface PersistedExtStorage {
 
 const PersistedExtStorageSchema = Schema.Struct({
     version: Schema.Literal(EXT_STORAGE_PERSIST_VERSION),
-    extensions: Schema.Record({ key: Schema.String, value: Schema.Unknown }),
+    extensions: Schema.Record(Schema.String, Schema.Unknown),
 })
 
 export const toPersistedExtStorage = (

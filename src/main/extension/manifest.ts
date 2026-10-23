@@ -34,7 +34,7 @@ const StringList = orDefault(Schema.mutable(Schema.Array(Schema.String)), (): st
 
 /** A path or a size-keyed map of paths, both of which the library understands. */
 const IconSpec = Schema.NullOr(
-    Schema.Union(Schema.String, Schema.Record({ key: Schema.String, value: Schema.String })),
+    Schema.Union([Schema.String, Schema.Record(Schema.String, Schema.String)]),
 )
 
 const emptyActionSpec = () => ({ default_title: "", default_icon: null, default_popup: "" })

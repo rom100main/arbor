@@ -9,7 +9,7 @@ import type { DomainError } from "./state/state"
 export const runRequest = async <A>(effect: Effect.Effect<A, DomainError>): Promise<A> => {
     const exit = await Effect.runPromiseExit(effect)
     if (Exit.isSuccess(exit)) return exit.value
-    const failure = Cause.failureOption(exit.cause)
+    const failure = Cause.findErrorOption(exit.cause)
     if (Option.isSome(failure)) throw new Error(failure.value.message)
     throw new Error(Cause.pretty(exit.cause))
 }
@@ -25,8 +25,8 @@ export const runRequest = async <A>(effect: Effect.Effect<A, DomainError>): Prom
 export const runBackground = async (effect: Effect.Effect<unknown, unknown>): Promise<void> => {
     const exit = await Effect.runPromiseExit(effect)
     if (!Exit.isFailure(exit)) return
-    if (Cause.isInterruptedOnly(exit.cause)) return
-    const failure = Cause.failureOption(exit.cause)
+    if (Cause.hasInterruptsOnly(exit.cause)) return
+    const failure = Cause.findErrorOption(exit.cause)
     if (Option.isSome(failure)) return
     console.error("Background operation defect:", Cause.pretty(exit.cause))
 }

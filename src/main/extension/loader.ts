@@ -117,12 +117,12 @@ const ensureUnpackedConsent = (extensionPath: string): Effect.Effect<boolean> =>
         const deferred = yield* Deferred.make<boolean>()
         installPrompts.set(extensionPath, deferred)
         return yield* askUnpackedConsent(extensionPath).pipe(
-            Effect.catchAllCause(() => Effect.succeed(false)),
+            Effect.catchCause(() => Effect.succeed(false)),
             Effect.tap((allowed) => Deferred.succeed(deferred, allowed)),
             // Interruption still settles waiters (`false`) before the entry is dropped.
             Effect.ensuring(
                 Effect.sync(() => installPrompts.delete(extensionPath)).pipe(
-                    Effect.zipRight(Deferred.succeed(deferred, false)),
+                    Effect.andThen(Deferred.succeed(deferred, false)),
                 ),
             ),
         )
@@ -179,7 +179,7 @@ const loadUnpackedExtensions = (ses: Session): Effect.Effect<void> =>
                           )
                         : Effect.void,
                 ),
-                Effect.catchAllCause((cause) =>
+                Effect.catchCause((cause) =>
                     Effect.logError(
                         `Failed to load extension ${path.basename(extensionPath)}`,
                         cause,
@@ -203,7 +203,13 @@ const startWorkerWithRetry = (
         scopes.map((scope) =>
             Effect.tryPromise(() => ses.serviceWorkers.startWorkerForScope(scope)),
         ),
-    ).pipe(Effect.retry(Schedule.recurs(attempts - 1).pipe(Schedule.addDelay(() => "400 millis"))))
+    ).pipe(
+        Effect.retry(
+            Schedule.recurs(attempts - 1).pipe(
+                Schedule.addDelay(() => Effect.succeed("400 millis")),
+            ),
+        ),
+    )
 
 /** Scopes an MV3 background worker runs under; both spellings seen in the wild. */
 const workerScopes = (extensionId: string): readonly string[] => [
@@ -237,7 +243,7 @@ const startMv3Workers = (ses: Session, attempts = 3): Effect.Effect<void> =>
         ses.extensions?.getAllExtensions() ?? [],
         (extension) =>
             startMv3WorkerFor(ses, extension, attempts).pipe(
-                Effect.catchAllCause((cause) =>
+                Effect.catchCause((cause) =>
                     Effect.logError(`Failed to start worker for extension ${extension.id}`, cause),
                 ),
             ),
@@ -255,7 +261,7 @@ const loadExtensionEverywhere = (source: Session, extension: Electron.Extension)
                 yield* Effect.tryPromise(() => api.loadExtension(extension.path))
                 yield* startMv3WorkerFor(target, extension)
             }).pipe(
-                Effect.catchAllCause((cause) =>
+                Effect.catchCause((cause) =>
                     Effect.logError(`Failed to load extension ${extension.id} everywhere`, cause),
                 ),
             ),
@@ -268,17 +274,17 @@ const loadExtensionSources = (ses: Session): Effect.Effect<void> =>
     Effect.tryPromise(() =>
         installChromeWebStore({ session: ses, beforeInstall: consentStoreInstall }),
     ).pipe(
-        Effect.catchAllCause((cause) =>
+        Effect.catchCause((cause) =>
             Effect.logError("Failed to install Chrome Web Store support", cause),
         ),
         // The library registers `chrome.management.uninstall` before it can fail;
         // replace it either way so a Web Store "Remove" shares Arbor's teardown.
-        Effect.zipRight(Effect.sync(routeWebStoreUninstall)),
-        Effect.zipRight(app.isPackaged ? Effect.void : loadUnpackedExtensions(ses)),
+        Effect.andThen(Effect.sync(routeWebStoreUninstall)),
+        Effect.andThen(app.isPackaged ? Effect.void : loadUnpackedExtensions(ses)),
         // Give Electron a beat to finish registering MV3 backgrounds after loadExtension.
-        Effect.zipRight(Effect.sleep("500 millis")),
-        Effect.zipRight(startMv3Workers(ses)),
-        Effect.zipRight(Effect.sync(pruneMissingPins)),
+        Effect.andThen(Effect.sleep("500 millis")),
+        Effect.andThen(startMv3Workers(ses)),
+        Effect.andThen(Effect.sync(pruneMissingPins)),
     )
 
 /**
@@ -436,7 +442,7 @@ export const setupSessionExtensions = (ses: Session): void => {
     sourcesReady.set(ses, ready)
     void Effect.runPromise(
         loadExtensionSources(ses).pipe(
-            Effect.catchAllCause((cause) =>
+            Effect.catchCause((cause) =>
                 Effect.logError("Failed to load extension sources", cause),
             ),
             Effect.ensuring(Deferred.succeed(ready, undefined)),
@@ -614,7 +620,7 @@ export const uninstallExtensionEverywhere = (extensionId: string): Promise<void>
                 extensionSessions(),
                 (ses) =>
                     Effect.tryPromise(() => uninstallExtension(extensionId, { session: ses })).pipe(
-                        Effect.catchAllCause((cause) =>
+                        Effect.catchCause((cause) =>
                             Effect.logError(`Failed to uninstall ${extensionId}`, cause),
                         ),
                     ),
@@ -628,7 +634,5 @@ export const uninstallExtensionEverywhere = (extensionId: string): Promise<void>
             }
             d.settings.unpinExtension(extensionId)
             hideExtensionsPopup()
-        }).pipe(
-            Effect.catchAllCause((cause) => Effect.logError("Uninstall workflow failed", cause)),
-        ),
+        }).pipe(Effect.catchCause((cause) => Effect.logError("Uninstall workflow failed", cause))),
     )

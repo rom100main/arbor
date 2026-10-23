@@ -439,7 +439,7 @@ Effect.runFork(
         Effect.gen(function* () {
             const job = yield* Queue.take(promptQueue)
             yield* runPrompt(job).pipe(
-                Effect.catchAllCause((cause) => Effect.logError("Permission prompt failed", cause)),
+                Effect.catchCause((cause) => Effect.logError("Permission prompt failed", cause)),
             )
         }),
     ),

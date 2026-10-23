@@ -41,7 +41,7 @@ export const toPersisted = (state: DomainState): PersistedState => ({
     ),
 })
 
-const ContainerIconSchema = Schema.Literal(...CONTAINER_ICONS)
+const ContainerIconSchema = Schema.Literals(CONTAINER_ICONS)
 
 const ContainerMetaSchema = Schema.Struct({
     id: Schema.String,
@@ -55,13 +55,13 @@ const TabNodeSchema = Schema.Struct({
     id: Schema.String,
     containerId: Schema.String,
     parentId: Schema.NullOr(Schema.String),
-    order: orDefault(Schema.JsonNumber, () => 0),
+    order: orDefault(Schema.Finite, () => 0),
     url: Schema.String,
     title: orDefault(Schema.String, () => ""),
     collapsed: orDefault(Schema.Boolean, () => false),
     userLabel: orDefault(Schema.NullOr(Schema.String), () => null),
     favicon: orDefault(Schema.NullOr(Schema.String), () => null),
-    lastActiveAt: orDefault(Schema.JsonNumber, () => 0),
+    lastActiveAt: orDefault(Schema.Finite, () => 0),
 })
 
 const ExtensionGrantSchema = Schema.Struct({
@@ -75,7 +75,7 @@ const PersistedStateSchema = Schema.Struct({
     tabs: Schema.Array(Schema.Unknown),
     activeContainerId: orDefault(Schema.NullOr(Schema.String), () => null),
     extensionConsent: orDefault(
-        Schema.Record({ key: Schema.String, value: Schema.Unknown }),
+        Schema.Record(Schema.String, Schema.Unknown),
         (): Record<string, unknown> => ({}),
     ),
 })

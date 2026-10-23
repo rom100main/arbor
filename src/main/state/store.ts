@@ -82,7 +82,9 @@ export interface StoreService {
     readonly extensionConsent: Effect.Effect<Record<string, ExtensionGrant>>
 }
 
-export class BrowserStore extends Context.Tag("arbor.BrowserStore")<BrowserStore, StoreService>() {}
+export class BrowserStore extends Context.Service<BrowserStore, StoreService>()(
+    "arbor.BrowserStore",
+) {}
 
 export const makeStoreLayer = (
     initial: DomainState,
@@ -117,7 +119,7 @@ export const makeStoreLayer = (
                             return [{ value: pick(result), committed: result }, result]
                         },
                     ).pipe(
-                        Effect.catchAllDefect((defect) =>
+                        Effect.catchDefect((defect) =>
                             defect instanceof DomainError
                                 ? Effect.fail(defect)
                                 : Effect.die(defect),
@@ -126,7 +128,7 @@ export const makeStoreLayer = (
                     if (committed !== null) {
                         // Observe post-commit failures without pretending the mutation rolled back.
                         yield* Effect.sync(() => onCommit(committed)).pipe(
-                            Effect.catchAllCause((cause) =>
+                            Effect.catchCause((cause) =>
                                 Effect.logError("Post-commit observer failed", cause),
                             ),
                         )

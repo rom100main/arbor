@@ -15,7 +15,7 @@ import {
 } from "../shared/settings"
 import { createDebouncedSaver, readJsonFile, writeJsonSafely } from "./persistence"
 
-const ThemeSchema = Schema.Literal(...THEMES)
+const ThemeSchema = Schema.Literals(THEMES)
 
 const SettingsSchema = Schema.Struct({
     searchTemplate: orDefault(Schema.String, () => DEFAULT_SEARCH_TEMPLATE),
@@ -23,11 +23,11 @@ const SettingsSchema = Schema.Struct({
     // Unknown per element, so one bad id does not cost the whole pin list.
     pinnedExtensionIds: orDefault(Schema.Array(Schema.Unknown), () => [] as unknown[]),
     sidebarVisibility: orDefault(
-        Schema.Literal(...SIDEBAR_VISIBILITIES),
+        Schema.Literals(SIDEBAR_VISIBILITIES),
         (): SidebarVisibility => DEFAULT_SETTINGS.sidebarVisibility,
     ),
     urlBarVisibility: orDefault(
-        Schema.Literal(...URL_BAR_VISIBILITIES),
+        Schema.Literals(URL_BAR_VISIBILITIES),
         (): UrlBarVisibility => DEFAULT_SETTINGS.urlBarVisibility,
     ),
 })
