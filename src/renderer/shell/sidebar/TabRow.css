@@ -3,13 +3,18 @@
     display: flex;
     gap: 5px;
     align-items: center;
+    max-width: calc(var(--sidebar-width) - 16px);
     height: var(--tab-row-height);
     padding-right: 6px;
+    padding-left: calc(6px + var(--depth, 0) * 14px);
     margin: 1px 8px;
     font-size: var(--font-size-body);
     cursor: default;
     border-radius: var(--radius-md);
-    transition: background-color 0.12s;
+    transition:
+        background-color 0.12s,
+        max-width var(--reveal-duration) var(--reveal-easing),
+        padding-left var(--reveal-duration) var(--reveal-easing);
 
     &.drop-before::before,
     &.drop-after::after {
@@ -73,6 +78,17 @@
     }
 }
 
+.sidebar.collapsed .tab-row {
+    max-width: calc(var(--sidebar-compact-width) - 16px);
+    padding-left: calc((var(--sidebar-compact-width) - 16px - 16px) / 2);
+
+    .tab-title,
+    .tab-close {
+        visibility: hidden;
+        opacity: 0;
+    }
+}
+
 .tab-title {
     flex: 1;
     min-width: 0;
@@ -80,6 +96,9 @@
     text-overflow: ellipsis;
     color: var(--color-text);
     white-space: nowrap;
+    transition:
+        opacity var(--reveal-duration) var(--reveal-easing),
+        visibility var(--reveal-duration);
 }
 
 .chevron {

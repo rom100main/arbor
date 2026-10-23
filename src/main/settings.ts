@@ -3,10 +3,15 @@ import { Data, Schema } from "effect"
 import { decodeOr, orDefault } from "../shared/decode"
 import {
     DEFAULT_SEARCH_TEMPLATE,
+    DEFAULT_SETTINGS,
     normalizeSearchTemplate,
+    SIDEBAR_VISIBILITIES,
     THEMES,
+    URL_BAR_VISIBILITIES,
     type Settings,
+    type SidebarVisibility,
     type Theme,
+    type UrlBarVisibility,
 } from "../shared/settings"
 import { createDebouncedSaver, readJsonFile, writeJsonSafely } from "./persistence"
 
@@ -17,6 +22,14 @@ const SettingsSchema = Schema.Struct({
     theme: orDefault(ThemeSchema, (): Theme => "system"),
     // Unknown per element, so one bad id does not cost the whole pin list.
     pinnedExtensionIds: orDefault(Schema.Array(Schema.Unknown), () => [] as unknown[]),
+    sidebarVisibility: orDefault(
+        Schema.Literal(...SIDEBAR_VISIBILITIES),
+        (): SidebarVisibility => DEFAULT_SETTINGS.sidebarVisibility,
+    ),
+    urlBarVisibility: orDefault(
+        Schema.Literal(...URL_BAR_VISIBILITIES),
+        (): UrlBarVisibility => DEFAULT_SETTINGS.urlBarVisibility,
+    ),
 })
 
 const parseSettings = decodeOr(SettingsSchema)
@@ -40,6 +53,8 @@ export const fromPersistedSettings = (data: unknown): Settings | null => {
         searchTemplate: searchTemplate ?? DEFAULT_SEARCH_TEMPLATE,
         theme: parsed.theme,
         pinnedExtensionIds: cleanPinned(parsed.pinnedExtensionIds),
+        sidebarVisibility: parsed.sidebarVisibility,
+        urlBarVisibility: parsed.urlBarVisibility,
     }
 }
 
@@ -77,8 +92,7 @@ export const createSettingsStore = (
     options: SettingsStoreOptions = {},
 ): SettingsStore => {
     let current: Settings = fromPersistedSettings(readJsonFile(filePath)) ?? {
-        searchTemplate: DEFAULT_SEARCH_TEMPLATE,
-        theme: "system",
+        ...DEFAULT_SETTINGS,
         pinnedExtensionIds: [],
     }
     const subscribers = new Set<(settings: Settings) => void>()
@@ -110,6 +124,18 @@ export const createSettingsStore = (
             }
             if (patch.theme !== undefined && !THEMES.includes(patch.theme)) {
                 throw new SettingsError(`Unknown theme: ${patch.theme}`)
+            }
+            if (
+                patch.sidebarVisibility !== undefined &&
+                !SIDEBAR_VISIBILITIES.includes(patch.sidebarVisibility)
+            ) {
+                throw new SettingsError(`Unknown sidebar visibility: ${patch.sidebarVisibility}`)
+            }
+            if (
+                patch.urlBarVisibility !== undefined &&
+                !URL_BAR_VISIBILITIES.includes(patch.urlBarVisibility)
+            ) {
+                throw new SettingsError(`Unknown URL bar visibility: ${patch.urlBarVisibility}`)
             }
             if (patch.pinnedExtensionIds !== undefined) {
                 patch = { ...patch, pinnedExtensionIds: cleanPinned(patch.pinnedExtensionIds) }

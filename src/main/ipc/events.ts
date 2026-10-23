@@ -26,6 +26,7 @@ import {
     showOmniboxPopup,
     toggleExtensionsPopup,
 } from "../windows/overlays"
+import { setShellRaised, shellWebContents } from "../windows/shell-view"
 import {
     destroyView,
     ensureView,
@@ -52,6 +53,7 @@ export const registerSettingsBroadcast = (settings: SettingsStore): void => {
         for (const window of BrowserWindow.getAllWindows()) {
             window.webContents.send("arbor:settings:changed", next)
         }
+        shellWebContents()?.send("arbor:settings:changed", next)
         for (const wc of internalViewWebContents()) {
             wc.send("arbor:settings:changed", next)
         }
@@ -96,6 +98,7 @@ export const makeOnCommit =
         for (const window of BrowserWindow.getAllWindows()) {
             window.webContents.send("arbor:state", snapshot)
         }
+        shellWebContents()?.send("arbor:state", snapshot)
         rt.rebuildMenu()
     }
 
@@ -117,7 +120,7 @@ export const makeOmniboxActivator =
             }
         }
         hideOmniboxPopup()
-        rt.win?.webContents.send("arbor:omnibox:activated")
+        shellWebContents()?.send("arbor:omnibox:activated")
     }
 
 /** Fire-and-forget overlay channels previously inline in index.ts. */
@@ -181,5 +184,9 @@ export const registerOverlayEvents = (
     })
     ipcMain.on("arbor:permission:respond", (_event, allowed: boolean) => {
         respondPermissionPrompt(allowed)
+    })
+    // A revealed bar floats over the page, so the shell rises above it for as long as one is out.
+    ipcMain.on("arbor:shell:raise", (_event, raised: boolean) => {
+        setShellRaised(raised)
     })
 }

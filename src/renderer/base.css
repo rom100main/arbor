@@ -1,8 +1,6 @@
 :root {
     color-scheme: light;
 
-    --sidebar-width: 240px;
-    --toolbar-height: 44px;
     --font-family: system-ui, -apple-system, sans-serif;
     --font-size-sm: 11px;
     --font-size-md: 12px;
@@ -31,6 +29,7 @@
     --shadow-popup: 0 8px 24px oklch(28% 0.02 258deg / 12%);
     --shadow-popup-strong: 0 4px 18px oklch(28% 0.02 258deg / 20%);
     --shadow-modal: 0 12px 32px oklch(28% 0.02 258deg / 24%);
+    --shadow-float: 0 0 24px oklch(28% 0.02 258deg / 18%);
     --radius-sm: 4px;
     --radius-md: 6px;
     --radius-lg: 8px;
@@ -68,6 +67,7 @@
     --shadow-popup: 0 8px 24px oklch(0% 0 0deg / 45%);
     --shadow-popup-strong: 0 4px 18px oklch(0% 0 0deg / 55%);
     --shadow-modal: 0 12px 32px oklch(0% 0 0deg / 60%);
+    --shadow-float: 0 0 24px oklch(0% 0 0deg / 50%);
 }
 
 * {

@@ -1,7 +1,7 @@
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
-import type { BrowserWindow } from "electron"
+import type { BrowserWindow, WebContents } from "electron"
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 
@@ -11,8 +11,8 @@ export const extensionStorageShimPath = path.join(here, "../preload/extension-st
 
 export const rendererPath = path.join(here, "../../client/index.html")
 
-/** Dev server vs. packaged file loader shared by all windows. */
-export const loadRenderer = (win: BrowserWindow, query?: string): Promise<void> => {
+/** Dev server vs. packaged file loader shared by all windows and the shell view. */
+export const loadRenderer = (win: BrowserWindow | WebContents, query?: string): Promise<void> => {
     if (process.env.VITE_DEV_SERVER_URL) {
         const url = query
             ? `${process.env.VITE_DEV_SERVER_URL}?${query}`

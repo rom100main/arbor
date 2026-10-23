@@ -5,6 +5,15 @@ import { requestOmniboxFocus, useOmniboxFocus } from "../focus"
 
 import "./OmniboxInput.css"
 
+const restingRect = (el: HTMLElement): DOMRect => {
+    const rect = el.getBoundingClientRect()
+    const bar = el.closest<HTMLElement>(".toolbar")
+    if (!bar) return rect
+    const { transform } = getComputedStyle(bar)
+    const offset = transform === "none" ? 0 : new DOMMatrixReadOnly(transform).m42
+    return new DOMRect(rect.x, rect.y - offset, rect.width, rect.height)
+}
+
 export const OmniboxInput = (props: { tabId: TabId | null; url: string }) => {
     const [value, setValue] = createSignal(props.url)
     // Follow the page URL unless the user is editing.
@@ -17,7 +26,7 @@ export const OmniboxInput = (props: { tabId: TabId | null; url: string }) => {
 
     let input: HTMLInputElement | undefined
     const focusInput = (): void => {
-        input?.focus()
+        input?.focus({ preventScroll: true })
         input?.select()
     }
 
@@ -30,7 +39,7 @@ export const OmniboxInput = (props: { tabId: TabId | null; url: string }) => {
 
     const sendQuery = (query: string): void => {
         if (!input) return
-        const rect = input.getBoundingClientRect()
+        const rect = restingRect(input)
         window.arbor.omniboxUpdate({
             query,
             rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },

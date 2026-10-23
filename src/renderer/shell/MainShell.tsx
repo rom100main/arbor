@@ -1,5 +1,15 @@
-import { SETTINGS_URL } from "../../shared/settings"
+import { createEffect, onCleanup } from "solid-js"
+
+import {
+    chromeInsets,
+    SETTINGS_URL,
+    SIDEBAR_COMPACT_WIDTH,
+    SIDEBAR_WIDTH,
+    TOOLBAR_HEIGHT,
+} from "../../shared/settings"
 import { Icon } from "../ui/Icon"
+import { createReveal, REVEAL_MS, revealZones } from "./reveal"
+import { useSettings } from "./settings"
 import { Sidebar } from "./sidebar/Sidebar"
 import { initState, useSnapshot } from "./snapshot"
 import { NavButtons } from "./toolbar/NavButtons"
@@ -11,11 +21,92 @@ import "./MainShell.css"
 export const MainShell = () => {
     void initState()
     const snapshot = useSnapshot()
+    const settings = useSettings()
     const activeTabId = () => snapshot()?.activeTabId ?? null
     const activeTabUrl = () => {
         const snap = snapshot()
         return snap?.tabs.find((t) => t.id === snap.activeTabId)?.url ?? ""
     }
+
+    // --- revealing bars
+
+    const zones = () =>
+        revealZones(settings(), { width: window.innerWidth, height: window.innerHeight })
+    const sidebar = createReveal(() => zones().sidebar)
+    const toolbar = createReveal(() => zones().toolbar)
+
+    const onPointer = (event: MouseEvent): void => {
+        sidebar.pointer(event.clientX, event.clientY)
+        toolbar.pointer(event.clientX, event.clientY)
+    }
+    const onLeave = (): void => {
+        sidebar.leave()
+        toolbar.leave()
+    }
+    const onResize = (): void => {
+        sidebar.sync()
+        toolbar.sync()
+    }
+    document.addEventListener("mousemove", onPointer)
+    document.documentElement.addEventListener("mouseleave", onLeave)
+    window.addEventListener("resize", onResize)
+    onCleanup(() => {
+        document.removeEventListener("mousemove", onPointer)
+        document.documentElement.removeEventListener("mouseleave", onLeave)
+        window.removeEventListener("resize", onResize)
+    })
+    onCleanup(window.arbor.onShellEdge((edge) => (edge === "left" ? sidebar : toolbar).reveal()))
+
+    createEffect(
+        () => [settings().sidebarVisibility, settings().urlBarVisibility] as const,
+        () => {
+            sidebar.sync()
+            toolbar.sync()
+        },
+    )
+
+    // Stay above the page while any bar is out, and until the last one has finished leaving.
+    let raised = false
+    let lowerTimer: ReturnType<typeof setTimeout> | undefined
+    const setRaised = (next: boolean): void => {
+        clearTimeout(lowerTimer)
+        if (next === raised) return
+        raised = next
+        window.arbor.shellRaise(next)
+    }
+    onCleanup(() => clearTimeout(lowerTimer))
+    createEffect(
+        () => sidebar.open() || toolbar.open(),
+        (anyOpen) => {
+            if (anyOpen) {
+                setRaised(true)
+                return
+            }
+            clearTimeout(lowerTimer)
+            lowerTimer = setTimeout(() => setRaised(false), REVEAL_MS)
+        },
+    )
+
+    // While raised, the bare shell covers the page: a click there means "back to the page",
+    // so give it back at once rather than after the closing animation.
+    const onShellMouseDown = (event: MouseEvent): void => {
+        if (event.target !== event.currentTarget) return
+        sidebar.dismiss()
+        toolbar.dismiss()
+        if (!sidebar.isOpen() && !toolbar.isOpen()) setRaised(false)
+    }
+
+    // Typing in the URL bar keeps it out even once the pointer has left it.
+    // Only the input counts: clicked buttons keep focus too, and would pin the bar open.
+    const onToolbarFocusIn = (event: FocusEvent): void => {
+        toolbar.setFocused(event.target instanceof HTMLInputElement)
+    }
+    const onToolbarFocusOut = (event: FocusEvent & { currentTarget: HTMLElement }): void => {
+        const next = event.relatedTarget
+        toolbar.setFocused(next instanceof HTMLInputElement && event.currentTarget.contains(next))
+    }
+
+    // --- toolbar actions
 
     let button: HTMLButtonElement | undefined
 
@@ -37,10 +128,28 @@ export const MainShell = () => {
     }
 
     return (
-        <div class="shell">
-            <Sidebar />
-            <main class="webview-area" />
-            <footer class="toolbar">
+        <div
+            class="shell"
+            style={{
+                "--sidebar-width": `${SIDEBAR_WIDTH}px`,
+                "--sidebar-compact-width": `${SIDEBAR_COMPACT_WIDTH}px`,
+                "--toolbar-height": `${TOOLBAR_HEIGHT}px`,
+                "--toolbar-inset": `${chromeInsets(settings()).bottom}px`,
+                "--reveal-duration": `${REVEAL_MS}ms`,
+            }}
+            onMouseDown={onShellMouseDown}
+        >
+            <Sidebar visibility={settings().sidebarVisibility} open={sidebar.open()} />
+            <section
+                aria-label="URL bar"
+                class={{
+                    toolbar: true,
+                    stowed: settings().urlBarVisibility === "hidden" && !toolbar.open(),
+                    floating: settings().urlBarVisibility === "hidden" && toolbar.open(),
+                }}
+                onFocusIn={onToolbarFocusIn}
+                onFocusOut={onToolbarFocusOut}
+            >
                 <NavButtons tabId={activeTabId()} />
                 <OmniboxInput tabId={activeTabId()} url={activeTabUrl()} />
                 <PinnedActions />
@@ -57,7 +166,7 @@ export const MainShell = () => {
                         <Icon name="settings" />
                     </button>
                 </div>
-            </footer>
+            </section>
         </div>
     )
 }

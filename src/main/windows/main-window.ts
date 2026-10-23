@@ -2,7 +2,7 @@ import { BrowserWindow, nativeTheme } from "electron"
 
 import type { Settings } from "../../shared/settings"
 import { hideOmniboxPopup, repositionRenameModal } from "./overlays"
-import { loadRenderer, preloadPath } from "./paths"
+import { createShellView, layoutShell } from "./shell-view"
 import { layoutViews } from "./tab-views"
 
 /**
@@ -17,7 +17,8 @@ const windowBackground = (settings: Settings): string =>
           ? "#111315"
           : "#ffffff"
 
-export const createWindow = async (settings: Settings): Promise<BrowserWindow> => {
+export const createWindow = async (getSettings: () => Settings): Promise<BrowserWindow> => {
+    const settings = getSettings()
     const win = new BrowserWindow({
         width: 1440,
         height: 900,
@@ -26,13 +27,11 @@ export const createWindow = async (settings: Settings): Promise<BrowserWindow> =
         show: false,
         title: "Arbor",
         backgroundColor: windowBackground(settings),
-        webPreferences: { preload: preloadPath },
     })
 
-    win.on("ready-to-show", () => win.show())
-
-    await loadRenderer(win)
-    if (process.env.VITE_DEV_SERVER_URL) win.webContents.openDevTools()
+    const shell = await createShellView(win, getSettings)
+    win.show()
+    if (process.env.VITE_DEV_SERVER_URL) shell.webContents.openDevTools({ mode: "detach" })
 
     return win
 }
@@ -40,6 +39,7 @@ export const createWindow = async (settings: Settings): Promise<BrowserWindow> =
 /** Resize/move/blur wiring previously inline in index.ts. */
 export const attachWindowEvents = (win: BrowserWindow): void => {
     win.on("resize", () => {
+        layoutShell()
         layoutViews(win)
         repositionRenameModal(win)
     })

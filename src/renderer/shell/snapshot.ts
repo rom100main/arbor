@@ -1,6 +1,6 @@
 import { createMemo, createSignal } from "solid-js"
 
-import type { BrowserSnapshot, DisplayTab, TabId } from "../../shared/protocol"
+import type { BrowserSnapshot, ContainerId, DisplayTab, TabId } from "../../shared/protocol"
 import { displayTabs } from "../../shared/tree-display"
 import { createInit } from "./init-store"
 
@@ -22,8 +22,6 @@ export const useSnapshot = () => snapshot
 // collapsed arrives via useTreeMeta,
 // and order only affects the array position,
 // which <For> applies by moving existing nodes.
-const displayCache = new Map<TabId, DisplayTab>()
-
 const sameDisplay = (a: DisplayTab, b: DisplayTab): boolean =>
     a.containerId === b.containerId &&
     a.parentId === b.parentId &&
@@ -33,26 +31,27 @@ const sameDisplay = (a: DisplayTab, b: DisplayTab): boolean =>
     a.favicon === b.favicon &&
     a.userLabel === b.userLabel
 
-const stableDisplayTabs = (tabs: DisplayTab[]): DisplayTab[] => {
+const stableDisplayTabs = (cache: Map<TabId, DisplayTab>, tabs: DisplayTab[]): DisplayTab[] => {
     const visible = new Set<TabId>()
     const next = tabs.map((tab) => {
         visible.add(tab.id)
-        const cached = displayCache.get(tab.id)
+        const cached = cache.get(tab.id)
         if (cached && sameDisplay(cached, tab)) return cached
-        displayCache.set(tab.id, tab)
+        cache.set(tab.id, tab)
         return tab
     })
-    for (const id of displayCache.keys()) {
-        if (!visible.has(id)) displayCache.delete(id)
+    for (const id of cache.keys()) {
+        if (!visible.has(id)) cache.delete(id)
     }
     return next
 }
 
-export const useActiveContainerTabs = () => {
+export const useContainerTabs = (containerId: ContainerId) => {
+    const cache = new Map<TabId, DisplayTab>()
     return () => {
         const snap = snapshot()
-        if (!snap || snap.activeContainerId === null) return []
-        return stableDisplayTabs(displayTabs(snap.tabs, snap.activeContainerId))
+        if (!snap) return []
+        return stableDisplayTabs(cache, displayTabs(snap.tabs, containerId))
     }
 }
 

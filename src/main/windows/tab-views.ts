@@ -14,9 +14,7 @@ import { extensionsReady, setupSessionExtensions } from "../extension/loader"
 import type { DomainState } from "../state/state"
 import type { StoreService } from "../state/store"
 import { internalSession } from "./internal-pages"
-
-const SIDEBAR_WIDTH = 240
-const TOOLBAR_HEIGHT = 44
+import { restackShell, shellInsets, watchShellEdges } from "./shell-view"
 
 export interface ViewDeps {
     readonly store: StoreService
@@ -124,6 +122,7 @@ export const ensureView = (deps: ViewDeps, tabId: string, url: string): WebConte
         menu.popup()
     })
     views.set(tabId, view)
+    watchShellEdges(view)
     trackPageMeta(deps.store, tabId, view)
     void loadTabUrl(tabId, tab.containerId, url, view)
     return view
@@ -178,17 +177,20 @@ export const showTab = (win: BrowserWindow, tabId: string): void => {
         if (other !== view) win.contentView.removeChildView(other)
     }
     win.contentView.addChildView(view)
+    restackShell()
     layoutViews(win)
 }
 
 export const layoutViews = (win: BrowserWindow): void => {
     const { width, height } = win.getContentBounds()
-    for (const view of win.contentView.children) {
+    const insets = shellInsets()
+    for (const view of views.values()) {
+        if (!win.contentView.children.includes(view)) continue
         view.setBounds({
-            x: SIDEBAR_WIDTH,
+            x: insets.left,
             y: 0,
-            width: Math.max(0, width - SIDEBAR_WIDTH),
-            height: Math.max(0, height - TOOLBAR_HEIGHT),
+            width: Math.max(0, width - insets.left),
+            height: Math.max(0, height - insets.bottom),
         })
     }
 }

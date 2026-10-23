@@ -91,6 +91,8 @@ export interface DisplayTab extends TabNode {
 
 export type OmniboxActivation = { kind: "go"; query: string } | { kind: "tab"; tabId: TabId }
 
+export type RevealEdge = "left" | "bottom"
+
 export type RenameTarget =
     | { kind: "container"; container: ContainerMeta }
     | { kind: "tab"; tab: TabNode }

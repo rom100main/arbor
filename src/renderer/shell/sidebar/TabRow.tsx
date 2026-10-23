@@ -45,7 +45,7 @@ export const TabRow = (props: {
                 "drop-after": dropClass("after"),
                 "drop-child": dropClass("child"),
             }}
-            style={{ "padding-left": `${6 + props.tab.depth * 14}px` }}
+            style={{ "--depth": props.tab.depth }}
             draggable="true"
             onClick={() => void window.arbor.selectTab(props.tab.id)}
             onContextMenu={(event) => {

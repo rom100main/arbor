@@ -21,7 +21,8 @@ import { BrowserStore, makeStoreLayer, type StoreService } from "./state/store"
 import { installMenu } from "./windows/app-menu"
 import { registerInternalPages, registerInternalScheme } from "./windows/internal-pages"
 import { attachWindowEvents, createWindow } from "./windows/main-window"
-import { ensureView, tabIdForWebContents, viewForTab } from "./windows/tab-views"
+import { focusShell, shellWebContents } from "./windows/shell-view"
+import { ensureView, layoutViews, tabIdForWebContents, viewForTab } from "./windows/tab-views"
 
 // Verbose only under `vp dev` (VITE_DEV_SERVER_URL). Packaged/prod: no console.debug noise.
 if (!process.env.VITE_DEV_SERVER_URL) {
@@ -161,17 +162,18 @@ const openMainWindow = async (appInstance: Application): Promise<void> => {
         store,
         getState: () => rt.latest,
         focusOmnibox: () => {
-            const win = rt.win
-            if (!win) return
-            win.focus()
-            win.webContents.focus()
-            win.webContents.send("arbor:focus-omnibox")
+            focusShell()
+            shellWebContents()?.send("arbor:focus-omnibox")
         },
     })
 
-    const win = await createWindow(rt.settings.get())
+    const win = await createWindow(() => rt.settings.get())
     rt.win = win
     attachWindowEvents(win)
+
+    // Showing or hiding a bar changes how much of the window the page gets.
+    const stopRelayout = rt.settings.subscribe(() => layoutViews(win))
+    win.on("closed", stopRelayout)
 
     await ensureSeedTab()
 }

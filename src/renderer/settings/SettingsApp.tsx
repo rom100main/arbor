@@ -1,7 +1,16 @@
 import { For, Match, Show, Switch, createEffect, createMemo, createSignal, untrack } from "solid-js"
 
 import { settingsRoute, type SettingsRoute } from "../../shared/internal-pages"
-import { SEARCH_ENGINES, SETTINGS_URL, THEMES, type Theme } from "../../shared/settings"
+import {
+    SEARCH_ENGINES,
+    SETTINGS_URL,
+    SIDEBAR_VISIBILITIES,
+    THEMES,
+    URL_BAR_VISIBILITIES,
+    type SidebarVisibility,
+    type Theme,
+    type UrlBarVisibility,
+} from "../../shared/settings"
 import { useSettings } from "../shell/settings"
 import { Icon, type IconName } from "../ui/Icon"
 
@@ -23,6 +32,28 @@ const THEME_ICONS: Record<Theme, IconName> = {
     light: "sun",
     dark: "moon",
     system: "device-desktop",
+}
+
+const SIDEBAR_LABELS: Record<SidebarVisibility, string> = {
+    displayed: "Displayed",
+    compact: "Compact",
+    hidden: "Hidden",
+}
+
+const SIDEBAR_ICONS: Record<SidebarVisibility, IconName> = {
+    displayed: "layout-sidebar",
+    compact: "layout-sidebar-left-collapse",
+    hidden: "layout-sidebar-inactive",
+}
+
+const URL_BAR_LABELS: Record<UrlBarVisibility, string> = {
+    displayed: "Displayed",
+    hidden: "Hidden",
+}
+
+const URL_BAR_ICONS: Record<UrlBarVisibility, IconName> = {
+    displayed: "layout-bottombar",
+    hidden: "layout-bottombar-inactive",
 }
 
 const routeUrl = (route: SettingsRoute): string => `${SETTINGS_URL}/${route}`
@@ -172,37 +203,88 @@ const SearchSection = () => {
     )
 }
 
+const OptionCards = <T extends string>(props: {
+    name: string
+    label: string
+    options: readonly T[]
+    labels: Record<T, string>
+    icons: Record<T, IconName>
+    value: T
+    onChange: (value: T) => void
+}) => (
+    <div class="settings-options" role="radiogroup" aria-label={props.label}>
+        <For each={props.options}>
+            {(option) => (
+                <label
+                    class={{
+                        "settings-option": true,
+                        active: props.value === option,
+                    }}
+                >
+                    <input
+                        type="radio"
+                        name={props.name}
+                        value={option}
+                        checked={props.value === option}
+                        onChange={() => props.onChange(option)}
+                    />
+                    <Icon name={props.icons[option]} size={16} />
+                    <span>{props.labels[option]}</span>
+                </label>
+            )}
+        </For>
+    </div>
+)
+
 const AppearanceSection = () => {
     const settings = useSettings()
     return (
         <section>
             <h1>Appearance</h1>
-            <div class="settings-theme">
-                <For each={THEMES}>
-                    {(theme) => (
-                        <label
-                            class={{
-                                "settings-theme-option": true,
-                                active: settings().theme === theme,
-                            }}
-                        >
-                            <input
-                                type="radio"
-                                name="theme"
-                                value={theme}
-                                checked={settings().theme === theme}
-                                onChange={() => void window.arbor.setSettings({ theme })}
-                            />
-                            <Icon name={THEME_ICONS[theme]} size={16} />
-                            <span>{THEME_LABELS[theme]}</span>
-                        </label>
-                    )}
-                </For>
+            <div class="settings-group">
+                <h2>Theme</h2>
+                <OptionCards
+                    name="theme"
+                    label="Theme"
+                    options={THEMES}
+                    labels={THEME_LABELS}
+                    icons={THEME_ICONS}
+                    value={settings().theme}
+                    onChange={(theme) => void window.arbor.setSettings({ theme })}
+                />
+                <p class="settings-hint">
+                    Arbor's own interface follows this choice but websites keep following the
+                    system.
+                </p>
             </div>
-            <p class="settings-hint">
-                System follows your operating system. Arbor's own interface follows this choice but
-                websites keep following the system.
-            </p>
+            <div class="settings-group">
+                <h2>Tab sidebar</h2>
+                <OptionCards
+                    name="sidebar-visibility"
+                    label="Tab sidebar"
+                    options={SIDEBAR_VISIBILITIES}
+                    labels={SIDEBAR_LABELS}
+                    icons={SIDEBAR_ICONS}
+                    value={settings().sidebarVisibility}
+                    onChange={(sidebarVisibility) =>
+                        void window.arbor.setSettings({ sidebarVisibility })
+                    }
+                />
+            </div>
+            <div class="settings-group">
+                <h2>URL bar</h2>
+                <OptionCards
+                    name="url-bar-visibility"
+                    label="URL bar"
+                    options={URL_BAR_VISIBILITIES}
+                    labels={URL_BAR_LABELS}
+                    icons={URL_BAR_ICONS}
+                    value={settings().urlBarVisibility}
+                    onChange={(urlBarVisibility) =>
+                        void window.arbor.setSettings({ urlBarVisibility })
+                    }
+                />
+            </div>
         </section>
     )
 }

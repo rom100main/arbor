@@ -106,7 +106,21 @@
     }
 }
 
-.settings-theme {
+.settings-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 26px;
+
+    h2 {
+        margin: 0;
+        font-size: var(--font-size-body);
+        font-weight: 600;
+        color: var(--color-text);
+    }
+}
+
+.settings-options {
     display: flex;
     gap: 8px;
 }
@@ -157,7 +171,7 @@
     color: var(--color-text-faint);
 }
 
-.settings-theme-option {
+.settings-option {
     position: relative;
     display: flex;
     flex-direction: column;

@@ -2,6 +2,41 @@ export const THEMES = ["light", "dark", "system"] as const
 
 export type Theme = (typeof THEMES)[number]
 
+export const SIDEBAR_VISIBILITIES = ["displayed", "compact", "hidden"] as const
+
+export type SidebarVisibility = (typeof SIDEBAR_VISIBILITIES)[number]
+
+export const URL_BAR_VISIBILITIES = ["displayed", "hidden"] as const
+
+export type UrlBarVisibility = (typeof URL_BAR_VISIBILITIES)[number]
+
+export const SIDEBAR_WIDTH = 240
+export const SIDEBAR_COMPACT_WIDTH = 48
+export const TOOLBAR_HEIGHT = 44
+
+export const REVEAL_EDGE = 16
+
+export interface ChromeInsets {
+    readonly left: number
+    readonly bottom: number
+}
+
+/**
+ * Space the shell keeps for itself along the window's left and bottom edges; tab views fill the rest.
+ * A revealed bar slides over the page rather than resizing it, so only the resting state counts here.
+ */
+export const chromeInsets = (
+    settings: Pick<Settings, "sidebarVisibility" | "urlBarVisibility">,
+): ChromeInsets => ({
+    left:
+        settings.sidebarVisibility === "displayed"
+            ? SIDEBAR_WIDTH
+            : settings.sidebarVisibility === "compact"
+              ? SIDEBAR_COMPACT_WIDTH
+              : 0,
+    bottom: settings.urlBarVisibility === "displayed" ? TOOLBAR_HEIGHT : 0,
+})
+
 export const DEFAULT_SEARCH_TEMPLATE = "https://duckduckgo.com/?q=%s"
 
 /**
@@ -47,12 +82,16 @@ export interface Settings {
     theme: Theme
     /** Extensions whose toolbar button sits between the URL input and the puzzle button. */
     pinnedExtensionIds: string[]
+    sidebarVisibility: SidebarVisibility
+    urlBarVisibility: UrlBarVisibility
 }
 
 export const DEFAULT_SETTINGS: Settings = {
     searchTemplate: DEFAULT_SEARCH_TEMPLATE,
     theme: "system",
     pinnedExtensionIds: [],
+    sidebarVisibility: "compact",
+    urlBarVisibility: "displayed",
 }
 
 const SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*:/i
