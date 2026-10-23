@@ -26,11 +26,15 @@ describe("fromPersistedSettings", () => {
             searchTemplate: "https://duckduckgo.com/",
             theme: "neon",
             pinnedExtensionIds: ["a", "a", "", 3],
+            sidebarVisibility: "folded",
+            urlBarVisibility: 1,
         })
         expect(restored).not.toBeNull()
         expect(restored!.searchTemplate).toBe(DEFAULT_SETTINGS.searchTemplate)
         expect(restored!.theme).toBe("system")
         expect(restored!.pinnedExtensionIds).toEqual(["a"])
+        expect(restored!.sidebarVisibility).toBe(DEFAULT_SETTINGS.sidebarVisibility)
+        expect(restored!.urlBarVisibility).toBe(DEFAULT_SETTINGS.urlBarVisibility)
     })
 
     it("keeps a valid file intact", () => {
@@ -38,6 +42,8 @@ describe("fromPersistedSettings", () => {
             searchTemplate: "https://kagi.com/search?q=%s",
             theme: "dark",
             pinnedExtensionIds: ["ext-a", "ext-b"],
+            sidebarVisibility: "compact",
+            urlBarVisibility: "hidden",
         }
         expect(fromPersistedSettings(payload)).toEqual(payload)
     })
@@ -58,6 +64,8 @@ describe("settings store", () => {
             theme: "dark",
             searchTemplate: "https://kagi.com/search?q=%s",
             pinnedExtensionIds: [],
+            sidebarVisibility: DEFAULT_SETTINGS.sidebarVisibility,
+            urlBarVisibility: DEFAULT_SETTINGS.urlBarVisibility,
         })
 
         const reloaded = createSettingsStore(filePath)
@@ -87,6 +95,16 @@ describe("settings store", () => {
         // Disk still holds what the last accepted write left there.
         expect(JSON.parse(readFileSync(filePath, "utf8"))).toEqual(before)
         expect(before.theme).toBe("light")
+    })
+
+    it("persists bar visibility", () => {
+        const filePath = tempFile()
+        const store = createSettingsStore(filePath)
+        store.set({ sidebarVisibility: "hidden", urlBarVisibility: "hidden" })
+        store.flush()
+        const reloaded = createSettingsStore(filePath)
+        expect(reloaded.get().sidebarVisibility).toBe("hidden")
+        expect(reloaded.get().urlBarVisibility).toBe("hidden")
     })
 
     // The unknown-theme guard is covered by the repair path above; here the only value that

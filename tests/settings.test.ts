@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vite-plus/test"
 
-import { normalizeSearchTemplate, SEARCH_ENGINES, searchUrl } from "../src/shared/settings"
+import {
+    chromeInsets,
+    normalizeSearchTemplate,
+    SEARCH_ENGINES,
+    searchUrl,
+    SIDEBAR_COMPACT_WIDTH,
+    SIDEBAR_WIDTH,
+    TOOLBAR_HEIGHT,
+} from "../src/shared/settings"
 
 describe("the suggested engines", () => {
     it("gives every engine a distinct name and a valid template", () => {
@@ -70,5 +78,26 @@ describe("searchUrl", () => {
 
     it("returns null when there is no token to substitute", () => {
         expect(searchUrl("https://duckduckgo.com/", "hi")).toBeNull()
+    })
+})
+
+describe("chromeInsets", () => {
+    it("keeps room for each bar shown at rest", () => {
+        expect(
+            chromeInsets({ sidebarVisibility: "displayed", urlBarVisibility: "displayed" }),
+        ).toEqual({ left: SIDEBAR_WIDTH, bottom: TOOLBAR_HEIGHT })
+        expect(
+            chromeInsets({ sidebarVisibility: "compact", urlBarVisibility: "displayed" }),
+        ).toEqual({
+            left: SIDEBAR_COMPACT_WIDTH,
+            bottom: TOOLBAR_HEIGHT,
+        })
+    })
+
+    it("gives a hidden bar's room to the page", () => {
+        expect(chromeInsets({ sidebarVisibility: "hidden", urlBarVisibility: "hidden" })).toEqual({
+            left: 0,
+            bottom: 0,
+        })
     })
 })
