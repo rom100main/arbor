@@ -16,7 +16,7 @@
 - **Location**: `src/main/state/store.ts`
 - **Role**: typed capability interface. Lists every allowed mutation. Return type per op: `Effect<A, DomainError>`.
 - **Ops**: `snapshot`, `createContainer`, `switchContainer`, `renameContainer`, `setContainerColor`, `setContainerIcon`, `reorderContainer`, `createTab`, `createChildTab`, `selectTab`, `setCollapsed`, `renameTab`, `closeTab`, `reopenTab`, `moveTab`, `moveToContainer`, `updateTabMeta`.
-- **Why interface + tag**: Effect dependency injection. `BrowserStore = Context.Tag("arbor.BrowserStore")`. Tests swap implementations. Handlers depend on interface, not constructor.
+- **Why interface + service key**: Effect dependency injection. `BrowserStore = Context.Service<BrowserStore, StoreService>()("arbor.BrowserStore")`. Tests swap implementations. Handlers depend on interface, not constructor.
 
 ## 3. `makeStoreLayer(onCommit)`
 
