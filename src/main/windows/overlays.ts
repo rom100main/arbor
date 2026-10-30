@@ -1,4 +1,4 @@
-import { Deferred, Effect, Queue } from "effect"
+import { Deferred, Effect, Exit, Queue } from "effect"
 import { BrowserWindow, type BrowserWindow as ParentWindow } from "electron"
 
 import type { PermissionPromptRequest, RenameTarget } from "../../shared/protocol"
@@ -379,7 +379,7 @@ interface PromptJob {
     readonly answer: Deferred.Deferred<boolean>
 }
 
-const promptQueue = Effect.runSync(Queue.unbounded<PromptJob>())
+let promptQueue: Queue.Queue<PromptJob> | null = null
 let permissionModal: BrowserWindow | null = null
 let activeAnswer: Deferred.Deferred<boolean> | null = null
 
@@ -413,7 +413,7 @@ const showPrompt = (job: PromptJob): void => {
         }
         // Closing the dialog without answering is a refusal.
         // Idempotent: a prior settle via `respondPermissionPrompt` wins.
-        void Effect.runSync(Deferred.succeed(job.answer, false))
+        Deferred.doneUnsafe(job.answer, Exit.succeed(false))
     })
     // The renderer registers its request listener during load; replay afterwards.
     promptWindow.webContents.on("did-finish-load", () => {
@@ -433,17 +433,18 @@ const runPrompt = (job: PromptJob): Effect.Effect<void> =>
         Effect.ensuring(Deferred.succeed(job.answer, false)),
     )
 
-// One prompt at a time: the consumer drains the queue serially.
-Effect.runFork(
-    Effect.forever(
+export const promptConsumer: Effect.Effect<never> = Effect.gen(function* () {
+    const queue = yield* Queue.unbounded<PromptJob>()
+    promptQueue = queue
+    return yield* Effect.forever(
         Effect.gen(function* () {
-            const job = yield* Queue.take(promptQueue)
+            const job = yield* Queue.take(queue)
             yield* runPrompt(job).pipe(
                 Effect.catchCause((cause) => Effect.logError("Permission prompt failed", cause)),
             )
         }),
-    ),
-)
+    )
+})
 
 /** Resolves `true` on Allow, `false` on Deny or when the dialog is closed. One at a time. */
 export const openPermissionPrompt = (
@@ -451,6 +452,7 @@ export const openPermissionPrompt = (
     request: PermissionPromptRequest,
 ): Effect.Effect<boolean> =>
     Effect.gen(function* () {
+        if (!promptQueue) return yield* Effect.die(new Error("Prompt consumer is not running"))
         const answer = yield* Deferred.make<boolean>()
         yield* Queue.offer(promptQueue, {
             request,
@@ -467,6 +469,6 @@ export const respondPermissionPrompt = (allowed: boolean): void => {
     activeAnswer = null
     const promptWindow = permissionModal
     permissionModal = null
-    void Effect.runSync(Deferred.succeed(answer, allowed))
+    Deferred.doneUnsafe(answer, Exit.succeed(allowed))
     if (promptWindow && !promptWindow.isDestroyed()) promptWindow.destroy()
 }

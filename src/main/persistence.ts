@@ -1,5 +1,8 @@
 import { readFileSync, renameSync, writeFileSync } from "node:fs"
 
+import { Effect } from "effect"
+
+import { AppRuntime } from "./runtime"
 import { fromPersisted, toPersisted } from "./state/persist"
 import type { DomainState } from "./state/state"
 
@@ -23,16 +26,25 @@ export const loadOwnedFile = <A>(
     filePath: string,
     decode: (data: unknown) => A | null,
     label: string,
-): A | null => {
-    try {
-        const value = decode(JSON.parse(readFileSync(filePath, "utf8")) as unknown)
-        if (value === null) console.warn(`[arbor] ${label} could not be read (unsupported content)`)
-        return value
-    } catch (error) {
-        if (!isMissingFile(error)) console.warn(`[arbor] ${label} could not be read:`, error)
-        return null
-    }
-}
+): Effect.Effect<A | null> =>
+    Effect.try({
+        try: () => decode(JSON.parse(readFileSync(filePath, "utf8")) as unknown),
+        catch: (error) => error,
+    }).pipe(
+        Effect.matchEffect({
+            onSuccess: (value) =>
+                value === null
+                    ? Effect.as(
+                          Effect.logWarning(`${label} could not be read (unsupported content)`),
+                          null,
+                      )
+                    : Effect.succeed(value),
+            onFailure: (error) =>
+                isMissingFile(error)
+                    ? Effect.succeed(null)
+                    : Effect.as(Effect.logWarning(`${label} could not be read`, error), null),
+        }),
+    )
 
 /** Best-effort atomic write (temp file + rename): a failed save never breaks the caller. */
 export const writeJsonSafely = (filePath: string, value: unknown, label: string): void => {
@@ -41,7 +53,7 @@ export const writeJsonSafely = (filePath: string, value: unknown, label: string)
         writeFileSync(tmp, JSON.stringify(value), "utf8")
         renameSync(tmp, filePath)
     } catch (error) {
-        console.error(`[arbor] failed to save ${label}:`, error)
+        AppRuntime.runSync(Effect.logError(`Failed to save ${label}`, error))
     }
 }
 
@@ -123,7 +135,7 @@ export const createStatePersistence = (
     })
 
     return {
-        load: () => loadOwnedFile(filePath, fromPersisted, "Browser state"),
+        load: () => AppRuntime.runSync(loadOwnedFile(filePath, fromPersisted, "Browser state")),
         schedule: (state) => {
             latest = state
             saver.schedule()

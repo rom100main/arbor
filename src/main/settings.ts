@@ -14,6 +14,7 @@ import {
     type UrlBarVisibility,
 } from "../shared/settings"
 import { createDebouncedSaver, loadOwnedFile, writeJsonSafely } from "./persistence"
+import { AppRuntime } from "./runtime"
 
 const ThemeSchema = Schema.Literals(THEMES)
 
@@ -91,7 +92,9 @@ export const createSettingsStore = (
     filePath: string,
     options: SettingsStoreOptions = {},
 ): SettingsStore => {
-    let current: Settings = loadOwnedFile(filePath, fromPersistedSettings, "Settings") ?? {
+    let current: Settings = AppRuntime.runSync(
+        loadOwnedFile(filePath, fromPersistedSettings, "Settings"),
+    ) ?? {
         ...DEFAULT_SETTINGS,
         pinnedExtensionIds: [],
     }

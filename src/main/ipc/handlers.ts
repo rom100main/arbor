@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect"
+import { Schema } from "effect"
 import { BrowserWindow, ipcMain } from "electron"
 
 import { decodeOr } from "../../shared/decode"
@@ -40,7 +40,7 @@ export const registerIpc = (
     settings: SettingsStore,
     getState: () => DomainState,
 ): void => {
-    handle("arbor:get-snapshot", () => Effect.runPromise(store.snapshot))
+    handle("arbor:get-snapshot", () => runRequest(store.snapshot))
     handle("arbor:settings:get", () => settings.get())
     handle("arbor:settings:set", (_event, patch: Partial<Settings>) => settings.set(patch))
 

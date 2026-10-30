@@ -23,6 +23,7 @@ import {
     writeJsonSafely,
     type DebouncedSaver,
 } from "../persistence"
+import { AppRuntime } from "../runtime"
 
 /** Frame invoke (extension pages) and service-worker invoke carry different event shapes. */
 type StorageInvokeEvent = IpcMainInvokeEvent | IpcMainServiceWorkerInvokeEvent
@@ -94,7 +95,9 @@ export const createExtensionStorage = (
 
     return {
         load: () => {
-            const restored = loadOwnedFile(filePath, fromPersistedExtStorage, "Extension storage")
+            const restored = AppRuntime.runSync(
+                loadOwnedFile(filePath, fromPersistedExtStorage, "Extension storage"),
+            )
             if (!restored) return
             for (const [id, areas] of Object.entries(restored)) extensions[id] = areas
         },

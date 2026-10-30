@@ -1,3 +1,4 @@
+import { Effect } from "effect"
 import {
     WebContentsView,
     session,
@@ -11,6 +12,7 @@ import { isInternalUrl } from "../../shared/internal-pages"
 import type { ContainerId } from "../../shared/protocol"
 import { runBackground } from "../exec"
 import { extensionsReady, setupSessionExtensions } from "../extension/loader"
+import { AppRuntime } from "../runtime"
 import type { DomainState } from "../state/state"
 import type { StoreService } from "../state/store"
 import { internalSession } from "./internal-pages"
@@ -158,7 +160,7 @@ const startLoad = async (webContents: WebContents, url: string): Promise<void> =
         const errno =
             typeof error === "object" && error !== null && "errno" in error ? error.errno : null
         if (errno === ERR_ABORTED) return
-        console.debug(`[arbor] load failed url=${url}:`, error)
+        AppRuntime.runSync(Effect.logDebug(`Load failed url=${url}`, error))
     }
 }
 

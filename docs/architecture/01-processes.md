@@ -10,7 +10,8 @@
     - `BrowserWindow` instances.
     - `WebContentsView` instances: 1 per tab, plus the shell view hosting `MainShell`.
     - `ipcMain` handlers.
-- **Never**: renders sidebar DOM. No SolidJS here.
+    - `AppRuntime` (`runtime.ts`): the one Effect runtime. Every Effect runs on it, so one logging config applies everywhere: debug in `vp dev`, info otherwise, and warnings/errors appended to `arbor.log` in the OS logs folder outside dev. `tests/architecture.test.ts` fails on `Effect.run*` anywhere else.
+- **Never**: renders sidebar DOM. No SolidJS here. No `console.*`: log with `Effect.log*`.
 
 ## 2. Preload
 

@@ -1,7 +1,7 @@
 import { existsSync, readdirSync } from "node:fs"
 import path from "node:path"
 
-import { Deferred, Effect, Schedule } from "effect"
+import { Deferred, Effect, Exit, Schedule } from "effect"
 import { app, ipcMain, Menu, MenuItem, session, type Session, type WebContents } from "electron"
 import { ElectronChromeExtensions } from "electron-chrome-extensions"
 import { installChromeWebStore, uninstallExtension } from "electron-chrome-web-store"
@@ -9,6 +9,7 @@ import { installChromeWebStore, uninstallExtension } from "electron-chrome-web-s
 import type { ExtensionGrant, ExtensionMenuRequest } from "../../shared/protocol"
 import { runBackground } from "../exec"
 import { readJsonFile } from "../persistence"
+import { AppRuntime } from "../runtime"
 import type { SettingsStore } from "../settings"
 import type { StoreService } from "../state/store"
 import {
@@ -138,11 +139,11 @@ const ensureUnpackedConsent = (extensionPath: string): Effect.Effect<boolean> =>
     })
 
 /** Resolves once the main window exists. */
-const mainWindowOpened = Effect.runSync(Deferred.make<void>())
+const mainWindowOpened = Deferred.makeUnsafe<void>()
 
 /** Called once the main window is created */
 export const markMainWindowOpened = (): void => {
-    Effect.runSync(Deferred.succeed(mainWindowOpened, undefined))
+    Deferred.doneUnsafe(mainWindowOpened, Exit.void)
 }
 
 const askUnpackedConsent = (extensionPath: string): Effect.Effect<boolean, unknown> =>
@@ -271,7 +272,7 @@ const startMv3Workers = (ses: Session, attempts = 3): Effect.Effect<void> =>
 const loadExtensionEverywhere = (source: Session, extension: Electron.Extension): void => {
     for (const target of configured) {
         if (target === source) continue
-        void Effect.runPromise(
+        void AppRuntime.runPromise(
             Effect.gen(function* () {
                 const api = target.extensions
                 // Loaded here already (startup restore or a racing copy): nothing to do.
@@ -319,7 +320,7 @@ interface StoreInstallDetails {
 }
 
 const consentStoreInstall = (details: StoreInstallDetails): Promise<{ action: "allow" | "deny" }> =>
-    Effect.runPromise(
+    AppRuntime.runPromise(
         Effect.gen(function* () {
             const d = deps
             if (!d) return { action: "deny" as const }
@@ -347,7 +348,7 @@ const sourcesReady = new WeakMap<Session, Deferred.Deferred<void>>()
 /** Never rejects: install failures are already logged by `loadExtensionSources`. */
 export const extensionsReady = (ses: Session): Promise<void> => {
     const ready = sourcesReady.get(ses)
-    return ready ? Effect.runPromise(Deferred.await(ready)) : Promise.resolve()
+    return ready ? AppRuntime.runPromise(Deferred.await(ready)) : Promise.resolve()
 }
 
 /** One ElectronChromeExtensions instance per session, created lazily. */
@@ -372,7 +373,7 @@ export const setupSessionExtensions = (ses: Session): void => {
         createTab: async (details) => {
             const url = details.url ?? extensions.getURLOverrides().newtab
             try {
-                const tabId = await Effect.runPromise(d.store.createTab(url))
+                const tabId = await AppRuntime.runPromise(d.store.createTab(url))
                 const win = d.getWindow()
                 let view = win ? d.viewForTab(tabId) : undefined
                 // onCommit creates the active tab's view; if the commit path was skipped
@@ -383,7 +384,9 @@ export const setupSessionExtensions = (ses: Session): void => {
                 }
                 return [view.webContents, win]
             } catch (error) {
-                console.error(`[arbor] extension tabs.create failed url=${url}:`, error)
+                AppRuntime.runSync(
+                    Effect.logError(`Extension tabs.create failed url=${url}`, error),
+                )
                 throw error
             }
         },
@@ -400,7 +403,7 @@ export const setupSessionExtensions = (ses: Session): void => {
         // v1 is single-window: chrome.windows.create becomes a new active tab.
         createWindow: async (details) => {
             const url = Array.isArray(details.url) ? details.url[0] : details.url
-            await Effect.runPromise(d.store.createTab(url))
+            await AppRuntime.runPromise(d.store.createTab(url))
             const win = d.getWindow()
             if (!win) throw new Error("No browser window available")
             return win
@@ -456,9 +459,9 @@ export const setupSessionExtensions = (ses: Session): void => {
     // SW ipcRenderer.invoke rides ServiceWorkerMain.ipc, not ipcMain.
     bindExtensionStorageToSession(ses)
 
-    const ready = Effect.runSync(Deferred.make<void>())
+    const ready = Deferred.makeUnsafe<void>()
     sourcesReady.set(ses, ready)
-    void Effect.runPromise(
+    void AppRuntime.runPromise(
         loadExtensionSources(ses).pipe(
             Effect.catchCause((cause) =>
                 Effect.logError("Failed to load extension sources", cause),
@@ -487,7 +490,7 @@ const requestExtensionPermissions = (
     extension: Electron.Extension,
     request: { permissions?: string[]; origins?: string[] },
 ): Promise<boolean> =>
-    Effect.runPromise(
+    AppRuntime.runPromise(
         Effect.gen(function* () {
             const d = deps
             if (!d) return false
@@ -628,7 +631,7 @@ export const openExtensionMenu = async ({
  * The unpacked source folder is the user's code and is never deleted.
  */
 export const uninstallExtensionEverywhere = (extensionId: string): Promise<void> =>
-    Effect.runPromise(
+    AppRuntime.runPromise(
         Effect.gen(function* () {
             const d = deps
             if (!d) return

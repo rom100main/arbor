@@ -1,10 +1,12 @@
 import { readdirSync } from "node:fs"
 import path from "node:path"
 
+import { Effect } from "effect"
 import { app, nativeImage, session } from "electron"
 
 import type { PinnedActionInfo } from "../../shared/protocol"
 import { readJsonFile } from "../persistence"
+import { AppRuntime } from "../runtime"
 import { parseManifest, type ParsedManifest } from "./manifest"
 
 const ICON_SIZE = 32
@@ -97,7 +99,7 @@ const iconDataUrl = (root: string, spec: string | Record<string, string> | null)
         const image = nativeImage.createFromPath(file)
         if (!image.isEmpty()) dataUrl = image.resize({ width: ICON_SIZE }).toDataURL()
     } catch (error) {
-        console.error(`[arbor] failed to read extension icon ${file}:`, error)
+        AppRuntime.runSync(Effect.logError(`Failed to read extension icon ${file}`, error))
     }
     iconCache.set(file, dataUrl)
     return dataUrl

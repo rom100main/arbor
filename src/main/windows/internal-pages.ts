@@ -2,6 +2,7 @@ import path from "node:path"
 import { pathToFileURL } from "node:url"
 
 import settingsGlyph from "@tabler/icons/outline/settings.svg?raw"
+import { Effect } from "effect"
 import { net, protocol, session, type Session } from "electron"
 
 import {
@@ -13,6 +14,7 @@ import {
     isSettingsUrl,
 } from "../../shared/internal-pages"
 import { INTERNAL_SCHEME, SETTINGS_URL } from "../../shared/settings"
+import { AppRuntime } from "../runtime"
 import { preloadPath, rendererPath } from "./paths"
 
 const INTERNAL_PARTITION = "arbor:internal"
@@ -76,7 +78,7 @@ const serveDocument = async (): Promise<Response> => {
             headers: { "content-type": "text/html; charset=utf-8" },
         })
     } catch (error) {
-        console.error(`[arbor] failed to serve ${INTERNAL_SCHEME} document:`, error)
+        AppRuntime.runSync(Effect.logError(`Failed to serve ${INTERNAL_SCHEME} document`, error))
         return new Response("Not found", { status: 404 })
     }
 }
@@ -97,7 +99,9 @@ const serveAsset = async (pathname: string, search: string): Promise<Response> =
     try {
         return await net.fetch(source)
     } catch (error) {
-        console.error(`[arbor] failed to serve ${INTERNAL_SCHEME} asset ${safe}:`, error)
+        AppRuntime.runSync(
+            Effect.logError(`Failed to serve ${INTERNAL_SCHEME} asset ${safe}`, error),
+        )
         return new Response("Not found", { status: 404 })
     }
 }

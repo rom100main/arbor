@@ -15,12 +15,14 @@ import {
 } from "./ipc/events"
 import { registerIpc } from "./ipc/handlers"
 import { createStatePersistence } from "./persistence"
+import { AppRuntime } from "./runtime"
 import { createSettingsStore } from "./settings"
 import { initialState, type DomainState } from "./state/state"
 import { BrowserStore, makeStoreLayer, type StoreService } from "./state/store"
 import { installMenu } from "./windows/app-menu"
 import { registerInternalPages, registerInternalScheme } from "./windows/internal-pages"
 import { attachWindowEvents, createWindow } from "./windows/main-window"
+import { promptConsumer } from "./windows/overlays"
 import { focusShell, shellWebContents } from "./windows/shell-view"
 import {
     destroyAllViews,
@@ -29,11 +31,6 @@ import {
     tabIdForWebContents,
     viewForTab,
 } from "./windows/tab-views"
-
-// Verbose only under `vp dev` (VITE_DEV_SERVER_URL). Packaged/prod: no console.debug noise.
-if (!process.env.VITE_DEV_SERVER_URL) {
-    console.debug = (): void => undefined
-}
 
 // Must precede app.whenReady(): arbor:// needs a real origin for the bundle's module script.
 registerInternalScheme()
@@ -85,6 +82,7 @@ let booting: Promise<Application> | null = null
 const bootApplication = async (): Promise<Application> => {
     filterBenignExtensionLoadWarnings()
     await app.whenReady()
+    AppRuntime.runFork(promptConsumer)
 
     const userData = app.getPath("userData")
     const persistence = createStatePersistence(path.join(userData, "state.json"))
@@ -100,7 +98,7 @@ const bootApplication = async (): Promise<Application> => {
     // Mutable ref so the store's onCommit can call the real handler once rt exists.
     let commitHandler: (next: DomainState) => void = () => undefined
 
-    const store: StoreService = Effect.runSync(
+    const store: StoreService = AppRuntime.runSync(
         Effect.gen(function* () {
             return yield* BrowserStore
         }).pipe(

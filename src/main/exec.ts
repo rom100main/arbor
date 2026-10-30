@@ -1,5 +1,6 @@
 import { Cause, Effect, Exit, Option } from "effect"
 
+import { AppRuntime } from "./runtime"
 import type { DomainError } from "./state/state"
 
 /**
@@ -7,7 +8,7 @@ import type { DomainError } from "./state/state"
  * Used at IPC invoke handlers where the renderer expects a rejected Error on failure.
  */
 export const runRequest = async <A>(effect: Effect.Effect<A, DomainError>): Promise<A> => {
-    const exit = await Effect.runPromiseExit(effect)
+    const exit = await AppRuntime.runPromiseExit(effect)
     if (Exit.isSuccess(exit)) return exit.value
     const failure = Cause.findErrorOption(exit.cause)
     if (Option.isSome(failure)) throw new Error(failure.value.message)
@@ -15,18 +16,22 @@ export const runRequest = async <A>(effect: Effect.Effect<A, DomainError>): Prom
 }
 
 /**
- * Background: observe the full cause without surfacing a rejection.
+ * Background: fire-and-forget, never rejects.
  * Used at Electron callbacks that fire-and-forget, and at best-effort workflow steps.
  *
- * Expected domain failures are silent (best-effort by design).
- * Unexpected defects are reported so they do not vanish.
+ * Expected failures are logged at debug level (best-effort by design, visible in dev).
+ * Defects are logged at error level so they do not vanish.
  * Interruption during shutdown is not an operational error.
  */
-export const runBackground = async (effect: Effect.Effect<unknown, unknown>): Promise<void> => {
-    const exit = await Effect.runPromiseExit(effect)
-    if (!Exit.isFailure(exit)) return
-    if (Cause.hasInterruptsOnly(exit.cause)) return
-    const failure = Cause.findErrorOption(exit.cause)
-    if (Option.isSome(failure)) return
-    console.error("Background operation defect:", Cause.pretty(exit.cause))
-}
+export const runBackground = (effect: Effect.Effect<unknown, unknown>): Promise<void> =>
+    AppRuntime.runPromise(
+        effect.pipe(
+            Effect.tapCause((cause) => {
+                if (Cause.hasInterruptsOnly(cause)) return Effect.void
+                return Cause.hasFails(cause)
+                    ? Effect.logDebug("Background operation failed", cause)
+                    : Effect.logError("Background operation defect", cause)
+            }),
+            Effect.ignoreCause,
+        ),
+    )
