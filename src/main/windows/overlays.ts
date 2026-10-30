@@ -1,7 +1,7 @@
-import { Deferred, Effect, Exit, Queue } from "effect"
+import { Deferred, Effect, Exit, Predicate, Queue } from "effect"
 import { BrowserWindow, type BrowserWindow as ParentWindow } from "electron"
 
-import type { PermissionPromptRequest, RenameTarget } from "../../shared/protocol"
+import type { Anchor, PermissionPromptRequest, Rect, RenameTarget } from "../../shared/protocol"
 import { loadRenderer, preloadPath } from "./paths"
 
 // --- omnibox popup
@@ -11,7 +11,7 @@ const DEFAULT_HEIGHT = 160
 const MAX_HEIGHT = 400
 
 let popup: BrowserWindow | null = null
-let anchor: { x: number; y: number; width: number } | null = null
+let anchor: Anchor | null = null
 let popupHeight = DEFAULT_HEIGHT
 let lastQuery = ""
 
@@ -29,11 +29,7 @@ const repositionPopup = (win: ParentWindow): void => {
     })
 }
 
-export const showOmniboxPopup = (
-    win: ParentWindow,
-    rect: { x: number; y: number; width: number },
-    query: string,
-): void => {
+export const showOmniboxPopup = (win: ParentWindow, rect: Anchor, query: string): void => {
     anchor = rect
     lastQuery = query
     if (!popup || popup.isDestroyed()) {
@@ -88,7 +84,7 @@ const EXTENSIONS_POPUP_DEFAULT_HEIGHT = 72
 const EXTENSIONS_POPUP_MAX_HEIGHT = 480
 
 let extensionsPopup: BrowserWindow | null = null
-let extensionsAnchor: { x: number; y: number; width: number } | null = null
+let extensionsAnchor: Anchor | null = null
 let extensionsPopupHeight = EXTENSIONS_POPUP_DEFAULT_HEIGHT
 
 /** When a popup closed because focus moved away; gates an immediate toggle reopen. */
@@ -116,10 +112,7 @@ const repositionExtensionsPopup = (win: ParentWindow): void => {
     })
 }
 
-export const toggleExtensionsPopup = (
-    win: ParentWindow,
-    rect: { x: number; y: number; width: number },
-): void => {
+export const toggleExtensionsPopup = (win: ParentWindow, rect: Anchor): void => {
     const open = extensionsPopup
     if (open && !open.isDestroyed()) {
         closeExtensionsPopup()
@@ -173,13 +166,11 @@ const EXTENSION_POPUP_MIN_WIDTH = 360
 const EXTENSION_POPUP_MIN_HEIGHT = 480
 const EXTENSION_POPUP_GAP = 5
 
-/** Toolbar anchor for a pinned extension's action popup, in window content coords. */
-type ExtensionAnchor = { x: number; y: number; width: number; height: number }
-
-const extensionAnchors = new Map<string, ExtensionAnchor>()
+/** Toolbar anchors of pinned extensions' action popups, in window content coords. */
+const extensionAnchors = new Map<string, Rect>()
 
 /** Remember where a pinned toolbar icon sits so its action popup opens above it. */
-export const setExtensionAnchor = (extensionId: string, rect: ExtensionAnchor): void => {
+export const setExtensionAnchor = (extensionId: string, rect: Rect): void => {
     extensionAnchors.set(extensionId, rect)
 }
 
@@ -191,7 +182,7 @@ export interface ExtensionPopupView {
 }
 
 export const isExtensionPopupView = (value: unknown): value is ExtensionPopupView =>
-    typeof value === "object" && value !== null && "browserWindow" in value && "parent" in value
+    Predicate.hasProperty(value, "browserWindow") && Predicate.hasProperty(value, "parent")
 
 /** Apply the minimum size and place the popup above its anchor. */
 const anchorAbove = (

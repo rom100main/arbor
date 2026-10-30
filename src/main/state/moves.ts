@@ -1,8 +1,8 @@
-import type { ContainerId, TabId } from "../../shared/protocol"
+import { InvalidMove, UnknownTab } from "../../shared/errors"
+import type { ContainerId, TabId, TabNode } from "../../shared/protocol"
 import {
     childrenOf,
     containerOf,
-    DomainError,
     reindex,
     removeContainer,
     siblingsOf,
@@ -29,15 +29,15 @@ export interface MoveTabOptions {
 
 export const moveTab = (state: DomainState, options: MoveTabOptions): DomainState => {
     const tab = state.tabs.get(options.tabId)
-    if (!tab) throw new DomainError(`Unknown tab: ${options.tabId}`)
+    if (!tab) throw new UnknownTab({ tabId: options.tabId })
     if (options.parentId !== null) {
         const parent = state.tabs.get(options.parentId)
-        if (!parent) throw new DomainError(`Unknown tab: ${options.parentId}`)
+        if (!parent) throw new UnknownTab({ tabId: options.parentId })
         if (parent.containerId !== tab.containerId) {
-            throw new DomainError("Use moveToContainer for cross-container moves")
+            throw new InvalidMove({ reason: "across-containers" })
         }
         if (options.parentId === tab.id || contains(state, tab.id, options.parentId)) {
-            throw new DomainError("Cannot move a tab into its own subtree")
+            throw new InvalidMove({ reason: "into-own-subtree" })
         }
     }
 
@@ -60,7 +60,7 @@ export const moveToContainer = (
     containerId: ContainerId,
 ): DomainState => {
     const tab = state.tabs.get(tabId)
-    if (!tab) throw new DomainError(`Unknown tab: ${tabId}`)
+    if (!tab) throw new UnknownTab({ tabId: tabId })
     const target = containerOf(state, containerId)
     if (tab.containerId === containerId) return state
     const source = containerOf(state, tab.containerId)
@@ -71,9 +71,13 @@ export const moveToContainer = (
     const oldSiblings = siblingsOf(state, tab).filter((s) => s.id !== tab.id)
     for (const updated of reindex(oldSiblings)) next.tabs.set(updated.id, updated)
 
-    const movedRoot = { ...tab, containerId: target.id, parentId: null }
     const targetRoots = childrenOf(state, target.id, null)
-    movedRoot.order = targetRoots.length
+    const movedRoot: TabNode = {
+        ...tab,
+        containerId: target.id,
+        parentId: null,
+        order: targetRoots.length,
+    }
     for (const node of subtree) {
         next.tabs.set(node.id, node.id === tabId ? movedRoot : { ...node, containerId: target.id })
     }

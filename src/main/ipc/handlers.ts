@@ -1,9 +1,7 @@
-import { Schema } from "effect"
 import { BrowserWindow, ipcMain } from "electron"
 
 import { decodeOr } from "../../shared/decode"
-import type { ContainerIcon, ContainerId, TabId } from "../../shared/protocol"
-import type { Settings } from "../../shared/settings"
+import { Rect, type ContainerIcon, type ContainerId, type TabId } from "../../shared/protocol"
 import { runBackground, runRequest } from "../exec"
 import { pinnedActionInfo } from "../extension/action"
 import { sessionForExtension } from "../extension/loader"
@@ -13,14 +11,7 @@ import type { StoreService } from "../state/store"
 import { openExtensionActionPopup, setExtensionAnchor } from "../windows/overlays"
 import { existingSessionForContainer, viewForTab } from "../windows/tab-views"
 
-const parseAnchor = decodeOr(
-    Schema.Struct({
-        x: Schema.Finite,
-        y: Schema.Finite,
-        width: Schema.Finite,
-        height: Schema.Finite,
-    }),
-)
+const parseAnchor = decodeOr(Rect)
 
 type Handler = (event: Electron.IpcMainInvokeEvent, ...args: any[]) => unknown
 
@@ -42,7 +33,7 @@ export const registerIpc = (
 ): void => {
     handle("arbor:get-snapshot", () => runRequest(store.snapshot))
     handle("arbor:settings:get", () => settings.get())
-    handle("arbor:settings:set", (_event, patch: Partial<Settings>) => settings.set(patch))
+    handle("arbor:settings:set", (_event, patch: unknown) => settings.set(patch))
 
     // The toolbar reads action metadata straight from the extension's manifest:
     // electron-chrome-extensions cannot serve it,

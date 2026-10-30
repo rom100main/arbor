@@ -1,5 +1,6 @@
 import { Menu, type MenuItemConstructorOptions } from "electron"
 
+import type { TabId } from "../../shared/protocol"
 import { stepVisibleTab } from "../../shared/tree-display"
 import { runBackground } from "../exec"
 import { snapshot, type DomainState } from "../state/state"
@@ -23,7 +24,7 @@ export const installMenu = (deps: MenuDeps): (() => void) => {
 const buildTemplate = (deps: MenuDeps): MenuItemConstructorOptions[] => {
     const { store, getState, focusOmnibox } = deps
 
-    const activeTabId = (): string | null => snapshot(getState()).activeTabId
+    const activeTabId = (): TabId | null => snapshot(getState()).activeTabId
 
     const withActiveView = (action: (webContents: Electron.WebContents) => void): void => {
         const tabId = activeTabId()

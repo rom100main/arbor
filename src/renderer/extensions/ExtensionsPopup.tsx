@@ -1,5 +1,6 @@
 import { Show, createEffect, createSignal, onSettled } from "solid-js"
 
+import { containerPartition } from "../../shared/constants"
 import { initState, useSnapshot } from "../shell/snapshot"
 
 import "./ExtensionsPopup.css"
@@ -22,7 +23,7 @@ export const ExtensionsPopup = () => {
     const snapshot = useSnapshot()
     const activePartition = () => {
         const id = snapshot()?.activeContainerId
-        return id ? `persist:container-${id}` : ""
+        return id ? containerPartition(id) : ""
     }
 
     // The action list renders into an open shadow root;

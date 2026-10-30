@@ -1,39 +1,28 @@
-import { Data, Schema } from "effect"
+import { Data, Result, Schema } from "effect"
 
 import { decodeOr, orDefault } from "../shared/decode"
-import {
-    DEFAULT_SEARCH_TEMPLATE,
-    DEFAULT_SETTINGS,
-    normalizeSearchTemplate,
-    SIDEBAR_VISIBILITIES,
-    THEMES,
-    URL_BAR_VISIBILITIES,
-    type Settings,
-    type SidebarVisibility,
-    type Theme,
-    type UrlBarVisibility,
-} from "../shared/settings"
+import { DEFAULT_SEARCH_TEMPLATE, DEFAULT_SETTINGS } from "../shared/settings"
+import { Settings, SettingsPatch } from "../shared/settings-schema"
 import { createDebouncedSaver, loadOwnedFile, writeJsonSafely } from "./persistence"
 import { AppRuntime } from "./runtime"
 
-const ThemeSchema = Schema.Literals(THEMES)
-
-const SettingsSchema = Schema.Struct({
-    searchTemplate: orDefault(Schema.String, () => DEFAULT_SEARCH_TEMPLATE),
-    theme: orDefault(ThemeSchema, (): Theme => "system"),
+const PersistedSettings = Schema.Struct({
+    searchTemplate: orDefault(Settings.fields.searchTemplate, () => DEFAULT_SEARCH_TEMPLATE),
+    theme: orDefault(Settings.fields.theme, () => DEFAULT_SETTINGS.theme),
     // Unknown per element, so one bad id does not cost the whole pin list.
-    pinnedExtensionIds: orDefault(Schema.Array(Schema.Unknown), () => [] as unknown[]),
+    pinnedExtensionIds: orDefault(Schema.Array(Schema.Unknown), () => []),
     sidebarVisibility: orDefault(
-        Schema.Literals(SIDEBAR_VISIBILITIES),
-        (): SidebarVisibility => DEFAULT_SETTINGS.sidebarVisibility,
+        Settings.fields.sidebarVisibility,
+        () => DEFAULT_SETTINGS.sidebarVisibility,
     ),
     urlBarVisibility: orDefault(
-        Schema.Literals(URL_BAR_VISIBILITIES),
-        (): UrlBarVisibility => DEFAULT_SETTINGS.urlBarVisibility,
+        Settings.fields.urlBarVisibility,
+        () => DEFAULT_SETTINGS.urlBarVisibility,
     ),
 })
 
-const parseSettings = decodeOr(SettingsSchema)
+const parseSettings = decodeOr(PersistedSettings)
+const decodePatch = Schema.decodeUnknownResult(SettingsPatch, { onExcessProperty: "ignore" })
 
 /** Pinned ids are deduplicated, kept in pin order, and non-strings dropped. */
 const cleanPinned = (ids: readonly unknown[]): string[] =>
@@ -49,9 +38,8 @@ const cleanPinned = (ids: readonly unknown[]): string[] =>
 export const fromPersistedSettings = (data: unknown): Settings | null => {
     const parsed = parseSettings(data)
     if (!parsed) return null
-    const searchTemplate = normalizeSearchTemplate(parsed.searchTemplate)
     return {
-        searchTemplate: searchTemplate ?? DEFAULT_SEARCH_TEMPLATE,
+        searchTemplate: parsed.searchTemplate,
         theme: parsed.theme,
         pinnedExtensionIds: cleanPinned(parsed.pinnedExtensionIds),
         sidebarVisibility: parsed.sidebarVisibility,
@@ -69,10 +57,10 @@ export interface SettingsStore {
     /** Current settings; a frozen copy, safe to hand to renderers. */
     readonly get: () => Settings
     /**
-     * Merge a patch, validate, persist, and notify subscribers.
+     * Decode a patch, merge, persist, and notify subscribers. Unknown keys are dropped.
      * Throws {@link SettingsError} when a value is rejected; nothing is written in that case.
      */
-    readonly set: (patch: Partial<Settings>) => Settings
+    readonly set: (patch: unknown) => Settings
     readonly pinExtension: (extensionId: string) => Settings
     readonly unpinExtension: (extensionId: string) => Settings
     readonly subscribe: (callback: (settings: Settings) => void) => () => void
@@ -115,35 +103,17 @@ export const createSettingsStore = (
     return {
         get: () => current,
 
-        set: (patch) => {
-            if (patch.searchTemplate !== undefined) {
-                const template = normalizeSearchTemplate(patch.searchTemplate)
-                if (template === null) {
-                    throw new SettingsError(
-                        "Search template must contain %s and produce an http(s) URL",
-                    )
-                }
-                patch = { ...patch, searchTemplate: template }
-            }
-            if (patch.theme !== undefined && !THEMES.includes(patch.theme)) {
-                throw new SettingsError(`Unknown theme: ${patch.theme}`)
-            }
-            if (
-                patch.sidebarVisibility !== undefined &&
-                !SIDEBAR_VISIBILITIES.includes(patch.sidebarVisibility)
-            ) {
-                throw new SettingsError(`Unknown sidebar visibility: ${patch.sidebarVisibility}`)
-            }
-            if (
-                patch.urlBarVisibility !== undefined &&
-                !URL_BAR_VISIBILITIES.includes(patch.urlBarVisibility)
-            ) {
-                throw new SettingsError(`Unknown URL bar visibility: ${patch.urlBarVisibility}`)
-            }
-            if (patch.pinnedExtensionIds !== undefined) {
-                patch = { ...patch, pinnedExtensionIds: cleanPinned(patch.pinnedExtensionIds) }
-            }
-            return commit({ ...current, ...patch })
+        set: (input) => {
+            const decoded = decodePatch(input)
+            if (Result.isFailure(decoded)) throw new SettingsError(decoded.failure.message)
+            const patch = decoded.success
+            return commit({
+                ...current,
+                ...patch,
+                ...(patch.pinnedExtensionIds && {
+                    pinnedExtensionIds: cleanPinned(patch.pinnedExtensionIds),
+                }),
+            })
         },
 
         pinExtension: (extensionId) => {

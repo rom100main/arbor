@@ -1,9 +1,9 @@
+import { LastTab, NoContainer, NothingToReopen, UnknownTab } from "../../shared/errors"
 import type { ClosedSubtree, ContainerId, TabId, TabNode } from "../../shared/protocol"
 import {
     childrenOf,
     containerOf,
     descendantsOf,
-    DomainError,
     reindex,
     removeContainer,
     siblingsOf,
@@ -30,7 +30,7 @@ const successorTab = (state: DomainState, removed: TabNode): TabId | null => {
  */
 export const closeTab = (state: DomainState, tabId: TabId, now?: number): DomainState => {
     const tab = state.tabs.get(tabId)
-    if (!tab) throw new DomainError(`Unknown tab: ${tabId}`)
+    if (!tab) throw new UnknownTab({ tabId: tabId })
     const container = containerOf(state, tab.containerId)
 
     const descendants = descendantsOf(state, tabId)
@@ -38,7 +38,7 @@ export const closeTab = (state: DomainState, tabId: TabId, now?: number): Domain
 
     const removedCount = expands ? 1 : 1 + descendants.length
     if (removedCount >= state.tabs.size) {
-        throw new DomainError("Cannot close the last tab of the last container")
+        throw new LastTab()
     }
 
     const siblings = siblingsOf(state, tab)
@@ -64,18 +64,18 @@ export const closeTab = (state: DomainState, tabId: TabId, now?: number): Domain
         }
     }
 
+    const emptiesContainer = tabCount(next, container.id) === 0
     const entry: ClosedSubtree = {
         nodes: [tab, ...descendants],
         containerId: container.id,
         parentIdBefore: tab.parentId,
         indexBefore,
-        containerMetaBefore: null,
+        containerMetaBefore: emptiesContainer ? container : null,
     }
 
     let result: DomainState = { ...next, closeHistory: [entry, ...next.closeHistory] }
 
-    if (tabCount(result, container.id) === 0) {
-        entry.containerMetaBefore = { ...container }
+    if (emptiesContainer) {
         const containers = result.containers
         const index = containers.findIndex((c) => c.id === container.id)
         result = removeContainer(result, container.id)
@@ -125,7 +125,7 @@ const promotedSuccessor = (
  */
 export const reopenTab = (state: DomainState, now?: number): DomainState => {
     const [entry, ...rest] = state.closeHistory
-    if (!entry) throw new DomainError("No closed tab to reopen")
+    if (!entry) throw new NothingToReopen()
 
     // Restore the container if it was auto-deleted on close.
     if (
@@ -141,7 +141,7 @@ export const reopenTab = (state: DomainState, now?: number): DomainState => {
     let containerId = entry.containerId
     if (!state.containers.some((c) => c.id === containerId)) {
         containerId = state.activeContainerId ?? state.containers[0]?.id
-        if (!containerId) throw new DomainError("No container to reopen into")
+        if (!containerId) throw new NoContainer()
     }
 
     // Keep the original parent only when it exists and lives in the same container.

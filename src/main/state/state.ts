@@ -1,5 +1,4 @@
-import { Data } from "effect"
-
+import { UnknownContainer, UnknownTab } from "../../shared/errors"
 import type {
     BrowserSnapshot,
     ClosedSubtree,
@@ -23,11 +22,7 @@ export interface DomainState {
     extensionConsent: Record<string, ExtensionGrant>
 }
 
-export class DomainError extends Data.TaggedError("DomainError")<{ message: string }> {
-    constructor(message: string) {
-        super({ message })
-    }
-}
+export type { DomainError } from "../../shared/errors"
 
 /** Explicit result of a transition that produces a value alongside the new state. */
 export interface TransitionResult<A> {
@@ -71,7 +66,7 @@ export const withTabs = (state: DomainState, tabs: Map<TabId, TabNode>): DomainS
 
 export const containerOf = (state: DomainState, containerId: ContainerId): ContainerMeta => {
     const container = state.containers.find((c) => c.id === containerId)
-    if (!container) throw new DomainError(`Unknown container: ${containerId}`)
+    if (!container) throw new UnknownContainer({ containerId: containerId })
     return container
 }
 
@@ -90,7 +85,7 @@ export const touch = (tab: TabNode, now: number = Date.now()): TabNode => ({
 
 export const descendantsOf = (state: DomainState, tabId: TabId): TabNode[] => {
     const root = state.tabs.get(tabId)
-    if (!root) throw new DomainError(`Unknown tab: ${tabId}`)
+    if (!root) throw new UnknownTab({ tabId: tabId })
     const result: TabNode[] = []
     const walk = (parentId: TabId): void => {
         for (const child of childrenOf(state, root.containerId, parentId)) {
@@ -104,7 +99,7 @@ export const descendantsOf = (state: DomainState, tabId: TabId): TabNode[] => {
 
 export const subtreeOf = (state: DomainState, tabId: TabId): TabNode[] => {
     const root = state.tabs.get(tabId)
-    if (!root) throw new DomainError(`Unknown tab: ${tabId}`)
+    if (!root) throw new UnknownTab({ tabId: tabId })
     return [root, ...descendantsOf(state, tabId)]
 }
 

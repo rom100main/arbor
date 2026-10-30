@@ -2,13 +2,12 @@ import { Schema } from "effect"
 
 import { decodeOr, orDefault } from "../../shared/decode"
 import {
-    CONTAINER_ICONS,
+    ContainerId,
+    ContainerMeta,
+    ExtensionGrant,
+    TabNode,
     type ContainerIcon,
-    type ContainerId,
-    type ContainerMeta,
-    type ExtensionGrant,
     type TabId,
-    type TabNode,
 } from "../../shared/protocol"
 import { reindex, type DomainState } from "./state"
 
@@ -41,48 +40,43 @@ export const toPersisted = (state: DomainState): PersistedState => ({
     ),
 })
 
-const ContainerIconSchema = Schema.Literals(CONTAINER_ICONS)
 
-const ContainerMetaSchema = Schema.Struct({
-    id: Schema.String,
-    name: Schema.String,
-    color: orDefault(Schema.String, () => "#3b82f6"),
-    icon: orDefault(ContainerIconSchema, (): ContainerIcon => "world"),
-    activeTabId: orDefault(Schema.NullOr(Schema.String), () => null),
+export const PersistedContainer = Schema.Struct({
+    ...ContainerMeta.fields,
+    color: orDefault(ContainerMeta.fields.color, () => "#3b82f6"),
+    icon: orDefault(ContainerMeta.fields.icon, (): ContainerIcon => "world"),
+    activeTabId: orDefault(ContainerMeta.fields.activeTabId, () => null),
 })
 
-const TabNodeSchema = Schema.Struct({
-    id: Schema.String,
-    containerId: Schema.String,
-    parentId: Schema.NullOr(Schema.String),
-    order: orDefault(Schema.Finite, () => 0),
-    url: Schema.String,
-    title: orDefault(Schema.String, () => ""),
-    collapsed: orDefault(Schema.Boolean, () => false),
-    userLabel: orDefault(Schema.NullOr(Schema.String), () => null),
-    favicon: orDefault(Schema.NullOr(Schema.String), () => null),
-    lastActiveAt: orDefault(Schema.Finite, () => 0),
+export const PersistedTab = Schema.Struct({
+    ...TabNode.fields,
+    order: orDefault(TabNode.fields.order, () => 0),
+    title: orDefault(TabNode.fields.title, () => ""),
+    collapsed: orDefault(TabNode.fields.collapsed, () => false),
+    userLabel: orDefault(TabNode.fields.userLabel, () => null),
+    favicon: orDefault(TabNode.fields.favicon, () => null),
+    lastActiveAt: orDefault(TabNode.fields.lastActiveAt, () => 0),
 })
 
-const ExtensionGrantSchema = Schema.Struct({
-    permissions: orDefault(Schema.Array(Schema.String), () => [] as string[]),
-    origins: orDefault(Schema.Array(Schema.String), () => [] as string[]),
+const PersistedGrant = Schema.Struct({
+    permissions: orDefault(ExtensionGrant.fields.permissions, () => []),
+    origins: orDefault(ExtensionGrant.fields.origins, () => []),
 })
 
 const PersistedStateSchema = Schema.Struct({
     version: Schema.Literal(PERSIST_VERSION),
     containers: Schema.Array(Schema.Unknown),
     tabs: Schema.Array(Schema.Unknown),
-    activeContainerId: orDefault(Schema.NullOr(Schema.String), () => null),
+    activeContainerId: orDefault(Schema.NullOr(ContainerId), () => null),
     extensionConsent: orDefault(
         Schema.Record(Schema.String, Schema.Unknown),
         (): Record<string, unknown> => ({}),
     ),
 })
 
-const parseContainer = decodeOr(ContainerMetaSchema)
-const parseTab = decodeOr(TabNodeSchema)
-const parseGrant = decodeOr(ExtensionGrantSchema)
+const parseContainer = decodeOr(PersistedContainer)
+const parseTab = decodeOr(PersistedTab)
+const parseGrant = decodeOr(PersistedGrant)
 const parsePayload = decodeOr(PersistedStateSchema)
 
 /**

@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron"
 import { injectBrowserAction } from "electron-chrome-extensions/browser-action"
 
 import type {
+    Anchor,
     BrowserSnapshot,
     ContainerIcon,
     ContainerId,
@@ -9,6 +10,7 @@ import type {
     OmniboxActivation,
     PermissionPromptRequest,
     PinnedActionInfo,
+    Rect,
     RenameTarget,
     RevealEdge,
     TabId,
@@ -57,10 +59,8 @@ const api = {
     goBack: (tabId: TabId): Promise<void> => ipcRenderer.invoke("arbor:tab:back", tabId),
     goForward: (tabId: TabId): Promise<void> => ipcRenderer.invoke("arbor:tab:forward", tabId),
     reload: (tabId: TabId): Promise<void> => ipcRenderer.invoke("arbor:tab:reload", tabId),
-    omniboxUpdate: (payload: {
-        query: string
-        rect: { x: number; y: number; width: number; height: number } | null
-    }): void => ipcRenderer.send("arbor:omnibox:update", payload),
+    omniboxUpdate: (payload: { query: string; rect: Rect | null }): void =>
+        ipcRenderer.send("arbor:omnibox:update", payload),
     omniboxSetPopupHeight: (height: number): void =>
         ipcRenderer.send("arbor:omnibox:popup-height", height),
     omniboxActivate: (payload: OmniboxActivation): void =>
@@ -106,8 +106,7 @@ const api = {
     openRenameModal: (target: RenameTarget): void =>
         ipcRenderer.send("arbor:rename-modal:open", target),
     closeRenameModal: (): void => ipcRenderer.send("arbor:rename-modal:close"),
-    extensionsToggle: (rect: { x: number; y: number; width: number }): void =>
-        ipcRenderer.send("arbor:extensions:toggle", rect),
+    extensionsToggle: (rect: Anchor): void => ipcRenderer.send("arbor:extensions:toggle", rect),
     extensionsClose: (): void => ipcRenderer.send("arbor:extensions:close"),
     extensionsSetPopupHeight: (height: number): void =>
         ipcRenderer.send("arbor:extensions:popup-height", height),
@@ -137,10 +136,8 @@ const api = {
     /** Title, icon and popup for a pinned extension, read from its manifest. */
     extensionActionInfo: (extensionId: string): Promise<PinnedActionInfo> =>
         ipcRenderer.invoke("arbor:extensions:action-info", extensionId),
-    openExtensionActionPopup: (
-        extensionId: string,
-        anchor: { x: number; y: number; width: number; height: number } | null,
-    ): Promise<void> => ipcRenderer.invoke("arbor:extensions:action-popup", extensionId, anchor),
+    openExtensionActionPopup: (extensionId: string, anchor: Rect | null): Promise<void> =>
+        ipcRenderer.invoke("arbor:extensions:action-popup", extensionId, anchor),
 
     shellRaise: (raised: boolean): void => ipcRenderer.send("arbor:shell:raise", raised),
     onShellEdge: (callback: (edge: RevealEdge) => void): (() => void) => {

@@ -1,5 +1,6 @@
 import { Context, Effect, Layer, Ref } from "effect"
 
+import { isDomainError } from "../../shared/errors"
 import type {
     BrowserSnapshot,
     ContainerIcon,
@@ -19,7 +20,7 @@ import {
 } from "./containers"
 import { clearExtensionConsent, setExtensionConsent } from "./extension-state"
 import { moveTab, moveToContainer, type MoveTabOptions } from "./moves"
-import { DomainError, snapshot, type DomainState, type TransitionResult } from "./state"
+import { snapshot, type DomainError, type DomainState, type TransitionResult } from "./state"
 import {
     createChildTab,
     createTab,
@@ -120,9 +121,7 @@ export const makeStoreLayer = (
                         },
                     ).pipe(
                         Effect.catchDefect((defect) =>
-                            defect instanceof DomainError
-                                ? Effect.fail(defect)
-                                : Effect.die(defect),
+                            isDomainError(defect) ? Effect.fail(defect) : Effect.die(defect),
                         ),
                     )
                     if (committed !== null) {

@@ -6,7 +6,7 @@ import { app, ipcMain, Menu, MenuItem, session, type Session, type WebContents }
 import { ElectronChromeExtensions } from "electron-chrome-extensions"
 import { installChromeWebStore, uninstallExtension } from "electron-chrome-web-store"
 
-import type { ExtensionGrant, ExtensionMenuRequest } from "../../shared/protocol"
+import type { ExtensionGrant, ExtensionMenuRequest, TabId } from "../../shared/protocol"
 import { runBackground } from "../exec"
 import { readJsonFile } from "../persistence"
 import { AppRuntime } from "../runtime"
@@ -36,9 +36,9 @@ interface ExtensionDeps {
     readonly store: StoreService
     readonly settings: SettingsStore
     readonly getWindow: () => Electron.BrowserWindow | null
-    readonly viewForTab: (tabId: string) => Electron.WebContentsView | undefined
-    readonly ensureView: (tabId: string, url: string) => Electron.WebContentsView
-    readonly tabIdForWebContents: (wc: WebContents) => string | null
+    readonly viewForTab: (tabId: TabId) => Electron.WebContentsView | undefined
+    readonly ensureView: (tabId: TabId, url: string) => Electron.WebContentsView
+    readonly tabIdForWebContents: (wc: WebContents) => TabId | null
 }
 
 let deps: ExtensionDeps | null = null
@@ -237,14 +237,8 @@ const workerScopes = (extensionId: string): readonly string[] => [
     `chrome-extension://${extensionId}`,
 ]
 
-const hasMv3Worker = (extension: Electron.Extension): boolean => {
-    if (extension.manifest.manifest_version !== 3) return false
-    const background: unknown = extension.manifest.background
-    if (typeof background !== "object" || background === null) return false
-    if (!("service_worker" in background)) return false
-    const worker: unknown = background.service_worker
-    return typeof worker === "string" && worker.length > 0
-}
+const hasMv3Worker = (extension: Electron.Extension): boolean =>
+    parseManifest(extension.manifest).serviceWorker !== ""
 
 const startMv3WorkerFor = (
     ses: Session,

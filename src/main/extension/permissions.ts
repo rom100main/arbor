@@ -12,7 +12,7 @@ import type { ExtensionGrant, PermissionPromptRequest } from "../../shared/proto
 
 /** Manifest fields that declare what an extension may do. */
 export interface ManifestPermissions {
-    permissions?: string[]
+    readonly permissions?: readonly string[]
     host_permissions?: string[]
     optional_permissions?: string[]
     optional_host_permissions?: string[]
@@ -20,8 +20,8 @@ export interface ManifestPermissions {
 
 /** A requested (or held) scope; missing lists mean "nothing asked for". */
 export interface PermissionScope {
-    permissions?: string[]
-    origins?: string[]
+    readonly permissions?: readonly string[]
+    readonly origins?: readonly string[]
 }
 
 const unique = (values: readonly string[]): string[] => [...new Set(values)]

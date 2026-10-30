@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain } from "electron"
 
 import type {
+    Anchor,
     BrowserSnapshot,
     ExtensionMenuRequest,
     OmniboxActivation,
@@ -130,10 +131,7 @@ export const registerOverlayEvents = (
 ): void => {
     ipcMain.on(
         "arbor:omnibox:update",
-        (
-            _event,
-            payload: { query: string; rect: { x: number; y: number; width: number } | null },
-        ) => {
+        (_event, payload: { query: string; rect: Anchor | null }) => {
             rt.lastOmniboxQuery = payload.query
             if (!rt.win) return
             if (!payload.rect || payload.query.trim().length === 0) {
@@ -169,12 +167,9 @@ export const registerOverlayEvents = (
         openRenameModal(rt.win, target)
     })
     ipcMain.on("arbor:rename-modal:close", () => closeRenameModal())
-    ipcMain.on(
-        "arbor:extensions:toggle",
-        (_event, rect: { x: number; y: number; width: number }) => {
-            if (rt.win) toggleExtensionsPopup(rt.win, rect)
-        },
-    )
+    ipcMain.on("arbor:extensions:toggle", (_event, rect: Anchor) => {
+        if (rt.win) toggleExtensionsPopup(rt.win, rect)
+    })
     ipcMain.on("arbor:extensions:close", () => hideExtensionsPopup())
     ipcMain.on("arbor:extensions:popup-height", (_event, height: number) => {
         if (rt.win) setExtensionsPopupHeight(rt.win, height)

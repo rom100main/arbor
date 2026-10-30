@@ -28,6 +28,8 @@ export interface ParsedManifest {
     readonly actionIcon: string | Record<string, string> | null
     /** `action.default_popup` / `browser_action.default_popup`; "" when neither is set. */
     readonly actionPopup: string
+    /** MV3 `background.service_worker`; "" for MV2 or when there is none. */
+    readonly serviceWorker: string
 }
 
 const StringList = orDefault(Schema.mutable(Schema.Array(Schema.String)), (): string[] => [])
@@ -57,6 +59,11 @@ const ManifestSchema = Schema.Struct({
     })),
     action: orDefault(ActionSpec, emptyActionSpec),
     browser_action: orDefault(ActionSpec, emptyActionSpec),
+    manifest_version: orDefault(Schema.Finite, () => 2),
+    background: orDefault(
+        Schema.Struct({ service_worker: orDefault(Schema.String, () => "") }),
+        () => ({ service_worker: "" }),
+    ),
 })
 
 const decodeManifest = decodeOr(ManifestSchema)
@@ -71,6 +78,7 @@ const emptyManifest = (): ParsedManifest => ({
     actionTitle: "",
     actionIcon: null,
     actionPopup: "",
+    serviceWorker: "",
 })
 
 /**
@@ -92,5 +100,6 @@ export const parseManifest = (raw: unknown): ParsedManifest => {
             manifest.action.default_title || manifest.browser_action.default_title || manifest.name,
         actionIcon: manifest.action.default_icon ?? manifest.browser_action.default_icon,
         actionPopup: manifest.action.default_popup || manifest.browser_action.default_popup,
+        serviceWorker: manifest.manifest_version === 3 ? manifest.background.service_worker : "",
     }
 }

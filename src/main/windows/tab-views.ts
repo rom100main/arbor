@@ -8,8 +8,9 @@ import {
 } from "electron"
 import buildChromeContextMenu from "electron-chrome-context-menu"
 
+import { containerPartition } from "../../shared/constants"
 import { isInternalUrl } from "../../shared/internal-pages"
-import type { ContainerId } from "../../shared/protocol"
+import type { ContainerId, TabId } from "../../shared/protocol"
 import { runBackground } from "../exec"
 import { extensionsReady, setupSessionExtensions } from "../extension/loader"
 import { AppRuntime } from "../runtime"
@@ -23,7 +24,7 @@ export interface ViewDeps {
     readonly getState: () => DomainState
 }
 
-const views = new Map<string, WebContentsView>()
+const views = new Map<TabId, WebContentsView>()
 
 /**
  * The session a tab loads on: Arbor's own for `arbor://`, its Container's otherwise.
@@ -42,7 +43,7 @@ const partitions = new Map<ContainerId, Session>()
 export const sessionForContainer = (containerId: ContainerId): Session => {
     const existing = partitions.get(containerId)
     if (existing) return existing
-    const partition = session.fromPartition(`persist:container-${containerId}`)
+    const partition = session.fromPartition(containerPartition(containerId))
     setupSessionExtensions(partition)
     partitions.set(containerId, partition)
     return partition
@@ -54,7 +55,7 @@ export const existingSessionForContainer = (containerId: ContainerId): Session |
 
 // --- tab views
 
-export const viewForTab = (tabId: string): WebContentsView | undefined => views.get(tabId)
+export const viewForTab = (tabId: TabId): WebContentsView | undefined => views.get(tabId)
 
 /**
  * The web contents of tabs showing an Arbor page, the only ones carrying the preload bridge.
@@ -77,13 +78,13 @@ export const internalViewWebContents = (): WebContents[] => {
  * A view's session is fixed when it is constructed, so a tab moving between a web page and
  * an `arbor://` page cannot reuse its view. Rebuilding costs a brief reload.
  */
-export const sessionMismatch = (tabId: string, containerId: ContainerId, url: string): boolean => {
+export const sessionMismatch = (tabId: TabId, containerId: ContainerId, url: string): boolean => {
     const view = views.get(tabId)
     if (!view) return false
     return view.webContents.session !== sessionForTab(containerId, url)
 }
 
-export const tabIdForWebContents = (wc: WebContents): string | null => {
+export const tabIdForWebContents = (wc: WebContents): TabId | null => {
     for (const [tabId, view] of views) {
         if (view.webContents === wc) return tabId
     }
@@ -92,7 +93,7 @@ export const tabIdForWebContents = (wc: WebContents): string | null => {
 
 const openChildTab = (
     store: StoreService,
-    parentTabId: string,
+    parentTabId: TabId,
     url: string,
     disposition: string,
 ): void => {
@@ -100,7 +101,7 @@ const openChildTab = (
     void runBackground(store.createChildTab(parentTabId, url, disposition === "background-tab"))
 }
 
-export const ensureView = (deps: ViewDeps, tabId: string, url: string): WebContentsView => {
+export const ensureView = (deps: ViewDeps, tabId: TabId, url: string): WebContentsView => {
     const existing = views.get(tabId)
     if (existing) return existing
     const tab = deps.getState().tabs.get(tabId)
@@ -137,7 +138,7 @@ export const ensureView = (deps: ViewDeps, tabId: string, url: string): WebConte
  * A view torn down while waiting never loads.
  */
 const loadTabUrl = async (
-    tabId: string,
+    tabId: TabId,
     containerId: ContainerId,
     url: string,
     view: WebContentsView,
@@ -164,7 +165,7 @@ const startLoad = async (webContents: WebContents, url: string): Promise<void> =
     }
 }
 
-export const destroyView = (tabId: string): void => {
+export const destroyView = (tabId: TabId): void => {
     const view = views.get(tabId)
     if (!view) return
     views.delete(tabId)
@@ -183,7 +184,7 @@ export const destroyAllViews = (): void => {
  * so there the URL is only recorded: `onCommit` then sees the mismatch,
  * rebuilds the view on the right session, and loads it.
  */
-export const navigateTab = async (deps: ViewDeps, tabId: string, url: string): Promise<void> => {
+export const navigateTab = async (deps: ViewDeps, tabId: TabId, url: string): Promise<void> => {
     const tab = deps.getState().tabs.get(tabId)
     if (!tab) return
     const needsOtherSession = sessionMismatch(tabId, tab.containerId, url)
@@ -193,7 +194,7 @@ export const navigateTab = async (deps: ViewDeps, tabId: string, url: string): P
     if (view) void startLoad(view.webContents, url)
 }
 
-export const showTab = (win: BrowserWindow, tabId: string): void => {
+export const showTab = (win: BrowserWindow, tabId: TabId): void => {
     const view = views.get(tabId)
     if (!view) return
     for (const other of views.values()) {
@@ -218,7 +219,7 @@ export const layoutViews = (win: BrowserWindow): void => {
     }
 }
 
-const trackPageMeta = (store: StoreService, tabId: string, view: WebContentsView): void => {
+const trackPageMeta = (store: StoreService, tabId: TabId, view: WebContentsView): void => {
     const { webContents } = view
     webContents.on("page-title-updated", (_event, title) => {
         void runBackground(store.updateTabMeta(tabId, { title }))

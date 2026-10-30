@@ -1,8 +1,8 @@
-import { CONTAINER_COLORS } from "../../shared/protocol"
+import { CONTAINER_COLORS } from "../../shared/constants"
+import { EmptyContainer, UnknownContainer } from "../../shared/errors"
 import type { ContainerIcon, ContainerId, TabId } from "../../shared/protocol"
 import {
     containerOf,
-    DomainError,
     okWith,
     touch,
     withTabs,
@@ -56,7 +56,7 @@ export const switchContainer = (
 ): DomainState => {
     const container = containerOf(state, containerId)
     if (container.activeTabId === null) {
-        throw new DomainError(`Container ${containerId} has no tabs`)
+        throw new EmptyContainer({ containerId: containerId })
     }
     const next = withTabs(state, new Map(state.tabs))
     const active = next.tabs.get(container.activeTabId)
@@ -106,7 +106,7 @@ export const reorderContainer = (
     toIndex: number,
 ): DomainState => {
     const from = state.containers.findIndex((c) => c.id === containerId)
-    if (from === -1) throw new DomainError(`Unknown container: ${containerId}`)
+    if (from === -1) throw new UnknownContainer({ containerId: containerId })
     const clamped = Math.max(0, Math.min(toIndex, state.containers.length - 1))
     if (from === clamped) return state
     const next = [...state.containers]

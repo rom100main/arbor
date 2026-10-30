@@ -1,8 +1,8 @@
+import { NoContainer, UnknownTab } from "../../shared/errors"
 import type { ContainerId, TabId, TabNode } from "../../shared/protocol"
 import {
     childrenOf,
     containerOf,
-    DomainError,
     okWith,
     reindex,
     siblingsOf,
@@ -32,7 +32,7 @@ export const createTab = (
     state: DomainState,
     options: CreateTabOptions = {},
 ): TransitionResult<TabId> => {
-    if (state.containers.length === 0) throw new DomainError("No container to create a tab in")
+    if (state.containers.length === 0) throw new NoContainer()
     const id = options.id ?? `tab-${crypto.randomUUID()}`
     const now = options.now ?? Date.now()
     const containerId = options.containerId ?? state.activeContainerId ?? state.containers[0].id
@@ -40,7 +40,7 @@ export const createTab = (
     const anchor =
         container.activeTabId !== null ? state.tabs.get(container.activeTabId) : undefined
 
-    const tab: TabNode = {
+    const base: TabNode = {
         id,
         containerId,
         parentId: null,
@@ -54,15 +54,16 @@ export const createTab = (
     }
 
     let next = withTabs(state, new Map(state.tabs))
+    let tab = base
     if (anchor) {
-        tab.parentId = anchor.parentId
+        tab = { ...base, parentId: anchor.parentId }
         const siblings = siblingsOf(state, anchor)
         const index = siblings.findIndex((s) => s.id === anchor.id)
         siblings.splice(index + 1, 0, tab)
         for (const updated of reindex(siblings)) next.tabs.set(updated.id, updated)
     } else {
         const roots = childrenOf(state, containerId, null)
-        tab.order = roots.length
+        tab = { ...base, order: roots.length }
         next.tabs.set(tab.id, tab)
     }
 
@@ -83,7 +84,7 @@ export const createChildTab = (
     options: CreateChildTabOptions = {},
 ): TransitionResult<TabId> => {
     const parent = state.tabs.get(parentTabId)
-    if (!parent) throw new DomainError(`Unknown tab: ${parentTabId}`)
+    if (!parent) throw new UnknownTab({ tabId: parentTabId })
     const id = options.id ?? `tab-${crypto.randomUUID()}`
     const now = options.now ?? Date.now()
     const tab: TabNode = {
@@ -117,7 +118,7 @@ export const createChildTab = (
 
 export const selectTab = (state: DomainState, tabId: TabId, now?: number): DomainState => {
     const tab = state.tabs.get(tabId)
-    if (!tab) throw new DomainError(`Unknown tab: ${tabId}`)
+    if (!tab) throw new UnknownTab({ tabId: tabId })
     const next = withTabs(state, new Map(state.tabs))
     next.tabs.set(tabId, touch(tab, now))
     return {
@@ -131,7 +132,7 @@ export const selectTab = (state: DomainState, tabId: TabId, now?: number): Domai
 
 export const setCollapsed = (state: DomainState, tabId: TabId, collapsed: boolean): DomainState => {
     const tab = state.tabs.get(tabId)
-    if (!tab) throw new DomainError(`Unknown tab: ${tabId}`)
+    if (!tab) throw new UnknownTab({ tabId: tabId })
     if (tab.collapsed === collapsed) return state
     const next = withTabs(state, new Map(state.tabs))
     next.tabs.set(tabId, { ...tab, collapsed })
@@ -141,7 +142,7 @@ export const setCollapsed = (state: DomainState, tabId: TabId, collapsed: boolea
 /** Custom label overriding the page title until cleared. */
 export const renameTab = (state: DomainState, tabId: TabId, label: string | null): DomainState => {
     const tab = state.tabs.get(tabId)
-    if (!tab) throw new DomainError(`Unknown tab: ${tabId}`)
+    if (!tab) throw new UnknownTab({ tabId: tabId })
     const next = withTabs(state, new Map(state.tabs))
     next.tabs.set(tabId, { ...tab, userLabel: label && label.length > 0 ? label : null })
     return next

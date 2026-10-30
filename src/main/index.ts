@@ -1,6 +1,6 @@
 import path from "node:path"
 
-import { Effect } from "effect"
+import { Effect, Option, Schema } from "effect"
 import { BrowserWindow, app } from "electron"
 
 import { runRequest } from "./exec"
@@ -40,14 +40,15 @@ registerInternalScheme()
  * (`webNavigation` is provided by electron-chrome-extensions itself; `privacy` is optional and unimplemented).
  * Drop only those all-benign warnings so real extension load problems stay visible.
  */
-const readWarningType = (value: unknown): string => {
-    if (typeof value === "string") return value
-    if (typeof value === "object" && value !== null && "type" in value) {
-        const { type } = value
-        return typeof type === "string" ? type : ""
-    }
-    return ""
-}
+const decodeWarningType = Schema.decodeUnknownOption(
+    Schema.Union([Schema.String, Schema.Struct({ type: Schema.String })]),
+)
+
+const readWarningType = (value: unknown): string =>
+    Option.match(decodeWarningType(value), {
+        onNone: () => "",
+        onSome: (decoded) => (typeof decoded === "string" ? decoded : decoded.type),
+    })
 
 const filterBenignExtensionLoadWarnings = (): void => {
     const original = process.emitWarning.bind(process)

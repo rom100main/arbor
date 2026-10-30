@@ -169,10 +169,7 @@ export const bindExtensionStorageToSession = (ses: Session): void => {
     }
 
     ses.serviceWorkers.on("running-status-changed", (details) => {
-        const { runningStatus, versionId } = details as {
-            runningStatus: string
-            versionId: number
-        }
+        const { runningStatus, versionId } = details
         if (runningStatus !== "starting") return
         attachWorker(ses.serviceWorkers.getWorkerFromVersionID(versionId))
     })
