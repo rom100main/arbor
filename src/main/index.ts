@@ -4,7 +4,7 @@ import { Effect } from "effect"
 import { BrowserWindow, app } from "electron"
 
 import { runRequest } from "./exec"
-import { initExtensions } from "./extension/loader"
+import { initExtensions, markMainWindowOpened } from "./extension/loader"
 import { createExtensionStorage, registerExtensionStorageIpc } from "./extension/storage"
 import {
     makeOmniboxActivator,
@@ -22,7 +22,13 @@ import { installMenu } from "./windows/app-menu"
 import { registerInternalPages, registerInternalScheme } from "./windows/internal-pages"
 import { attachWindowEvents, createWindow } from "./windows/main-window"
 import { focusShell, shellWebContents } from "./windows/shell-view"
-import { ensureView, layoutViews, tabIdForWebContents, viewForTab } from "./windows/tab-views"
+import {
+    destroyAllViews,
+    ensureView,
+    layoutViews,
+    tabIdForWebContents,
+    viewForTab,
+} from "./windows/tab-views"
 
 // Verbose only under `vp dev` (VITE_DEV_SERVER_URL). Packaged/prod: no console.debug noise.
 if (!process.env.VITE_DEV_SERVER_URL) {
@@ -143,9 +149,8 @@ const bootApplication = async (): Promise<Application> => {
     }
 
     const ensureSeedTab = async (): Promise<void> => {
-        if (initial.containers.length > 0) {
-            // Restored: attach the active tab's view and push state to the window.
-            commitHandler(initial)
+        if (rt.latest.containers.length > 0) {
+            commitHandler(rt.latest)
         } else {
             // The app always starts with one container holding one empty tab.
             await runRequest(store.createContainer())
@@ -169,7 +174,15 @@ const openMainWindow = async (appInstance: Application): Promise<void> => {
 
     const win = await createWindow(() => rt.settings.get())
     rt.win = win
+    markMainWindowOpened()
     attachWindowEvents(win)
+    win.on("closed", () => {
+        if (rt.win === win) {
+            rt.win = null
+            rt.previousActiveTab = null
+        }
+        destroyAllViews()
+    })
 
     // Showing or hiding a bar changes how much of the window the page gets.
     const stopRelayout = rt.settings.subscribe(() => layoutViews(win))

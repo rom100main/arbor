@@ -19,7 +19,7 @@ import {
 } from "../../shared/extension-storage"
 import {
     createDebouncedSaver,
-    readJsonFile,
+    loadOwnedFile,
     writeJsonSafely,
     type DebouncedSaver,
 } from "../persistence"
@@ -94,7 +94,7 @@ export const createExtensionStorage = (
 
     return {
         load: () => {
-            const restored = fromPersistedExtStorage(readJsonFile(filePath))
+            const restored = loadOwnedFile(filePath, fromPersistedExtStorage, "Extension storage")
             if (!restored) return
             for (const [id, areas] of Object.entries(restored)) extensions[id] = areas
         },

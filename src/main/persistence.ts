@@ -3,10 +3,33 @@ import { readFileSync, renameSync, writeFileSync } from "node:fs"
 import { fromPersisted, toPersisted } from "./state/persist"
 import type { DomainState } from "./state/state"
 
+/** Lenient read for files Arbor does not own (extension manifests): any failure is `null`. */
 export const readJsonFile = (filePath: string): unknown => {
     try {
         return JSON.parse(readFileSync(filePath, "utf8")) as unknown
     } catch {
+        return null
+    }
+}
+
+const isMissingFile = (error: unknown): boolean =>
+    typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT"
+
+/**
+ * Load a file Arbor owns: the decoded value, or `null` to start from defaults.
+ * A missing file is silent, an unusable one is logged.
+ */
+export const loadOwnedFile = <A>(
+    filePath: string,
+    decode: (data: unknown) => A | null,
+    label: string,
+): A | null => {
+    try {
+        const value = decode(JSON.parse(readFileSync(filePath, "utf8")) as unknown)
+        if (value === null) console.warn(`[arbor] ${label} could not be read (unsupported content)`)
+        return value
+    } catch (error) {
+        if (!isMissingFile(error)) console.warn(`[arbor] ${label} could not be read:`, error)
         return null
     }
 }
@@ -75,7 +98,7 @@ export const createDebouncedSaver = (options: DebouncedSaverOptions): DebouncedS
 }
 
 export interface StatePersistence {
-    /** Restored state, or `null` when the file is missing/unusable. */
+    /** Restored state, or `null` when the file is missing or unusable. */
     readonly load: () => DomainState | null
     /** Remember `state` and schedule a debounced disk write. */
     readonly schedule: (state: DomainState) => void
@@ -100,7 +123,7 @@ export const createStatePersistence = (
     })
 
     return {
-        load: () => fromPersisted(readJsonFile(filePath)),
+        load: () => loadOwnedFile(filePath, fromPersisted, "Browser state"),
         schedule: (state) => {
             latest = state
             saver.schedule()

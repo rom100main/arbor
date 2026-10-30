@@ -144,7 +144,22 @@ const loadTabUrl = async (
         await extensionsReady(sessionForContainer(containerId))
     }
     if (views.get(tabId) !== view) return
-    await view.webContents.loadURL(url)
+    await startLoad(view.webContents, url)
+}
+
+/** Chromium's net error for a load replaced by another navigation: not a failure. */
+const ERR_ABORTED = -3
+
+/** Load a URL with debug log if error. */
+const startLoad = async (webContents: WebContents, url: string): Promise<void> => {
+    try {
+        await webContents.loadURL(url)
+    } catch (error) {
+        const errno =
+            typeof error === "object" && error !== null && "errno" in error ? error.errno : null
+        if (errno === ERR_ABORTED) return
+        console.debug(`[arbor] load failed url=${url}:`, error)
+    }
 }
 
 export const destroyView = (tabId: string): void => {
@@ -154,20 +169,26 @@ export const destroyView = (tabId: string): void => {
     view.webContents.close()
 }
 
+/** Close every tab view: they belong to the window, and close with it. */
+export const destroyAllViews = (): void => {
+    for (const tabId of [...views.keys()]) destroyView(tabId)
+}
+
 /**
  * Record a tab's new URL, then load it.
  *
  * Crossing the `arbor://` boundary changes which session the tab needs,
  * so there the URL is only recorded: `onCommit` then sees the mismatch,
  * rebuilds the view on the right session, and loads it.
- * Loading here would target the session just discarded.
  */
 export const navigateTab = async (deps: ViewDeps, tabId: string, url: string): Promise<void> => {
     const tab = deps.getState().tabs.get(tabId)
     if (!tab) return
+    const needsOtherSession = sessionMismatch(tabId, tab.containerId, url)
     await runBackground(deps.store.updateTabMeta(tabId, { url }))
-    if (sessionMismatch(tabId, tab.containerId, url)) return
-    await viewForTab(tabId)?.webContents.loadURL(url)
+    if (needsOtherSession) return
+    const view = viewForTab(tabId)
+    if (view) void startLoad(view.webContents, url)
 }
 
 export const showTab = (win: BrowserWindow, tabId: string): void => {

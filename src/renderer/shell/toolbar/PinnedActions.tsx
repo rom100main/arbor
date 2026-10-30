@@ -58,26 +58,16 @@ const PinnedAction = (props: { extensionId: string }) => {
 
     let button: HTMLButtonElement | undefined
     const label = () => info()?.title || props.extensionId
-    const popupUrl = () => info()?.popupUrl ?? null
+    const hasPopup = () => (info()?.popupUrl ?? null) !== null
 
     const activate = (): void => {
-        const url = popupUrl()
-        // No popup declared: the button still shows the extension, as in Chrome.
-        if (!url) return
-        // Record the anchor before opening: the popup positions itself from this rect.
-        if (button) {
-            const bounds = button.getBoundingClientRect()
-            spawn("failed to anchor the action popup", async () => {
-                await window.arbor.extensionsAnchor({
-                    extensionId: props.extensionId,
-                    rect: { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height },
-                })
-                await window.arbor.openExtensionActionPopup(props.extensionId, url)
-            })
-            return
-        }
+        if (!hasPopup()) return
+        const bounds = button?.getBoundingClientRect()
+        const anchor = bounds
+            ? { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }
+            : null
         spawn("failed to open the action popup", async () => {
-            await window.arbor.openExtensionActionPopup(props.extensionId, url)
+            await window.arbor.openExtensionActionPopup(props.extensionId, anchor)
         })
     }
 

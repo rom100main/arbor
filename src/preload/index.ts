@@ -43,22 +43,17 @@ const api = {
         ipcRenderer.invoke("arbor:container:reorder", containerId, toIndex),
 
     createTab: (url?: string): Promise<TabId> => ipcRenderer.invoke("arbor:tab:create", url),
-    createChildTab: (parentTabId: TabId, url?: string): Promise<TabId> =>
-        ipcRenderer.invoke("arbor:tab:create-child", parentTabId, url),
     selectTab: (tabId: TabId): Promise<void> => ipcRenderer.invoke("arbor:tab:select", tabId),
     setCollapsed: (tabId: TabId, collapsed: boolean): Promise<void> =>
         ipcRenderer.invoke("arbor:tab:set-collapsed", tabId, collapsed),
     closeTab: (tabId: TabId): Promise<void> => ipcRenderer.invoke("arbor:tab:close", tabId),
     renameTab: (tabId: TabId, label: string | null): Promise<void> =>
         ipcRenderer.invoke("arbor:tab:rename", tabId, label),
-    reopenTab: (): Promise<void> => ipcRenderer.invoke("arbor:tab:reopen"),
     moveTab: (options: { tabId: TabId; parentId: TabId | null; index: number }): Promise<void> =>
         ipcRenderer.invoke("arbor:tab:move", options),
     moveToContainer: (tabId: TabId, containerId: ContainerId): Promise<void> =>
         ipcRenderer.invoke("arbor:tab:move-to-container", tabId, containerId),
 
-    navigate: (tabId: TabId, input: string): Promise<void> =>
-        ipcRenderer.invoke("arbor:tab:navigate", tabId, input),
     goBack: (tabId: TabId): Promise<void> => ipcRenderer.invoke("arbor:tab:back", tabId),
     goForward: (tabId: TabId): Promise<void> => ipcRenderer.invoke("arbor:tab:forward", tabId),
     reload: (tabId: TabId): Promise<void> => ipcRenderer.invoke("arbor:tab:reload", tabId),
@@ -118,10 +113,6 @@ const api = {
         ipcRenderer.send("arbor:extensions:popup-height", height),
     extensionsMenu: (payload: ExtensionMenuRequest): void =>
         ipcRenderer.send("arbor:extensions:menu", payload),
-    extensionsAnchor: (payload: {
-        extensionId: string
-        rect: { x: number; y: number; width: number; height: number }
-    }): Promise<void> => ipcRenderer.invoke("arbor:extensions:anchor", payload),
     onPermissionRequest: (
         callback: (request: PermissionPromptRequest | null) => void,
     ): (() => void) => {
@@ -146,8 +137,10 @@ const api = {
     /** Title, icon and popup for a pinned extension, read from its manifest. */
     extensionActionInfo: (extensionId: string): Promise<PinnedActionInfo> =>
         ipcRenderer.invoke("arbor:extensions:action-info", extensionId),
-    openExtensionActionPopup: (extensionId: string, popupUrl: string): Promise<void> =>
-        ipcRenderer.invoke("arbor:extensions:action-popup", extensionId, popupUrl),
+    openExtensionActionPopup: (
+        extensionId: string,
+        anchor: { x: number; y: number; width: number; height: number } | null,
+    ): Promise<void> => ipcRenderer.invoke("arbor:extensions:action-popup", extensionId, anchor),
 
     shellRaise: (raised: boolean): void => ipcRenderer.send("arbor:shell:raise", raised),
     onShellEdge: (callback: (edge: RevealEdge) => void): (() => void) => {

@@ -110,13 +110,22 @@ const grantedScope = (extension: {
  */
 const installPrompts = new Map<string, Deferred.Deferred<boolean>>()
 
+const deniedUnpacked = new Set<string>()
+
 const ensureUnpackedConsent = (extensionPath: string): Effect.Effect<boolean> =>
     Effect.gen(function* () {
+        if (deniedUnpacked.has(extensionPath)) return false
         const pending = installPrompts.get(extensionPath)
         if (pending) return yield* Deferred.await(pending)
         const deferred = yield* Deferred.make<boolean>()
         installPrompts.set(extensionPath, deferred)
         return yield* askUnpackedConsent(extensionPath).pipe(
+            // Only an actual answer is remembered, a failed prompt may be asked again.
+            Effect.tap((allowed) =>
+                Effect.sync(() => {
+                    if (!allowed) deniedUnpacked.add(extensionPath)
+                }),
+            ),
             Effect.catchCause(() => Effect.succeed(false)),
             Effect.tap((allowed) => Deferred.succeed(deferred, allowed)),
             // Interruption still settles waiters (`false`) before the entry is dropped.
@@ -128,6 +137,14 @@ const ensureUnpackedConsent = (extensionPath: string): Effect.Effect<boolean> =>
         )
     })
 
+/** Resolves once the main window exists. */
+const mainWindowOpened = Effect.runSync(Deferred.make<void>())
+
+/** Called once the main window is created */
+export const markMainWindowOpened = (): void => {
+    Effect.runSync(Deferred.succeed(mainWindowOpened, undefined))
+}
+
 const askUnpackedConsent = (extensionPath: string): Effect.Effect<boolean, unknown> =>
     Effect.gen(function* () {
         const d = deps
@@ -136,6 +153,7 @@ const askUnpackedConsent = (extensionPath: string): Effect.Effect<boolean, unkno
         const scope = manifestGranted(manifest)
         const held = yield* consentFor([extensionPath])
         if (held[extensionPath]) return true
+        yield* Deferred.await(mainWindowOpened)
         const allowed = yield* openPermissionPrompt(d.getWindow(), {
             kind: "install",
             id: extensionPath,
