@@ -1,13 +1,14 @@
-export const THEMES = ["light", "dark", "system"] as const
+// Should be Effect free
 
+import type { Settings } from "./settings-schema"
+
+export const THEMES = ["light", "dark", "system"] as const
 export type Theme = (typeof THEMES)[number]
 
 export const SIDEBAR_VISIBILITIES = ["displayed", "compact", "hidden"] as const
-
 export type SidebarVisibility = (typeof SIDEBAR_VISIBILITIES)[number]
 
 export const URL_BAR_VISIBILITIES = ["displayed", "hidden"] as const
-
 export type UrlBarVisibility = (typeof URL_BAR_VISIBILITIES)[number]
 
 export const SIDEBAR_WIDTH = 240
@@ -22,7 +23,7 @@ export interface ChromeInsets {
 }
 
 /**
- * Space the shell keeps for itself along the window's left and bottom edges; tab views fill the rest.
+ * Space the shell keeps for itself along the window's left and bottom edge.
  * A revealed bar slides over the page rather than resizing it, so only the resting state counts here.
  */
 export const chromeInsets = (
@@ -39,18 +40,11 @@ export const chromeInsets = (
 
 export const DEFAULT_SEARCH_TEMPLATE = "https://duckduckgo.com/?q=%s"
 
-/**
- * A search engine as a URL template holding one `%s`,
- * which the omnibox replaces with the encoded query.
- * One string rather than a name plus a URL keeps the Setting round-trippable through JSON
- * and makes every engine expressible without a code change.
- */
 export interface SearchEngine {
     readonly name: string
     readonly template: string
 }
 
-/** Offered as suggestions. Anything else the user types is still accepted. */
 export const SEARCH_ENGINES: readonly SearchEngine[] = [
     { name: "DuckDuckGo", template: DEFAULT_SEARCH_TEMPLATE },
     { name: "Google", template: "https://www.google.com/search?q=%s" },
@@ -62,29 +56,14 @@ export const SEARCH_ENGINES: readonly SearchEngine[] = [
     { name: "Ecosia", template: "https://www.ecosia.org/search?q=%s" },
 ]
 
-/** Bare templates, for callers that only need the URL. */
 export const SUGGESTED_SEARCH_TEMPLATES = SEARCH_ENGINES.map((engine) => engine.template)
 
-/**
- * Where Arbor's own pages live. Belongs to no Container.
- *
- * The host is required, not decorative:
- * `arbor:/settings` parses as a scheme with an empty authority,
- * so `hostname` comes back empty and nothing recognises the page as internal.
- */
 export const INTERNAL_SCHEME = "arbor"
 export const INTERNAL_HOST = "settings"
 export const SETTINGS_PATH = `/${INTERNAL_HOST}`
 export const SETTINGS_URL = `${INTERNAL_SCHEME}://${INTERNAL_HOST}`
 
-export interface Settings {
-    searchTemplate: string
-    theme: Theme
-    /** Extensions whose toolbar button sits between the URL input and the puzzle button. */
-    pinnedExtensionIds: string[]
-    sidebarVisibility: SidebarVisibility
-    urlBarVisibility: UrlBarVisibility
-}
+export type { Settings } from "./settings-schema"
 
 export const DEFAULT_SETTINGS: Settings = {
     searchTemplate: DEFAULT_SEARCH_TEMPLATE,
@@ -100,10 +79,6 @@ const HOST_PATTERN = /^([a-z0-9-]+\.)+[a-z]{2,}(:\d+)?(\/.*)?$/i
 export const SEARCH_TOKEN = "%s"
 
 /**
- * A template the omnibox can substitute into:
- * it carries one `%s`, and a probe query substituted for it parses as an `http(s)` URL.
- *
- * A bare host is normalised to `https://`.
  * Returns `null` when the input could not be used, which callers treat as "keep the value we already have".
  */
 export const normalizeSearchTemplate = (input: string): string | null => {
@@ -128,7 +103,6 @@ export const normalizeSearchTemplate = (input: string): string | null => {
     }
 }
 
-/** Substitute the query into a template, or `null` when the template is unusable. */
 export const searchUrl = (template: string, query: string): string | null => {
     if (!template.includes(SEARCH_TOKEN)) return null
     try {
