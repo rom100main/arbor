@@ -129,6 +129,22 @@ describe("persist repair", () => {
         }
     })
 
+    it("drops records whose id lacks its prefix", () => {
+        const state = buildRichState()
+        const persisted = clonePersisted(state)
+        // A leaf tab, so dropping it orphans nothing else.
+        const leaf = persisted.tabs.find((t) => !persisted.tabs.some((o) => o.parentId === t.id))!
+        const data = {
+            ...persisted,
+            tabs: persisted.tabs.map((t) => (t.id === leaf.id ? { ...t, id: "abc" } : t)),
+            containers: [...persisted.containers, { id: "abc", name: "Bare", color: "#000000" }],
+        }
+        const restored = fromPersisted(data)!
+        expect([...restored.tabs.keys()]).not.toContain("abc")
+        expect(restored.tabs.size).toBe(state.tabs.size - 1)
+        expect(restored.containers.map((c) => c.id)).not.toContain("abc")
+    })
+
     it("drops tabs whose parent is dangling and keeps the rest", () => {
         const data = clonePersisted(buildRichState())
         const before = data.tabs.length
@@ -153,7 +169,7 @@ describe("persist repair", () => {
 
     it("reindexes sibling order", () => {
         const data = clonePersisted(buildRichState())
-        for (const tab of data.tabs) tab.order = 42
+        data.tabs = data.tabs.map((tab) => ({ ...tab, order: 42 }))
         const restored = fromPersisted(data)!
         const byGroup = new Map<string, number[]>()
         for (const tab of restored.tabs.values()) {
@@ -170,7 +186,7 @@ describe("persist repair", () => {
 
     it("resets dangling activeTabId and activeContainerId", () => {
         const data = clonePersisted(buildRichState())
-        for (const container of data.containers) container.activeTabId = "tab-gone"
+        data.containers = data.containers.map((c) => ({ ...c, activeTabId: "tab-gone" }))
         data.activeContainerId = "container-gone"
         const restored = fromPersisted(data)!
         expect(restored.containers[0].activeTabId).not.toBe("tab-gone")

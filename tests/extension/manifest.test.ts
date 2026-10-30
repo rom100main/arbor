@@ -12,6 +12,7 @@ const empty: ParsedManifest = {
     actionTitle: "",
     actionIcon: null,
     actionPopup: "",
+    serviceWorker: "",
 }
 
 describe("action fields", () => {
@@ -138,5 +139,25 @@ describe("parseManifest", () => {
         expect(parseManifest({}).optionsPage).toBe("")
         expect(parseManifest({ options_ui: "nope" }).optionsPage).toBe("")
         expect(parseManifest({ options_page: 7 }).optionsPage).toBe("")
+    })
+})
+
+describe("service worker", () => {
+    it("reads an MV3 background service worker", () => {
+        const manifest = parseManifest({
+            manifest_version: 3,
+            background: { service_worker: "sw.js" },
+        })
+        expect(manifest.serviceWorker).toBe("sw.js")
+    })
+
+    it("ignores a service worker outside MV3", () => {
+        expect(
+            parseManifest({ manifest_version: 2, background: { service_worker: "sw.js" } })
+                .serviceWorker,
+        ).toBe("")
+        expect(
+            parseManifest({ manifest_version: 3, background: { scripts: [] } }).serviceWorker,
+        ).toBe("")
     })
 })

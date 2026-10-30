@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs"
 
+import { Schema } from "effect"
 import { describe, expect, it } from "vite-plus/test"
 
 import type { IconName } from "../src/renderer/ui/Icon"
-import { CONTAINER_ICONS, type ContainerIcon } from "../src/shared/protocol"
+import { CONTAINER_ICONS, type ContainerIcon } from "../src/shared/constants"
 
 // Type-level guard (checked by `vp check`):
 // every ContainerIcon must be covered by icons.json through the generated IconName union.
@@ -11,11 +12,9 @@ type EnsureIconName<T extends IconName> = T
 export type ContainerIconsAreCovered = EnsureIconName<ContainerIcon>
 
 const iconsUrl = new URL("../src/renderer/ui/icons.json", import.meta.url)
-const isStringArray = (value: unknown): value is string[] =>
-    Array.isArray(value) && value.every((entry): entry is string => typeof entry === "string")
-const rawIcons: unknown = JSON.parse(readFileSync(iconsUrl, "utf8"))
-if (!isStringArray(rawIcons)) throw new Error("Invalid icons.json: expected an array of strings")
-const icons = rawIcons
+const icons = Schema.decodeUnknownSync(Schema.Array(Schema.String))(
+    JSON.parse(readFileSync(iconsUrl, "utf8")),
+)
 
 describe("icons", () => {
     // icons.json is the generation source; Icon.tsx can be stale on disk while still typechecking.

@@ -3,8 +3,9 @@ import { describe, expect, it } from "vite-plus/test"
 import { closeTab, reopenTab } from "../src/main/state/close-reopen"
 import { createContainer, setContainerIcon, switchContainer } from "../src/main/state/containers"
 import { moveTab, moveToContainer } from "../src/main/state/moves"
-import { DomainError, initialState } from "../src/main/state/state"
+import { initialState } from "../src/main/state/state"
 import { createChildTab, createTab, selectTab, setCollapsed } from "../src/main/state/tabs"
+import { InvalidMove, LastTab } from "../src/shared/errors"
 import { displayTabs, stepVisibleTab } from "../src/shared/tree-display"
 
 const containerIdOf = (state: { containers: { id: string }[] }, index = 0): string =>
@@ -39,7 +40,7 @@ describe("containers", () => {
     it("refuses to close the last tab of the last container", () => {
         const state = createContainer(initialState()).state
         const tabId = state.containers[0].activeTabId!
-        expect(() => closeTab(state, tabId)).toThrow(DomainError)
+        expect(() => closeTab(state, tabId)).toThrow(LastTab)
     })
 
     it("refuses to close a collapsed root holding every remaining tab", () => {
@@ -49,7 +50,7 @@ describe("containers", () => {
         const b = state.containers[0].activeTabId!
         state = createChildTab(state, b).state
         state = setCollapsed(state, a, true)
-        expect(() => closeTab(state, a)).toThrow(DomainError)
+        expect(() => closeTab(state, a)).toThrow(LastTab)
     })
 
     it("deletes a container when its last tab closes and switches to a neighbor", () => {
@@ -269,7 +270,7 @@ describe("moves", () => {
         state = createChildTab(state, child).state
         const grandchild = state.containers[0].activeTabId!
         expect(() => moveTab(state, { tabId: a, parentId: grandchild, index: 0 })).toThrow(
-            DomainError,
+            InvalidMove,
         )
     })
 
