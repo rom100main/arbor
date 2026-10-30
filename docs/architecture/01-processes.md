@@ -36,9 +36,13 @@
 
 - **Location**: `src/shared/`
 - **Runtime**: none. Pure logic + types, no `electron` import.
+- **Effect**: the renderer and preload load nothing from `effect` at runtime. They import schema modules (`protocol.ts`, `errors.ts`, `settings-schema.ts`) with `import type` only; runtime values live in schema-free modules (`constants.ts`, `settings.ts`). `tests/architecture.test.ts` follows imports to enforce it.
 - **Membership**: only code loaded into **both** processes, main and renderer (the latter directly or through a preload). Code a single process uses belongs in that process's tree.
 - **Contents**:
-    - `protocol.ts`: `ContainerId`, `TabId`, `BrowserSnapshot`, `RenameTarget`, `OmniboxActivation`, `CONTAINER_COLORS`, `CONTAINER_ICONS`.
+    - `protocol.ts`: Schemas for every shape crossing processes or onto disk (`TabId`, `ContainerId`, `TabNode`, `ContainerMeta`, `BrowserSnapshot`, IPC payloads, `Anchor` / `Rect`). Types derive from them (`typeof X.Type`). IDs are template literals (`` `tab-${string}` ``, `` `container-${string}` ``): distinct types, no runtime cost.
+    - `errors.ts`: `DomainError`, a tagged union (`UnknownTab`, `UnknownContainer`, `LastTab`, `InvalidMove`, `EmptyContainer`, `NoContainer`, `NothingToReopen`).
+    - `settings.ts` / `settings-schema.ts`: settings constants and helpers / the `Settings` and `SettingsPatch` schemas.
+    - `constants.ts`: `CONTAINER_COLORS`, `CONTAINER_ICONS`, `containerPartition()`.
     - `url.ts`: `omniboxTarget()`, `isUrlLike()`.
     - `tree-display.ts`: `displayTabs()` -> flat rows + `depth`.
     - `match-patterns.ts`: `originsCoveredBy()` -> Chrome match-pattern subsumption.

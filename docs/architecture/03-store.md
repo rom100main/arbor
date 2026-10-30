@@ -23,7 +23,7 @@
 - **Role**: factory. Builds live `StoreService` from `Ref<DomainState>` + commit hook.
 - **Internals**:
     - `ref = Ref.make(initial)`.
-    - `commit(op, pick)`: `Ref.modify(ref, op)` atomically. A thrown `DomainError` becomes the effect's failure and leaves the ref unchanged. An op returning the same state is a no-op. Otherwise -> `onCommit(next)` -> `return pick(next)`; an `onCommit` failure is logged, never a failed mutation.
+    - `commit(op, pick)`: `Ref.modify(ref, op)` atomically. A thrown `DomainError` (any member of the union in `shared/errors.ts`) becomes the effect's failure and leaves the ref unchanged. An op returning the same state is a no-op. Otherwise -> `onCommit(next)` -> `return pick(next)`; an `onCommit` failure is logged, never a failed mutation.
     - `runVoid(op) = commit(op, () => undefined)`.
 - **Law**: `state_{t+1} = op(state_t)` atomically. Every effective mutation triggers exactly 1 `onCommit`; failures and no-ops trigger none. No silent writes.
 
@@ -100,4 +100,4 @@ flowchart LR
 
 1. Add mutation in 4 steps: pure op in `state/*.ts` -> method on `StoreService` -> wiring in `makeStoreLayer` -> `handle()` in `handlers.ts` + `api` in preload.
 2. Keep ops pure: `(state) -> state`. Side effects (`loadURL`, `send`) live in `events.ts` / `handlers.ts` / `onCommit` only.
-3. Convert errors at boundary: `DomainError{message} -> throw new Error(message)` via `toPromise()`. Renderer receives rejected promise with `message: string`.
+3. Convert errors at boundary: `DomainError -> throw new Error(error.message)` via `runRequest()`. Renderer receives rejected promise with `message: string`.
