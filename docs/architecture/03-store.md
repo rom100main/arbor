@@ -1,7 +1,7 @@
 # Problem
 
 - **Why central store**: views, sessions, menus, popups all derive from one truth. Renderer copies would desync: `views ≠ snapshot` on every race.
-- **Decision**: main owns `DomainState`. Renderer holds `BrowserSnapshot_t`, read-only projection. See `docs/adr/0003-main-process-owns-state.md`.
+- **Decision**: main owns `DomainState`. Renderer holds `BrowserSnapshot_t`, read-only projection.
 
 # Components
 
@@ -18,14 +18,14 @@
 - **Ops**: `snapshot`, `createContainer`, `switchContainer`, `renameContainer`, `setContainerColor`, `setContainerIcon`, `reorderContainer`, `createTab`, `createChildTab`, `selectTab`, `setCollapsed`, `renameTab`, `closeTab`, `reopenTab`, `moveTab`, `moveToContainer`, `updateTabMeta`.
 - **Why interface + service key**: Effect dependency injection. `BrowserStore = Context.Service<BrowserStore, StoreService>()("arbor.BrowserStore")`. Tests swap implementations. Handlers depend on interface, not constructor.
 
-## 3. `makeStoreLayer(onCommit)`
+## 3. `makeStoreLayer(initial, onCommit)`
 
 - **Role**: factory. Builds live `StoreService` from `Ref<DomainState>` + commit hook.
 - **Internals**:
-    - `ref = Ref.make(initialState())`.
-    - `run(op, pick)`: `get(ref)` -> `try(op)` -> `set(ref, next)` -> `onCommit(next)` -> `return pick(next)`.
-    - `runVoid(op) = run(op, () => undefined)`.
-- **Law**: `state_{t+1} = op(state_t)` atomically. Every mutation triggers exactly 1 `onCommit`. No silent writes.
+    - `ref = Ref.make(initial)`.
+    - `commit(op, pick)`: `Ref.modify(ref, op)` atomically. A thrown `DomainError` becomes the effect's failure and leaves the ref unchanged. An op returning the same state is a no-op. Otherwise -> `onCommit(next)` -> `return pick(next)`; an `onCommit` failure is logged, never a failed mutation.
+    - `runVoid(op) = commit(op, () => undefined)`.
+- **Law**: `state_{t+1} = op(state_t)` atomically. Every effective mutation triggers exactly 1 `onCommit`; failures and no-ops trigger none. No silent writes.
 
 # Flow
 
@@ -39,7 +39,7 @@ flowchart LR
     end
     subgraph Lay["makeStoreLayer"]
         REF["Ref<DomainState>"]
-        RUN["run / runVoid"]
+        RUN["commit / runVoid"]
     end
     SVC["StoreService"]
     COM["onCommit"]
@@ -67,7 +67,7 @@ sequenceDiagram
     participant F as Ref + onCommit
     R->>H: invoke arbor:tab:close(tabId)
     H->>S: closeTab(tabId): Effect
-    S->>F: run(op): get -> op -> set -> onCommit
+    S->>F: commit(op): modify -> onCommit
     F-->>H: void
     F->>R: send arbor:state(snapshot_{t+1})
     H-->>R: resolve
