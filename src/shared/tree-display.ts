@@ -1,8 +1,10 @@
+// Should be Effect free
+
 import type { ContainerId, DisplayTab, TabId, TabNode } from "./protocol"
 
 /** Depth-first display order of a container's tree, pruning collapsed subtrees. */
-export const displayTabs = (tabs: TabNode[], containerId: ContainerId): DisplayTab[] => {
-    const childrenByParent = new Map<string | null, TabNode[]>()
+export const displayTabs = (tabs: readonly TabNode[], containerId: ContainerId): DisplayTab[] => {
+    const childrenByParent = new Map<TabId | null, TabNode[]>()
     for (const tab of tabs) {
         if (tab.containerId !== containerId) continue
         const key = tab.parentId ?? null
@@ -15,7 +17,7 @@ export const displayTabs = (tabs: TabNode[], containerId: ContainerId): DisplayT
     }
 
     const out: DisplayTab[] = []
-    const walk = (parentId: string | null, depth: number): void => {
+    const walk = (parentId: TabId | null, depth: number): void => {
         for (const tab of childrenByParent.get(parentId) ?? []) {
             out.push({ ...tab, depth })
             if (!tab.collapsed) walk(tab.id, depth + 1)

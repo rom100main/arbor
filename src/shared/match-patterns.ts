@@ -6,6 +6,8 @@
  * This is that broader-covers-narrower check.
  */
 
+// Should be Effect free
+
 export interface MatchPattern {
     scheme: string
     host: string

@@ -1,3 +1,5 @@
+// Should be Effect free
+
 import { INTERNAL_SCHEME, SETTINGS_PATH } from "./settings"
 
 /**

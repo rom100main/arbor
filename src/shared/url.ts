@@ -1,3 +1,5 @@
+// Should be Effect free
+
 import { DEFAULT_SEARCH_TEMPLATE, searchUrl } from "./settings"
 
 const URL_PATTERN = /^[a-z][a-z0-9+.-]*:/i
