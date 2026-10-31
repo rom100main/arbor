@@ -40,7 +40,6 @@ export const toPersisted = (state: DomainState): PersistedState => ({
     ),
 })
 
-
 export const PersistedContainer = Schema.Struct({
     ...ContainerMeta.fields,
     color: orDefault(ContainerMeta.fields.color, () => "#3b82f6"),

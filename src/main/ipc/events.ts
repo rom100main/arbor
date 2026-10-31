@@ -43,7 +43,7 @@ export interface HostRuntime {
     win: BrowserWindow | null
     store: StoreService
     settings: SettingsStore
-    latest: DomainState
+    readonly getState: () => DomainState
     previousActiveTab: TabId | null
     lastOmniboxQuery: string
     rebuildMenu: () => void
@@ -61,21 +61,20 @@ export const registerSettingsBroadcast = (settings: SettingsStore): void => {
     })
 }
 
-/** State commit -> view sync + broadcast, extracted from index.ts onCommit. */
-export const makeOnCommit =
-    (rt: HostRuntime) =>
-    (next: DomainState): void => {
-        const previous = rt.latest
-        rt.latest = next
+export const makeWindowSync = (rt: HostRuntime): ((next: DomainState) => void) => {
+    let previous: DomainState | null = null
+    return (next) => {
+        const before = previous ?? next
+        previous = next
 
-        for (const tabId of previous.tabs.keys()) {
+        for (const tabId of before.tabs.keys()) {
             if (!next.tabs.has(tabId)) destroyView(tabId)
         }
         // Cross-container moves must reload under the target container's session,
         // and so must a tab that navigated to or from an arbor:// internal page.
         for (const [tabId, tab] of next.tabs) {
-            const before = previous.tabs.get(tabId)
-            if (before && before.containerId !== tab.containerId) destroyView(tabId)
+            const was = before.tabs.get(tabId)
+            if (was && was.containerId !== tab.containerId) destroyView(tabId)
             else if (sessionMismatch(tabId, tab.containerId, tab.url)) destroyView(tabId)
         }
 
@@ -84,11 +83,7 @@ export const makeOnCommit =
         if (activeTabId !== null && rt.win !== null) {
             const tab = next.tabs.get(activeTabId)
             if (tab && (activeTabId !== rt.previousActiveTab || !viewForTab(activeTabId))) {
-                const view = ensureView(
-                    { store: rt.store, getState: () => rt.latest },
-                    tab.id,
-                    tab.url,
-                )
+                const view = ensureView({ store: rt.store, getState: rt.getState }, tab.id, tab.url)
                 showTab(rt.win, tab.id)
                 attachExtensionTab(rt.win, view.webContents)
             }
@@ -100,8 +95,8 @@ export const makeOnCommit =
             window.webContents.send("arbor:state", snapshot)
         }
         shellWebContents()?.send("arbor:state", snapshot)
-        rt.rebuildMenu()
     }
+}
 
 export const makeOmniboxActivator =
     (rt: HostRuntime) =>
@@ -110,14 +105,14 @@ export const makeOmniboxActivator =
         if (payload.kind === "tab") {
             void runBackground(store.selectTab(payload.tabId))
         } else if (payload.query.trim().length > 0) {
-            const snapshot = toSnapshot(rt.latest)
+            const snapshot = toSnapshot(rt.getState())
             const tabId = snapshot.activeTabId
             if (tabId !== null && viewForTab(tabId)) {
                 const target = omniboxTarget(
                     payload.query,
                     rt.settings.get().searchTemplate ?? DEFAULT_SEARCH_TEMPLATE,
                 )
-                await navigateTab({ store, getState: () => rt.latest }, tabId, target)
+                await navigateTab({ store, getState: rt.getState }, tabId, target)
             }
         }
         hideOmniboxPopup()

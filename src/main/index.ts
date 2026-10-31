@@ -1,6 +1,6 @@
 import path from "node:path"
 
-import { Effect, Option, Schema } from "effect"
+import { Effect, Fiber, Option, Schema, Stream } from "effect"
 import { BrowserWindow, app } from "electron"
 
 import { runRequest } from "./exec"
@@ -8,7 +8,7 @@ import { initExtensions, markMainWindowOpened } from "./extension/loader"
 import { createExtensionStorage, registerExtensionStorageIpc } from "./extension/storage"
 import {
     makeOmniboxActivator,
-    makeOnCommit,
+    makeWindowSync,
     registerOverlayEvents,
     registerSettingsBroadcast,
     type HostRuntime,
@@ -18,7 +18,7 @@ import { createStatePersistence } from "./persistence"
 import { AppRuntime } from "./runtime"
 import { createSettingsStore } from "./settings"
 import { initialState, type DomainState } from "./state/state"
-import { BrowserStore, makeStoreLayer, type StoreService } from "./state/store"
+import { BrowserStore, type StoreService } from "./state/store"
 import { installMenu } from "./windows/app-menu"
 import { registerInternalPages, registerInternalScheme } from "./windows/internal-pages"
 import { attachWindowEvents, createWindow } from "./windows/main-window"
@@ -96,34 +96,38 @@ const bootApplication = async (): Promise<Application> => {
     extStorage.load()
     registerExtensionStorageIpc(extStorage)
 
-    // Mutable ref so the store's onCommit can call the real handler once rt exists.
-    let commitHandler: (next: DomainState) => void = () => undefined
-
     const store: StoreService = AppRuntime.runSync(
         Effect.gen(function* () {
             return yield* BrowserStore
-        }).pipe(
-            Effect.provide(
-                makeStoreLayer(initial, (next) => {
-                    commitHandler(next)
-                    persistence.schedule(next)
-                }),
-            ),
-        ),
+        }).pipe(Effect.provide(BrowserStore.layer(initial))),
     )
 
     const rt: HostRuntime = {
         win: null,
         store,
         settings,
-        latest: initial,
+        getState: () => AppRuntime.runSync(store.state),
         previousActiveTab: null,
         lastOmniboxQuery: "",
         rebuildMenu: () => undefined,
     }
-    commitHandler = makeOnCommit(rt)
 
-    registerIpc(store, settings, () => rt.latest)
+    // Keep app in sync with the store: JSON files and menu app
+    AppRuntime.runFork(
+        store.changes.pipe(
+            Stream.drop(1), // first emission is the state just loaded, so skip it
+            Stream.runForEach((next) =>
+                Effect.sync(() => {
+                    persistence.schedule(next)
+                    rt.rebuildMenu()
+                }).pipe(
+                    Effect.catchCause((cause) => Effect.logError("State observer failed", cause)),
+                ),
+            ),
+        ),
+    )
+
+    registerIpc(store, settings, rt.getState)
 
     // arbor:// internal pages: their own session, so only they carry the preload bridge.
     registerInternalPages()
@@ -134,7 +138,7 @@ const bootApplication = async (): Promise<Application> => {
         settings,
         getWindow: () => rt.win,
         viewForTab,
-        ensureView: (tabId, url) => ensureView({ store, getState: () => rt.latest }, tabId, url),
+        ensureView: (tabId, url) => ensureView({ store, getState: rt.getState }, tabId, url),
         tabIdForWebContents,
     })
 
@@ -148,12 +152,7 @@ const bootApplication = async (): Promise<Application> => {
     }
 
     const ensureSeedTab = async (): Promise<void> => {
-        if (rt.latest.containers.length > 0) {
-            commitHandler(rt.latest)
-        } else {
-            // The app always starts with one container holding one empty tab.
-            await runRequest(store.createContainer())
-        }
+        if (rt.getState().containers.length === 0) await runRequest(store.createContainer())
     }
 
     return { store, rt, flush, ensureSeedTab }
@@ -164,7 +163,7 @@ const openMainWindow = async (appInstance: Application): Promise<void> => {
 
     rt.rebuildMenu = installMenu({
         store,
-        getState: () => rt.latest,
+        getState: rt.getState,
         focusOmnibox: () => {
             focusShell()
             shellWebContents()?.send("arbor:focus-omnibox")
@@ -182,6 +181,19 @@ const openMainWindow = async (appInstance: Application): Promise<void> => {
         }
         destroyAllViews()
     })
+
+    // Keep this window in sync with the store: tab views and renderers
+    const sync = makeWindowSync(rt)
+    const syncFiber = AppRuntime.runFork(
+        store.changes.pipe(
+            Stream.runForEach((next) =>
+                Effect.sync(() => sync(next)).pipe(
+                    Effect.catchCause((cause) => Effect.logError("Window sync failed", cause)),
+                ),
+            ),
+        ),
+    )
+    win.on("closed", () => AppRuntime.runFork(Fiber.interrupt(syncFiber)))
 
     // Showing or hiding a bar changes how much of the window the page gets.
     const stopRelayout = rt.settings.subscribe(() => layoutViews(win))

@@ -1,3 +1,5 @@
+import { Result } from "effect"
+
 import { UnknownContainer, UnknownTab } from "../../shared/errors"
 import type {
     BrowserSnapshot,
@@ -23,16 +25,6 @@ export interface DomainState {
 }
 
 export type { DomainError } from "../../shared/errors"
-
-/** Explicit result of a transition that produces a value alongside the new state. */
-export interface TransitionResult<A> {
-    readonly state: DomainState
-    readonly value: A
-}
-
-export const ok = (state: DomainState): TransitionResult<void> => ({ state, value: undefined })
-
-export const okWith = <A>(state: DomainState, value: A): TransitionResult<A> => ({ state, value })
 
 export const initialState = (): DomainState => ({
     containers: [],
@@ -64,11 +56,24 @@ export const withTabs = (state: DomainState, tabs: Map<TabId, TabNode>): DomainS
     tabs,
 })
 
-export const containerOf = (state: DomainState, containerId: ContainerId): ContainerMeta => {
-    const container = state.containers.find((c) => c.id === containerId)
-    if (!container) throw new UnknownContainer({ containerId: containerId })
-    return container
+export const tabOf = (state: DomainState, tabId: TabId): Result.Result<TabNode, UnknownTab> => {
+    const tab = state.tabs.get(tabId)
+    return tab ? Result.succeed(tab) : Result.fail(new UnknownTab({ tabId }))
 }
+
+export const containerOf = (
+    state: DomainState,
+    containerId: ContainerId,
+): Result.Result<ContainerMeta, UnknownContainer> => {
+    const container = state.containers.find((c) => c.id === containerId)
+    return container
+        ? Result.succeed(container)
+        : Result.fail(new UnknownContainer({ containerId }))
+}
+
+/** `state` with one tab replaced or added. */
+export const putTab = (state: DomainState, tab: TabNode): DomainState =>
+    withTabs(state, new Map(state.tabs).set(tab.id, tab))
 
 export const removeContainer = (state: DomainState, containerId: ContainerId): DomainState => {
     const remaining = state.containers.filter((c) => c.id !== containerId)
@@ -78,14 +83,14 @@ export const removeContainer = (state: DomainState, containerId: ContainerId): D
 export const tabCount = (state: DomainState, containerId: ContainerId): number =>
     [...state.tabs.values()].filter((t) => t.containerId === containerId).length
 
-export const touch = (tab: TabNode, now: number = Date.now()): TabNode => ({
+/** Update `lastActiveAt` */
+export const touch = (tab: TabNode, now: number): TabNode => ({
     ...tab,
     lastActiveAt: now,
 })
 
-export const descendantsOf = (state: DomainState, tabId: TabId): TabNode[] => {
-    const root = state.tabs.get(tabId)
-    if (!root) throw new UnknownTab({ tabId: tabId })
+/** Every tab below `root`, parents before children. */
+export const descendantsOf = (state: DomainState, root: TabNode): TabNode[] => {
     const result: TabNode[] = []
     const walk = (parentId: TabId): void => {
         for (const child of childrenOf(state, root.containerId, parentId)) {
@@ -93,15 +98,14 @@ export const descendantsOf = (state: DomainState, tabId: TabId): TabNode[] => {
             walk(child.id)
         }
     }
-    walk(tabId)
+    walk(root.id)
     return result
 }
 
-export const subtreeOf = (state: DomainState, tabId: TabId): TabNode[] => {
-    const root = state.tabs.get(tabId)
-    if (!root) throw new UnknownTab({ tabId: tabId })
-    return [root, ...descendantsOf(state, tabId)]
-}
+export const subtreeOf = (state: DomainState, root: TabNode): TabNode[] => [
+    root,
+    ...descendantsOf(state, root),
+]
 
 // --- derived
 

@@ -177,13 +177,7 @@ export const destroyAllViews = (): void => {
     for (const tabId of [...views.keys()]) destroyView(tabId)
 }
 
-/**
- * Record a tab's new URL, then load it.
- *
- * Crossing the `arbor://` boundary changes which session the tab needs,
- * so there the URL is only recorded: `onCommit` then sees the mismatch,
- * rebuilds the view on the right session, and loads it.
- */
+/** Record a tab's new URL, then load it. */
 export const navigateTab = async (deps: ViewDeps, tabId: TabId, url: string): Promise<void> => {
     const tab = deps.getState().tabs.get(tabId)
     if (!tab) return

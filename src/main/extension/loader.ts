@@ -370,8 +370,6 @@ export const setupSessionExtensions = (ses: Session): void => {
                 const tabId = await AppRuntime.runPromise(d.store.createTab(url))
                 const win = d.getWindow()
                 let view = win ? d.viewForTab(tabId) : undefined
-                // onCommit creates the active tab's view; if the commit path was skipped
-                // (e.g. popup opened a tab before the window was attached), force it.
                 if (win && !view) view = d.ensureView(tabId, url)
                 if (!win || !view) {
                     throw new Error(`No view created for tab: ${tabId}`)

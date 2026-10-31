@@ -1,6 +1,5 @@
-import { Context, Effect, Layer, Ref } from "effect"
+import { Clock, Context, Effect, Layer, Option, Result, SubscriptionRef, type Stream } from "effect"
 
-import { isDomainError } from "../../shared/errors"
 import type {
     BrowserSnapshot,
     ContainerIcon,
@@ -16,212 +15,177 @@ import {
     setContainerColor,
     setContainerIcon,
     switchContainer,
-    type CreateContainerOptions,
 } from "./containers"
 import { clearExtensionConsent, setExtensionConsent } from "./extension-state"
 import { moveTab, moveToContainer, type MoveTabOptions } from "./moves"
-import { snapshot, type DomainError, type DomainState, type TransitionResult } from "./state"
+import { snapshot, type DomainState } from "./state"
 import {
     createChildTab,
     createTab,
     renameTab,
     selectTab,
     setCollapsed,
-    type CreateChildTabOptions,
-    type CreateTabOptions,
+    updateTabMeta,
+    type TabMeta,
 } from "./tabs"
 
+/** The precise failure union of an op, read off its `Result`. */
+type OpError<Op> = Op extends (...args: never[]) => Result.Result<unknown, infer E> ? E : never
+
 export interface StoreService {
+    readonly state: Effect.Effect<DomainState>
+    /** The current state on subscribe, then every effective change, once each. */
+    readonly changes: Stream.Stream<DomainState>
     readonly snapshot: Effect.Effect<BrowserSnapshot>
     readonly createContainer: (
         name?: string,
         color?: string,
-    ) => Effect.Effect<ContainerId, DomainError>
-    readonly switchContainer: (containerId: ContainerId) => Effect.Effect<void, DomainError>
+    ) => Effect.Effect<ContainerId, OpError<typeof createContainer>>
+    readonly switchContainer: (
+        containerId: ContainerId,
+    ) => Effect.Effect<void, OpError<typeof switchContainer>>
     readonly renameContainer: (
         containerId: ContainerId,
         name: string,
-    ) => Effect.Effect<void, DomainError>
+    ) => Effect.Effect<void, OpError<typeof renameContainer>>
     readonly setContainerColor: (
         containerId: ContainerId,
         color: string,
-    ) => Effect.Effect<void, DomainError>
+    ) => Effect.Effect<void, OpError<typeof setContainerColor>>
     readonly setContainerIcon: (
         containerId: ContainerId,
         icon: ContainerIcon,
-    ) => Effect.Effect<void, DomainError>
+    ) => Effect.Effect<void, OpError<typeof setContainerIcon>>
     readonly reorderContainer: (
         containerId: ContainerId,
         toIndex: number,
-    ) => Effect.Effect<void, DomainError>
-    readonly createTab: (url?: string) => Effect.Effect<TabId, DomainError>
+    ) => Effect.Effect<void, OpError<typeof reorderContainer>>
+    readonly createTab: (url?: string) => Effect.Effect<TabId, OpError<typeof createTab>>
     readonly createChildTab: (
         parentTabId: TabId,
         url?: string,
         background?: boolean,
-    ) => Effect.Effect<TabId, DomainError>
-    readonly selectTab: (tabId: TabId) => Effect.Effect<void, DomainError>
-    readonly setCollapsed: (tabId: TabId, collapsed: boolean) => Effect.Effect<void, DomainError>
-    readonly renameTab: (tabId: TabId, label: string | null) => Effect.Effect<void, DomainError>
-    readonly closeTab: (tabId: TabId) => Effect.Effect<void, DomainError>
-    readonly reopenTab: () => Effect.Effect<void, DomainError>
-    readonly moveTab: (options: MoveTabOptions) => Effect.Effect<void, DomainError>
+    ) => Effect.Effect<TabId, OpError<typeof createChildTab>>
+    readonly selectTab: (tabId: TabId) => Effect.Effect<void, OpError<typeof selectTab>>
+    readonly setCollapsed: (
+        tabId: TabId,
+        collapsed: boolean,
+    ) => Effect.Effect<void, OpError<typeof setCollapsed>>
+    readonly renameTab: (
+        tabId: TabId,
+        label: string | null,
+    ) => Effect.Effect<void, OpError<typeof renameTab>>
+    readonly closeTab: (tabId: TabId) => Effect.Effect<void, OpError<typeof closeTab>>
+    readonly reopenTab: () => Effect.Effect<void, OpError<typeof reopenTab>>
+    readonly moveTab: (options: MoveTabOptions) => Effect.Effect<void, OpError<typeof moveTab>>
     readonly moveToContainer: (
         tabId: TabId,
         containerId: ContainerId,
-    ) => Effect.Effect<void, DomainError>
-    readonly updateTabMeta: (
-        tabId: TabId,
-        meta: { title?: string; url?: string; favicon?: string | null },
-    ) => Effect.Effect<void, DomainError>
+    ) => Effect.Effect<void, OpError<typeof moveToContainer>>
+    readonly updateTabMeta: (tabId: TabId, meta: TabMeta) => Effect.Effect<void>
     readonly setExtensionConsent: (
         extensionId: string,
         grant: ExtensionGrant,
-    ) => Effect.Effect<void, DomainError>
-    readonly clearExtensionConsent: (extensionId: string) => Effect.Effect<void, DomainError>
+    ) => Effect.Effect<void>
+    readonly clearExtensionConsent: (extensionId: string) => Effect.Effect<void>
     /** Consent ledger (install consent + runtime grants); deliberately not in the snapshot. */
     readonly extensionConsent: Effect.Effect<Record<string, ExtensionGrant>>
 }
 
+const make = (initial: DomainState) =>
+    Effect.gen(function* () {
+        const ref = yield* SubscriptionRef.make(initial)
+
+        /** Atomic: a failure or a no-op leaves the ref untouched and publishes nothing. */
+        const commit = <E>(op: (state: DomainState) => Result.Result<DomainState, E>) =>
+            SubscriptionRef.modifySome(ref, (state) => {
+                const result = op(state)
+                const next =
+                    Result.isSuccess(result) && result.success !== state
+                        ? Option.some(result.success)
+                        : Option.none()
+                return [result, next] as const
+            }).pipe(Effect.flatMap(Effect.fromResult), Effect.asVoid)
+
+        return BrowserStore.of({
+            state: SubscriptionRef.get(ref),
+            changes: SubscriptionRef.changes(ref),
+            snapshot: Effect.map(SubscriptionRef.get(ref), snapshot),
+            createContainer: Effect.fn("BrowserStore.createContainer")(function* (
+                name?: string,
+                color?: string,
+            ) {
+                const id: ContainerId = `container-${crypto.randomUUID()}`
+                const tabId: TabId = `tab-${crypto.randomUUID()}`
+                const now = yield* Clock.currentTimeMillis
+                yield* commit((state) => createContainer(state, { id, tabId, now, name, color }))
+                return id
+            }),
+            switchContainer: Effect.fn("BrowserStore.switchContainer")(function* (
+                containerId: ContainerId,
+            ) {
+                const now = yield* Clock.currentTimeMillis
+                yield* commit((state) => switchContainer(state, containerId, now))
+            }),
+            renameContainer: (containerId, name) =>
+                commit((state) => renameContainer(state, containerId, name)),
+            setContainerColor: (containerId, color) =>
+                commit((state) => setContainerColor(state, containerId, color)),
+            setContainerIcon: (containerId, icon) =>
+                commit((state) => setContainerIcon(state, containerId, icon)),
+            reorderContainer: (containerId, toIndex) =>
+                commit((state) => reorderContainer(state, containerId, toIndex)),
+            createTab: Effect.fn("BrowserStore.createTab")(function* (url?: string) {
+                const id: TabId = `tab-${crypto.randomUUID()}`
+                const now = yield* Clock.currentTimeMillis
+                yield* commit((state) => createTab(state, { id, now, url }))
+                return id
+            }),
+            createChildTab: Effect.fn("BrowserStore.createChildTab")(function* (
+                parentTabId: TabId,
+                url?: string,
+                background?: boolean,
+            ) {
+                const id: TabId = `tab-${crypto.randomUUID()}`
+                const now = yield* Clock.currentTimeMillis
+                yield* commit((state) =>
+                    createChildTab(state, parentTabId, { id, now, url, background }),
+                )
+                return id
+            }),
+            selectTab: Effect.fn("BrowserStore.selectTab")(function* (tabId: TabId) {
+                const now = yield* Clock.currentTimeMillis
+                yield* commit((state) => selectTab(state, tabId, now))
+            }),
+            setCollapsed: (tabId, collapsed) =>
+                commit((state) => setCollapsed(state, tabId, collapsed)),
+            renameTab: (tabId, label) => commit((state) => renameTab(state, tabId, label)),
+            closeTab: Effect.fn("BrowserStore.closeTab")(function* (tabId: TabId) {
+                const now = yield* Clock.currentTimeMillis
+                yield* commit((state) => closeTab(state, tabId, now))
+            }),
+            reopenTab: Effect.fn("BrowserStore.reopenTab")(function* () {
+                const now = yield* Clock.currentTimeMillis
+                yield* commit((state) => reopenTab(state, now))
+            }),
+            moveTab: (options) => commit((state) => moveTab(state, options)),
+            moveToContainer: (tabId, containerId) =>
+                commit((state) => moveToContainer(state, tabId, containerId)),
+            updateTabMeta: (tabId, meta) => commit((state) => updateTabMeta(state, tabId, meta)),
+            setExtensionConsent: (extensionId, grant) =>
+                commit((state) => setExtensionConsent(state, extensionId, grant)),
+            clearExtensionConsent: (extensionId) =>
+                commit((state) => clearExtensionConsent(state, extensionId)),
+            extensionConsent: Effect.map(
+                SubscriptionRef.get(ref),
+                (state) => state.extensionConsent,
+            ),
+        })
+    })
+
 export class BrowserStore extends Context.Service<BrowserStore, StoreService>()(
     "arbor.BrowserStore",
-) {}
-
-export const makeStoreLayer = (
-    initial: DomainState,
-    onCommit: (state: DomainState) => void,
-): Layer.Layer<BrowserStore> =>
-    Layer.effect(
-        BrowserStore,
-        Effect.gen(function* () {
-            const ref = yield* Ref.make(initial)
-
-            /** Atomic synchronous transition: domain failures leave state unchanged. */
-            const commit = <A>(
-                op: (state: DomainState) => DomainState | TransitionResult<A>,
-                pick: (next: DomainState) => A,
-            ): Effect.Effect<A, DomainError> =>
-                Effect.gen(function* () {
-                    const { value, committed } = yield* Ref.modify(
-                        ref,
-                        (
-                            state,
-                        ): readonly [{ value: A; committed: DomainState | null }, DomainState] => {
-                            const result = op(state)
-                            if (isTransition(result)) {
-                                return [
-                                    { value: result.value, committed: result.state },
-                                    result.state,
-                                ]
-                            }
-                            if (result === state) {
-                                return [{ value: pick(state), committed: null }, state]
-                            }
-                            return [{ value: pick(result), committed: result }, result]
-                        },
-                    ).pipe(
-                        Effect.catchDefect((defect) =>
-                            isDomainError(defect) ? Effect.fail(defect) : Effect.die(defect),
-                        ),
-                    )
-                    if (committed !== null) {
-                        // Observe post-commit failures without pretending the mutation rolled back.
-                        yield* Effect.sync(() => onCommit(committed)).pipe(
-                            Effect.catchCause((cause) =>
-                                Effect.logError("Post-commit observer failed", cause),
-                            ),
-                        )
-                    }
-                    return value
-                })
-
-            const runVoid = (op: (state: DomainState) => DomainState) =>
-                commit<void>(op, () => undefined)
-
-            const now = (): number => Date.now()
-            const tabId = (): TabId => `tab-${crypto.randomUUID()}`
-            const containerId = (): ContainerId => `container-${crypto.randomUUID()}`
-
-            const service: StoreService = {
-                snapshot: Effect.map(Ref.get(ref), snapshot),
-                createContainer: (name, color) => {
-                    const id = containerId()
-                    const ts = now()
-                    return commit<ContainerId>(
-                        (state) =>
-                            createContainer(state, {
-                                id,
-                                now: ts,
-                                name,
-                                color,
-                            } satisfies CreateContainerOptions),
-                        () => id,
-                    )
-                },
-                switchContainer: (id) => runVoid((state) => switchContainer(state, id, now())),
-                renameContainer: (id, name) => runVoid((state) => renameContainer(state, id, name)),
-                setContainerColor: (id, color) =>
-                    runVoid((state) => setContainerColor(state, id, color)),
-                setContainerIcon: (id, icon) =>
-                    runVoid((state) => setContainerIcon(state, id, icon)),
-                reorderContainer: (id, toIndex) =>
-                    runVoid((state) => reorderContainer(state, id, toIndex)),
-                createTab: (url) => {
-                    const id = tabId()
-                    const ts = now()
-                    return commit<TabId>(
-                        (state) =>
-                            createTab(state, { id, now: ts, url } satisfies CreateTabOptions),
-                        () => id,
-                    )
-                },
-                createChildTab: (parentTabId, url, background) => {
-                    const id = tabId()
-                    const ts = now()
-                    return commit<TabId>(
-                        (state) =>
-                            createChildTab(state, parentTabId, {
-                                id,
-                                now: ts,
-                                url,
-                                background,
-                            } satisfies CreateChildTabOptions),
-                        () => id,
-                    )
-                },
-                selectTab: (id) => runVoid((state) => selectTab(state, id, now())),
-                setCollapsed: (id, collapsed) =>
-                    runVoid((state) => setCollapsed(state, id, collapsed)),
-                renameTab: (id, label) => runVoid((state) => renameTab(state, id, label)),
-                closeTab: (id) => runVoid((state) => closeTab(state, id, now())),
-                reopenTab: () => runVoid((state) => reopenTab(state, now())),
-                moveTab: (options) => runVoid((state) => moveTab(state, options)),
-                moveToContainer: (tab, container) =>
-                    runVoid((state) => moveToContainer(state, tab, container)),
-                updateTabMeta: (id, meta) =>
-                    runVoid((state) => {
-                        const tab = state.tabs.get(id)
-                        if (!tab) return state
-                        const title = meta.title ?? tab.title
-                        const url = meta.url ?? tab.url
-                        const favicon = meta.favicon !== undefined ? meta.favicon : tab.favicon
-                        if (title === tab.title && url === tab.url && favicon === tab.favicon) {
-                            return state
-                        }
-                        const next: DomainState = { ...state, tabs: new Map(state.tabs) }
-                        next.tabs.set(id, { ...tab, title, url, favicon })
-                        return next
-                    }),
-                setExtensionConsent: (extensionId, grant) =>
-                    runVoid((state) => setExtensionConsent(state, extensionId, grant)),
-                clearExtensionConsent: (extensionId) =>
-                    runVoid((state) => clearExtensionConsent(state, extensionId)),
-                extensionConsent: Effect.map(Ref.get(ref), (state) => state.extensionConsent),
-            }
-
-            return service
-        }),
-    )
-
-const isTransition = <A>(value: DomainState | TransitionResult<A>): value is TransitionResult<A> =>
-    "state" in value && "value" in value
+) {
+    static readonly layer = (initial: DomainState): Layer.Layer<BrowserStore> =>
+        Layer.effect(BrowserStore, make(initial))
+}
