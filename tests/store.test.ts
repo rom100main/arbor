@@ -6,7 +6,7 @@ import { createContainer } from "../src/main/state/containers"
 import { initialState, type DomainState } from "../src/main/state/state"
 import { BrowserStore, type StoreService } from "../src/main/state/store"
 import { LastTab } from "../src/shared/errors"
-import { runTest } from "./support/effect"
+import { runTest, settle } from "./support/effect"
 
 const makeStore = (initial: DomainState = initialState()) =>
     Effect.gen(function* () {
@@ -28,9 +28,6 @@ const collectChanges = (store: StoreService): Effect.Effect<DomainState[], never
         yield* Deferred.await(subscribed)
         return changes
     })
-
-/** Let consumer fibers catch up with what was just published. */
-const settle = Effect.repeat(Effect.yieldNow, { times: 10 })
 
 const scopedTest = <A, E>(effect: Effect.Effect<A, E, Scope.Scope | TestClock.TestClock>) =>
     runTest(Effect.scoped(effect))

@@ -18,3 +18,6 @@ export const captureLogs = (): {
     ])
     return { entries, layer }
 }
+
+/** Let forked consumer fibers catch up with what was just published. */
+export const settle = Effect.repeat(Effect.yieldNow, { times: 10 })

@@ -1,14 +1,40 @@
-import { mkdtempSync, readFileSync } from "node:fs"
-import { tmpdir } from "node:os"
-import path from "node:path"
-
+import { Context, Deferred, Effect, Exit, Layer, Scope, Stream } from "effect"
 import { describe, expect, it } from "vite-plus/test"
 
-import { createSettingsStore, fromPersistedSettings, SettingsError } from "../src/main/settings"
+import { fromPersistedSettings, SettingsRejected, SettingsStore } from "../src/main/settings"
 import { DEFAULT_SETTINGS } from "../src/shared/settings"
+import { runTest, settle } from "./support/effect"
+import { memoryJsonFileLayer } from "./support/json-file"
 
-const tempFile = (): string =>
-    path.join(mkdtempSync(path.join(tmpdir(), "arbor-settings-")), "settings.json")
+const FILE = "/data/settings.json"
+
+/** A settings store over `files`; closing `scope` writes what is pending, as quitting does. */
+const open = (files: Map<string, string>) =>
+    Effect.gen(function* () {
+        const scope = yield* Scope.make()
+        const context = yield* Layer.buildWithScope(
+            SettingsStore.layer(FILE).pipe(Layer.provide(memoryJsonFileLayer(files))),
+            scope,
+        )
+        return { store: Context.get(context, SettingsStore), scope }
+    })
+
+const onDisk = (files: Map<string, string>): unknown => JSON.parse(files.get(FILE)!)
+
+/** Every change published after the call. */
+const collect = <A>(changes: Stream.Stream<A>) =>
+    Effect.gen(function* () {
+        const seen: A[] = []
+        const subscribed = yield* Deferred.make<void>()
+        const fiber = yield* changes.pipe(
+            Stream.tap(() => Deferred.succeed(subscribed, undefined)),
+            Stream.drop(1),
+            Stream.runForEach((value) => Effect.sync(() => seen.push(value))),
+            Effect.forkChild,
+        )
+        yield* Deferred.await(subscribed)
+        return { seen, fiber }
+    })
 
 describe("fromPersistedSettings", () => {
     it("returns null for a payload that is not an object", () => {
@@ -50,108 +76,134 @@ describe("fromPersistedSettings", () => {
 })
 
 describe("settings store", () => {
-    it("starts from defaults when there is no file", () => {
-        const store = createSettingsStore(tempFile())
-        expect(store.get()).toEqual(DEFAULT_SETTINGS)
-    })
+    it("starts from defaults when there is no file", () =>
+        runTest(
+            Effect.gen(function* () {
+                const { store } = yield* open(new Map())
+                expect(yield* store.get).toEqual(DEFAULT_SETTINGS)
+            }),
+        ))
 
-    it("loads what a previous run wrote", () => {
-        const filePath = tempFile()
-        const store = createSettingsStore(filePath)
-        store.set({ theme: "dark", searchTemplate: "https://kagi.com/search?q=%s" })
-        store.flush()
-        expect(fromPersistedSettings(JSON.parse(readFileSync(filePath, "utf8")))).toEqual({
-            theme: "dark",
-            searchTemplate: "https://kagi.com/search?q=%s",
-            pinnedExtensionIds: [],
-            sidebarVisibility: DEFAULT_SETTINGS.sidebarVisibility,
-            urlBarVisibility: DEFAULT_SETTINGS.urlBarVisibility,
-        })
+    it("loads what a previous run wrote", () =>
+        runTest(
+            Effect.gen(function* () {
+                const files = new Map<string, string>()
+                const first = yield* open(files)
+                yield* first.store.set({
+                    theme: "dark",
+                    searchTemplate: "https://kagi.com/search?q=%s",
+                })
+                yield* Scope.close(first.scope, Exit.void)
+                expect(fromPersistedSettings(onDisk(files))).toEqual({
+                    theme: "dark",
+                    searchTemplate: "https://kagi.com/search?q=%s",
+                    pinnedExtensionIds: [],
+                    sidebarVisibility: DEFAULT_SETTINGS.sidebarVisibility,
+                    urlBarVisibility: DEFAULT_SETTINGS.urlBarVisibility,
+                })
 
-        const reloaded = createSettingsStore(filePath)
-        expect(reloaded.get().theme).toBe("dark")
-        expect(reloaded.get().searchTemplate).toBe("https://kagi.com/search?q=%s")
-    })
+                const reloaded = yield* (yield* open(files)).store.get
+                expect(reloaded.theme).toBe("dark")
+                expect(reloaded.searchTemplate).toBe("https://kagi.com/search?q=%s")
+            }),
+        ))
 
-    it("normalises a bare-host template on the way in", () => {
-        const store = createSettingsStore(tempFile())
-        expect(store.set({ searchTemplate: "kagi.com/search?q=%s" }).searchTemplate).toBe(
-            "https://kagi.com/search?q=%s",
-        )
-    })
+    it("normalises a bare-host template on the way in", () =>
+        runTest(
+            Effect.gen(function* () {
+                const { store } = yield* open(new Map())
+                const next = yield* store.set({ searchTemplate: "kagi.com/search?q=%s" })
+                expect(next.searchTemplate).toBe("https://kagi.com/search?q=%s")
+            }),
+        ))
 
-    it("rejects a template with no %s and writes nothing", () => {
-        const filePath = tempFile()
-        const store = createSettingsStore(filePath)
-        store.set({ theme: "light" })
-        store.flush()
-        const before = JSON.parse(readFileSync(filePath, "utf8"))
+    it("rejects a template with no %s and writes nothing", () =>
+        runTest(
+            Effect.gen(function* () {
+                const files = new Map<string, string>()
+                const first = yield* open(files)
+                yield* first.store.set({ theme: "light" })
+                yield* Scope.close(first.scope, Exit.void)
+                const before = onDisk(files)
 
-        expect(() => store.set({ searchTemplate: "https://duckduckgo.com/" })).toThrow(
-            SettingsError,
-        )
-        expect(store.get().searchTemplate).toBe(DEFAULT_SETTINGS.searchTemplate)
-        store.flush()
-        // Disk still holds what the last accepted write left there.
-        expect(JSON.parse(readFileSync(filePath, "utf8"))).toEqual(before)
-        expect(before.theme).toBe("light")
-    })
+                const { store, scope } = yield* open(files)
+                const error = yield* Effect.flip(
+                    store.set({ searchTemplate: "https://duckduckgo.com/" }),
+                )
+                expect(error).toBeInstanceOf(SettingsRejected)
+                expect((yield* store.get).searchTemplate).toBe(DEFAULT_SETTINGS.searchTemplate)
+                yield* Scope.close(scope, Exit.void)
+                // Disk still holds what the last accepted write left there.
+                expect(onDisk(files)).toEqual(before)
+                expect(before).toMatchObject({ theme: "light" })
+            }),
+        ))
 
-    it("persists bar visibility", () => {
-        const filePath = tempFile()
-        const store = createSettingsStore(filePath)
-        store.set({ sidebarVisibility: "hidden", urlBarVisibility: "hidden" })
-        store.flush()
-        const reloaded = createSettingsStore(filePath)
-        expect(reloaded.get().sidebarVisibility).toBe("hidden")
-        expect(reloaded.get().urlBarVisibility).toBe("hidden")
-    })
+    it("drops unknown keys in a patch", () =>
+        runTest(
+            Effect.gen(function* () {
+                const files = new Map<string, string>()
+                const { store, scope } = yield* open(files)
+                const next = yield* store.set({ theme: "dark", injected: "nope" })
+                expect(next).not.toHaveProperty("injected")
+                yield* Scope.close(scope, Exit.void)
+                expect(onDisk(files)).not.toHaveProperty("injected")
+            }),
+        ))
 
-    // The unknown-theme guard is covered by the repair path above; here the only value that
-    // can be type-valid and still be rejected is the template, since it is a free-text string.
+    it("persists bar visibility", () =>
+        runTest(
+            Effect.gen(function* () {
+                const files = new Map<string, string>()
+                const first = yield* open(files)
+                yield* first.store.set({ sidebarVisibility: "hidden", urlBarVisibility: "hidden" })
+                yield* Scope.close(first.scope, Exit.void)
+                const reloaded = yield* (yield* open(files)).store.get
+                expect(reloaded.sidebarVisibility).toBe("hidden")
+                expect(reloaded.urlBarVisibility).toBe("hidden")
+            }),
+        ))
 
-    it("notifies subscribers on change and stops after unsubscribe", () => {
-        const store = createSettingsStore(tempFile())
-        const seen: string[] = []
-        const stop = store.subscribe((settings) => seen.push(settings.theme))
-        store.set({ theme: "dark" })
-        stop()
-        store.set({ theme: "light" })
-        expect(seen).toEqual(["dark"])
-    })
+    it("publishes each change", () =>
+        runTest(
+            Effect.gen(function* () {
+                const { store } = yield* open(new Map())
+                const { seen } = yield* collect(store.changes)
+                yield* store.set({ theme: "dark" })
+                yield* store.set({ theme: "light" })
+                yield* settle
+                expect(seen.map((settings) => settings.theme)).toEqual(["dark", "light"])
+            }),
+        ))
 
-    it("pins in order, dedupes, and unpins", () => {
-        const store = createSettingsStore(tempFile())
-        store.pinExtension("ext-bbb")
-        store.pinExtension("ext-aaa")
-        store.pinExtension("ext-bbb")
-        expect(store.get().pinnedExtensionIds).toEqual(["ext-bbb", "ext-aaa"])
+    it("pins in order, dedupes, and unpins", () =>
+        runTest(
+            Effect.gen(function* () {
+                const { store } = yield* open(new Map())
+                yield* store.pin("ext-bbb")
+                yield* store.pin("ext-aaa")
+                yield* store.pin("ext-bbb")
+                expect((yield* store.get).pinnedExtensionIds).toEqual(["ext-bbb", "ext-aaa"])
 
-        store.unpinExtension("ext-gone")
-        expect(store.get().pinnedExtensionIds).toEqual(["ext-bbb", "ext-aaa"])
+                yield* store.unpin("ext-gone")
+                expect((yield* store.get).pinnedExtensionIds).toEqual(["ext-bbb", "ext-aaa"])
 
-        store.unpinExtension("ext-bbb")
-        expect(store.get().pinnedExtensionIds).toEqual(["ext-aaa"])
-    })
+                yield* store.unpin("ext-bbb")
+                expect((yield* store.get).pinnedExtensionIds).toEqual(["ext-aaa"])
+            }),
+        ))
 
-    it("does not notify when a pin is a no-op", () => {
-        const store = createSettingsStore(tempFile())
-        store.pinExtension("ext-aaa")
-        const seen: number[] = []
-        store.subscribe(() => seen.push(1))
-        store.pinExtension("ext-aaa")
-        store.unpinExtension("ext-gone")
-        expect(seen).toEqual([])
-        expect(store.get().pinnedExtensionIds).toEqual(["ext-aaa"])
-    })
-})
-
-describe("settings flush", () => {
-    it("writes pending changes on flush without waiting for the timer", () => {
-        const filePath = tempFile()
-        const store = createSettingsStore(filePath)
-        store.set({ theme: "dark" })
-        store.flush()
-        expect(JSON.parse(readFileSync(filePath, "utf8")).theme).toBe("dark")
-    })
+    it("does not publish when a pin is a no-op", () =>
+        runTest(
+            Effect.gen(function* () {
+                const { store } = yield* open(new Map())
+                yield* store.pin("ext-aaa")
+                const { seen } = yield* collect(store.changes)
+                yield* store.pin("ext-aaa")
+                yield* store.unpin("ext-gone")
+                yield* settle
+                expect(seen).toEqual([])
+                expect((yield* store.get).pinnedExtensionIds).toEqual(["ext-aaa"])
+            }),
+        ))
 })

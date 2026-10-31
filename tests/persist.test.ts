@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vite-plus/test"
 
-import { createDebouncedSaver } from "../src/main/persistence"
 import { createContainer, switchContainer } from "../src/main/state/containers"
 import { setExtensionConsent } from "../src/main/state/extension-state"
 import { fromPersisted, PERSIST_VERSION, toPersisted } from "../src/main/state/persist"
@@ -213,43 +212,5 @@ describe("persist reject", () => {
         expect(fromPersisted({ version: 99, containers: [], tabs: [] })).toBeNull()
         expect(fromPersisted({ version: PERSIST_VERSION })).toBeNull()
         expect(fromPersisted({ version: PERSIST_VERSION, containers: {}, tabs: [] })).toBeNull()
-    })
-})
-
-describe("debounced saver", () => {
-    const setup = () => {
-        const writes: number[] = []
-        const saver = createDebouncedSaver({
-            write: () => writes.push(writes.length),
-            delayMs: 20,
-        })
-        return { saver, writes }
-    }
-
-    const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 50))
-
-    it("coalesces bursts into one write", async () => {
-        const { saver, writes } = setup()
-        saver.schedule()
-        saver.schedule()
-        saver.schedule()
-        expect(writes).toHaveLength(0)
-        await settle()
-        expect(writes).toHaveLength(1)
-    })
-
-    it("flush writes immediately and clears the timer", async () => {
-        const { saver, writes } = setup()
-        saver.schedule()
-        saver.flush()
-        expect(writes).toHaveLength(1)
-        await settle()
-        expect(writes).toHaveLength(1)
-    })
-
-    it("flush without dirty state writes nothing", () => {
-        const { saver, writes } = setup()
-        saver.flush()
-        expect(writes).toHaveLength(0)
     })
 })
