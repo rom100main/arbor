@@ -27,7 +27,8 @@
     - `ref = SubscriptionRef.make(initial)`.
     - `commit(op)`: `SubscriptionRef.modifySome(ref, op)` atomically. A failed `Result` leaves the ref unchanged and becomes the effect's typed failure (`Effect.fromResult`), never a defect. An op returning the same state is a no-op. Otherwise the ref is set and `changes` publishes `next`.
 - **Law**: `state_{t+1} = op(state_t)` atomically. Every effective mutation publishes exactly once on `changes`; failures and no-ops publish nothing. Consumers run on their own fibers, so a consumer cannot fail a mutation.
-- **Consumers** (`index.ts`, until the MainWindow module): an app-wide one (persistence, menu rebuild; skips the first emission), and one per window (view sync + `arbor:state` broadcast; its first emission shows the current state in the new window).
+- **Persistence**: `persistence/state-file.ts` builds the store from `state.json` and feeds `changes` to a debounced writer in the app scope (see `01-processes.md`).
+- **Consumers** (`index.ts`, until the MainWindow module): an app-wide one (menu rebuild; skips the first emission), and one per window (view sync + `arbor:state` broadcast; its first emission shows the current state in the new window).
 
 # Flow
 
@@ -47,7 +48,7 @@ flowchart LR
     COM["changes"]
     OUT1["views sync"]
     OUT2["send arbor:state"]
-    OUT3["rebuildMenu + persistence"]
+    OUT3["rebuildMenu, state.json writer"]
 
     CC --> RUN
     TB --> RUN

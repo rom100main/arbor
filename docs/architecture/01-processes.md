@@ -11,6 +11,11 @@
     - `WebContentsView` instances: 1 per tab, plus the shell view hosting `MainShell`.
     - `ipcMain` handlers.
     - `AppRuntime` (`runtime.ts`): the one Effect runtime. Every Effect runs on it, so one logging config applies everywhere: debug in `vp dev`, info otherwise, and warnings/errors appended to `arbor.log` in the OS logs folder outside dev. `tests/architecture.test.ts` fails on `Effect.run*` anywhere else.
+- **Persistence** (`src/main/persistence/`): `state.json`, `settings.json` and `extension-storage.json`.
+    - `JsonFile`: typed reads and writes (`FileMissing`, `FileUnreadable`, `FileUnwritable`); a Node adapter and an in-memory one for tests.
+    - `PersistedRef`: a value that loads itself, is read, modified and observed, and writes itself back, debounced. `persistChanges` is its writer alone, used for the store's state.
+    - A missing file starts from defaults. An unusable one (bad JSON, unknown version, no live container) is logged and replaced by defaults on the next write.
+    - `app-services.ts` builds the store, `Settings` and extension storage into the **app scope**. Quitting closes that scope: each writer flushes in its finalizer, so a new persisted file needs no quit wiring.
 - **Never**: renders sidebar DOM. No SolidJS here. No `console.*`: log with `Effect.log*`.
 
 ## 2. Preload
