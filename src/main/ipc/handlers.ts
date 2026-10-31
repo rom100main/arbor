@@ -5,7 +5,7 @@ import { Rect, type ContainerIcon, type ContainerId, type TabId } from "../../sh
 import { runBackground, runRequest } from "../exec"
 import { pinnedActionInfo } from "../extension/action"
 import { sessionForExtension } from "../extension/loader"
-import type { SettingsStore } from "../settings"
+import type { SettingsService } from "../settings"
 import type { DomainState } from "../state/state"
 import type { StoreService } from "../state/store"
 import { openExtensionActionPopup, setExtensionAnchor } from "../windows/overlays"
@@ -28,12 +28,12 @@ const actionPopupSession = (state: DomainState, extensionId: string): Electron.S
 
 export const registerIpc = (
     store: StoreService,
-    settings: SettingsStore,
+    settings: SettingsService,
     getState: () => DomainState,
 ): void => {
     handle("arbor:get-snapshot", () => runRequest(store.snapshot))
-    handle("arbor:settings:get", () => settings.get())
-    handle("arbor:settings:set", (_event, patch: unknown) => settings.set(patch))
+    handle("arbor:settings:get", () => runRequest(settings.get))
+    handle("arbor:settings:set", (_event, patch: unknown) => runRequest(settings.set(patch)))
 
     // The toolbar reads action metadata straight from the extension's manifest:
     // electron-chrome-extensions cannot serve it,

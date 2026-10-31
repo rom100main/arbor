@@ -1,13 +1,15 @@
 import { Cause, Effect, Exit, Option } from "effect"
 
 import { AppRuntime } from "./runtime"
-import type { DomainError } from "./state/state"
 
 /**
  * Request/response: run an Effect and convert its Exit into a rejected-Error promise.
- * Used at IPC invoke handlers where the renderer expects a rejected Error on failure.
+ * Used at IPC invoke handlers where the renderer expects a rejected Error on failure:
+ * the error's `message` is what the renderer sees.
  */
-export const runRequest = async <A>(effect: Effect.Effect<A, DomainError>): Promise<A> => {
+export const runRequest = async <A, E extends { readonly message: string }>(
+    effect: Effect.Effect<A, E>,
+): Promise<A> => {
     const exit = await AppRuntime.runPromiseExit(effect)
     if (Exit.isSuccess(exit)) return exit.value
     const failure = Cause.findErrorOption(exit.cause)

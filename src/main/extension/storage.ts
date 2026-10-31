@@ -1,3 +1,4 @@
+import { Context, Effect, Layer, Option, type Duration } from "effect"
 import {
     ipcMain,
     type IpcMainInvokeEvent,
@@ -8,21 +9,16 @@ import {
 
 import {
     applyExtStorageOp,
-    canonicalArea,
     emptyExtStorageAreas,
     fromPersistedExtStorage,
     parseExtStorageOp,
-    purgeExtStorage,
     toPersistedExtStorage,
     type ExtStorageAreas,
     type ExtStorageOp,
+    type StorageItems,
 } from "../../shared/extension-storage"
-import {
-    createDebouncedSaver,
-    loadOwnedFile,
-    writeJsonSafely,
-    type DebouncedSaver,
-} from "../persistence"
+import { JsonFile } from "../persistence/json-file"
+import * as PersistedRef from "../persistence/persisted-ref"
 import { AppRuntime } from "../runtime"
 
 /** Frame invoke (extension pages) and service-worker invoke carry different event shapes. */
@@ -30,17 +26,9 @@ type StorageInvokeEvent = IpcMainInvokeEvent | IpcMainServiceWorkerInvokeEvent
 
 export interface ExtensionStorageService {
     /** Apply one chrome.storage op for the extension that sent `event`. */
-    readonly handle: (event: StorageInvokeEvent, op: ExtStorageOp) => unknown
-    /** Hydrate from disk (call once before the first extension session loads). */
-    readonly load: () => void
+    readonly handle: (event: StorageInvokeEvent, op: ExtStorageOp) => Effect.Effect<unknown>
     /** Drop an extension's areas (uninstall teardown). */
-    readonly purge: (extensionId: string) => void
-    /** Synchronously persist pending local-area writes (quit path). */
-    readonly flush: () => void
-}
-
-export interface ExtensionStorageOptions {
-    debounceMs?: number
+    readonly purge: (extensionId: string) => Effect.Effect<void>
 }
 
 const EXTENSION_URL = /^chrome-extension:\/\/([^/?#]+)/
@@ -70,72 +58,93 @@ let currentService: ExtensionStorageService | null = null
 const wiredSessions = new WeakSet<Session>()
 const wiredWorkers = new WeakSet<ServiceWorkerMain>()
 
+type LocalAreas = Readonly<Record<string, StorageItems>>
+
+const encodeLocal = (local: LocalAreas): unknown =>
+    toPersistedExtStorage(
+        Object.fromEntries(
+            Object.entries(local).map(([id, items]) => [id, { local: items, session: {} }]),
+        ),
+    )
+
+const decodeLocal = (data: unknown): LocalAreas | null => {
+    const restored = fromPersistedExtStorage(data)
+    if (!restored) return null
+    return Object.fromEntries(Object.entries(restored).map(([id, areas]) => [id, areas.local]))
+}
+
 /**
  * Single authoritative chrome.storage for every container session
  * (Firefox model: containers isolate web storage, extensions share one store).
- * `local`/`sync`/`managed` persist to disk; `session` is process-lifetime only.
- * Writes are applied synchronously in main so N extension service workers cannot interleave.
+ * `local`/`sync`/`managed` persist to disk; `session` is process-lifetime only, so it lives in a `Map`.
+ * Each op is applied atomically in main, so N extension service workers cannot interleave.
  */
-export const createExtensionStorage = (
-    filePath: string,
-    options: ExtensionStorageOptions = {},
-): ExtensionStorageService => {
-    let extensions: Record<string, ExtStorageAreas> = {}
-    const saver: DebouncedSaver = createDebouncedSaver({
-        write: () =>
-            writeJsonSafely(filePath, toPersistedExtStorage(extensions), "extension storage"),
-        delayMs: options.debounceMs,
+const make = (path: string, debounce?: Duration.Input) =>
+    Effect.gen(function* () {
+        const file = yield* JsonFile
+        const local = yield* PersistedRef.make<LocalAreas>({
+            path,
+            read: file.read(path, decodeLocal),
+            encode: encodeLocal,
+            empty: () => ({}),
+            debounce,
+        })
+        const session = new Map<string, StorageItems>()
+
+        const handle = (event: StorageInvokeEvent, op: ExtStorageOp): Effect.Effect<unknown> => {
+            const extensionId = extensionIdOf(event)
+            if (!extensionId) {
+                return Effect.die(new Error("arbor:ext-storage requires an extension sender"))
+            }
+            return local.modifySome((all) => {
+                const before: ExtStorageAreas = {
+                    ...emptyExtStorageAreas(),
+                    ...(all[extensionId] && { local: all[extensionId] }),
+                    ...(session.has(extensionId) && { session: session.get(extensionId) }),
+                }
+                const { areas, result } = applyExtStorageOp(before, op)
+                if (areas.session !== before.session) session.set(extensionId, areas.session)
+                // Only a changed `local` area is a change to the file.
+                return [
+                    result,
+                    areas.local !== before.local
+                        ? Option.some({ ...all, [extensionId]: areas.local })
+                        : Option.none(),
+                ] as const
+            })
+        }
+
+        const purge = (extensionId: string): Effect.Effect<void> =>
+            Effect.suspend(() => {
+                session.delete(extensionId)
+                return local.modifySome((all) => {
+                    if (!(extensionId in all)) return [undefined, Option.none()] as const
+                    const { [extensionId]: _dropped, ...rest } = all
+                    return [undefined, Option.some(rest)] as const
+                })
+            })
+
+        return ExtensionStorage.of({ handle, purge })
     })
 
-    const areasFor = (extensionId: string): ExtStorageAreas => {
-        const areas = extensions[extensionId] ?? emptyExtStorageAreas()
-        extensions[extensionId] = areas
-        return areas
-    }
-
-    return {
-        load: () => {
-            const restored = AppRuntime.runSync(
-                loadOwnedFile(filePath, fromPersistedExtStorage, "Extension storage"),
-            )
-            if (!restored) return
-            for (const [id, areas] of Object.entries(restored)) extensions[id] = areas
-        },
-        handle: (event, op) => {
-            const extensionId = extensionIdOf(event)
-            if (!extensionId) throw new Error("arbor:ext-storage requires an extension sender")
-            const { areas, result } = applyExtStorageOp(areasFor(extensionId), op)
-            extensions[extensionId] = areas
-            // `session` is memory-only; only durable (canonical local) areas touch disk.
-            if (
-                op.op !== "get" &&
-                op.op !== "getBytesInUse" &&
-                canonicalArea(op.area) !== "session"
-            )
-                saver.schedule()
-            return result
-        },
-        purge: (extensionId) => {
-            const before = extensions
-            extensions = purgeExtStorage(extensions, extensionId)
-            if (extensions !== before) saver.schedule()
-        },
-        flush: () => saver.flush(),
-    }
+export class ExtensionStorage extends Context.Service<ExtensionStorage, ExtensionStorageService>()(
+    "arbor.ExtensionStorage",
+) {
+    static readonly layer = (path: string, debounce?: Duration.Input) =>
+        Layer.effect(ExtensionStorage, make(path, debounce))
 }
 
-const dispatch = (event: StorageInvokeEvent, op: unknown): unknown => {
+const dispatch = (event: StorageInvokeEvent, op: unknown): Promise<unknown> => {
     const service = currentService
     if (!service) throw new Error("arbor:ext-storage is not ready")
     const decoded = parseExtStorageOp(op)
     if (!decoded) throw new Error("Invalid arbor:ext-storage request")
-    return service.handle(event, decoded)
+    return AppRuntime.runPromise(service.handle(event, decoded))
 }
 
 /** Uninstall teardown: forget the extension's `chrome.storage` areas. */
-export const purgeExtensionStorage = (extensionId: string): void => {
-    currentService?.purge(extensionId)
-}
+export const purgeExtensionStorage = (extensionId: string): Effect.Effect<void> =>
+    currentService ? currentService.purge(extensionId) : Effect.void
 
 /** Frame path: extension pages / popups use ipcRenderer → ipcMain. */
 export const registerExtensionStorageIpc = (service: ExtensionStorageService): void => {

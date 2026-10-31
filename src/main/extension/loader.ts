@@ -8,9 +8,9 @@ import { installChromeWebStore, uninstallExtension } from "electron-chrome-web-s
 
 import type { ExtensionGrant, ExtensionMenuRequest, TabId } from "../../shared/protocol"
 import { runBackground } from "../exec"
-import { readJsonFile } from "../persistence"
+import { readJsonLenient } from "../persistence/json-file"
 import { AppRuntime } from "../runtime"
-import type { SettingsStore } from "../settings"
+import type { SettingsService } from "../settings"
 import type { StoreService } from "../state/store"
 import {
     attachExtensionPopupPositioning,
@@ -34,7 +34,7 @@ import { bindExtensionStorageToSession, purgeExtensionStorage } from "./storage"
 /** Bridge between the domain store/views and the per-container extension systems. */
 interface ExtensionDeps {
     readonly store: StoreService
-    readonly settings: SettingsStore
+    readonly settings: SettingsService
     readonly getWindow: () => Electron.BrowserWindow | null
     readonly viewForTab: (tabId: TabId) => Electron.WebContentsView | undefined
     readonly ensureView: (tabId: TabId, url: string) => Electron.WebContentsView
@@ -71,7 +71,7 @@ export const initExtensions = (d: ExtensionDeps): void => {
 
 /** Unpacked installs are keyed by source path until `loadExtension` reveals their id. */
 const readUnpackedManifest = (extensionPath: string): ParsedManifest =>
-    parseManifest(readJsonFile(path.join(extensionPath, "manifest.json")))
+    parseManifest(readJsonLenient(path.join(extensionPath, "manifest.json")))
 
 const consentFor = (
     keys: readonly (string | undefined)[],
@@ -528,9 +528,10 @@ const findExtension = (extensionId: string): Electron.Extension | null => {
 const pruneMissingPins = (): void => {
     const d = deps
     if (!d) return
-    for (const extensionId of [...d.settings.get().pinnedExtensionIds]) {
+    const { pinnedExtensionIds } = AppRuntime.runSync(d.settings.get)
+    for (const extensionId of pinnedExtensionIds) {
         const live = findExtension(extensionId) !== null || manifestFor(extensionId) !== null
-        if (!live) d.settings.unpinExtension(extensionId)
+        if (!live) void runBackground(d.settings.unpin(extensionId))
     }
 }
 
@@ -572,14 +573,14 @@ export const openExtensionMenu = async ({
     const d = deps
     if (!d) return
     const extension = findExtension(extensionId)
-    const pinned = d.settings.get().pinnedExtensionIds.includes(extensionId)
+    const pinned = AppRuntime.runSync(d.settings.get).pinnedExtensionIds.includes(extensionId)
     if (!extension) {
         if (!pinned) return
         const ghostMenu = new Menu()
         ghostMenu.append(
             new MenuItem({
                 label: "Unpin from toolbar",
-                click: () => d.settings.unpinExtension(extensionId),
+                click: () => void runBackground(d.settings.unpin(extensionId)),
             }),
         )
         ghostMenu.popup({ window: d.getWindow() ?? undefined, x: screenX, y: screenY })
@@ -601,8 +602,9 @@ export const openExtensionMenu = async ({
         new MenuItem({
             label: pinned ? "Unpin from toolbar" : "Pin to toolbar",
             click: () => {
-                if (pinned) d.settings.unpinExtension(extensionId)
-                else d.settings.pinExtension(extensionId)
+                void runBackground(
+                    pinned ? d.settings.unpin(extensionId) : d.settings.pin(extensionId),
+                )
             },
         }),
     )
@@ -640,12 +642,12 @@ export const uninstallExtensionEverywhere = (extensionId: string): Promise<void>
                 { concurrency: "unbounded" },
             )
             forgetExtensionIcon(extensionId)
-            purgeExtensionStorage(extensionId)
+            yield* purgeExtensionStorage(extensionId)
             yield* d.store.clearExtensionConsent(extensionId).pipe(Effect.ignore)
             if (sourcePath) {
                 yield* d.store.clearExtensionConsent(sourcePath).pipe(Effect.ignore)
             }
-            d.settings.unpinExtension(extensionId)
+            yield* d.settings.unpin(extensionId)
             hideExtensionsPopup()
         }).pipe(Effect.catchCause((cause) => Effect.logError("Uninstall workflow failed", cause))),
     )

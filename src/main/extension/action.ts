@@ -5,7 +5,7 @@ import { Effect } from "effect"
 import { app, nativeImage, session } from "electron"
 
 import type { PinnedActionInfo } from "../../shared/protocol"
-import { readJsonFile } from "../persistence"
+import { readJsonLenient } from "../persistence/json-file"
 import { AppRuntime } from "../runtime"
 import { parseManifest, type ParsedManifest } from "./manifest"
 
@@ -43,7 +43,7 @@ export const manifestFor = (extensionId: string): ParsedManifest | null => {
     if (extension) return parseManifest(extension.manifest)
     const root = installedRoot(extensionId)
     if (!root) return null
-    return parseManifest(readJsonFile(path.join(root, "manifest.json")))
+    return parseManifest(readJsonLenient(path.join(root, "manifest.json")))
 }
 
 /**

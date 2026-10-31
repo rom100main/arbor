@@ -1,3 +1,4 @@
+import { Effect, Stream } from "effect"
 import { BrowserWindow, ipcMain } from "electron"
 
 import type {
@@ -8,11 +9,12 @@ import type {
     RenameTarget,
     TabId,
 } from "../../shared/protocol"
-import { DEFAULT_SEARCH_TEMPLATE } from "../../shared/settings"
+import { DEFAULT_SEARCH_TEMPLATE, type Settings } from "../../shared/settings"
 import { omniboxTarget } from "../../shared/url"
 import { runBackground } from "../exec"
 import { attachExtensionTab, openExtensionMenu } from "../extension/loader"
-import type { SettingsStore } from "../settings"
+import { AppRuntime } from "../runtime"
+import type { SettingsService } from "../settings"
 import { snapshot as toSnapshot, type DomainState } from "../state/state"
 import type { StoreService } from "../state/store"
 import {
@@ -42,23 +44,36 @@ import {
 export interface HostRuntime {
     win: BrowserWindow | null
     store: StoreService
-    settings: SettingsStore
+    settings: SettingsService
     readonly getState: () => DomainState
+    readonly getSettings: () => Settings
     previousActiveTab: TabId | null
     lastOmniboxQuery: string
     rebuildMenu: () => void
 }
 
-export const registerSettingsBroadcast = (settings: SettingsStore): void => {
-    settings.subscribe((next) => {
-        for (const window of BrowserWindow.getAllWindows()) {
-            window.webContents.send("arbor:settings:changed", next)
-        }
-        shellWebContents()?.send("arbor:settings:changed", next)
-        for (const wc of internalViewWebContents()) {
-            wc.send("arbor:settings:changed", next)
-        }
-    })
+/** Every settings change goes to every renderer, the first emission is what they already have. */
+export const registerSettingsBroadcast = (settings: SettingsService): void => {
+    AppRuntime.runFork(
+        settings.changes.pipe(
+            Stream.drop(1),
+            Stream.runForEach((next) =>
+                Effect.sync(() => {
+                    for (const window of BrowserWindow.getAllWindows()) {
+                        window.webContents.send("arbor:settings:changed", next)
+                    }
+                    shellWebContents()?.send("arbor:settings:changed", next)
+                    for (const wc of internalViewWebContents()) {
+                        wc.send("arbor:settings:changed", next)
+                    }
+                }).pipe(
+                    Effect.catchCause((cause) =>
+                        Effect.logError("Settings broadcast failed", cause),
+                    ),
+                ),
+            ),
+        ),
+    )
 }
 
 export const makeWindowSync = (rt: HostRuntime): ((next: DomainState) => void) => {
@@ -110,7 +125,7 @@ export const makeOmniboxActivator =
             if (tabId !== null && viewForTab(tabId)) {
                 const target = omniboxTarget(
                     payload.query,
-                    rt.settings.get().searchTemplate ?? DEFAULT_SEARCH_TEMPLATE,
+                    rt.getSettings().searchTemplate ?? DEFAULT_SEARCH_TEMPLATE,
                 )
                 await navigateTab({ store, getState: rt.getState }, tabId, target)
             }

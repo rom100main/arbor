@@ -186,6 +186,7 @@ const make = (initial: DomainState) =>
 export class BrowserStore extends Context.Service<BrowserStore, StoreService>()(
     "arbor.BrowserStore",
 ) {
+    static readonly make = make
     static readonly layer = (initial: DomainState): Layer.Layer<BrowserStore> =>
         Layer.effect(BrowserStore, make(initial))
 }

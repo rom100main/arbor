@@ -1,11 +1,10 @@
-import path from "node:path"
-
-import { Effect, Fiber, Option, Schema, Stream } from "effect"
+import { Context, Effect, Exit, Fiber, Layer, Option, Schema, Scope, Stream } from "effect"
 import { BrowserWindow, app } from "electron"
 
+import { AppServicesLive } from "./app-services"
 import { runRequest } from "./exec"
 import { initExtensions, markMainWindowOpened } from "./extension/loader"
-import { createExtensionStorage, registerExtensionStorageIpc } from "./extension/storage"
+import { ExtensionStorage, registerExtensionStorageIpc } from "./extension/storage"
 import {
     makeOmniboxActivator,
     makeWindowSync,
@@ -14,10 +13,8 @@ import {
     type HostRuntime,
 } from "./ipc/events"
 import { registerIpc } from "./ipc/handlers"
-import { createStatePersistence } from "./persistence"
 import { AppRuntime } from "./runtime"
-import { createSettingsStore } from "./settings"
-import { initialState, type DomainState } from "./state/state"
+import { SettingsStore } from "./settings"
 import { BrowserStore, type StoreService } from "./state/store"
 import { installMenu } from "./windows/app-menu"
 import { registerInternalPages, registerInternalScheme } from "./windows/internal-pages"
@@ -73,7 +70,8 @@ const filterBenignExtensionLoadWarnings = (): void => {
 interface Application {
     readonly store: StoreService
     readonly rt: HostRuntime
-    readonly flush: () => void
+    /** Holds every persisted service; closing it writes their pending changes. */
+    readonly scope: Scope.Closeable
     readonly ensureSeedTab: () => Promise<void>
 }
 
@@ -85,42 +83,32 @@ const bootApplication = async (): Promise<Application> => {
     await app.whenReady()
     AppRuntime.runFork(promptConsumer)
 
-    const userData = app.getPath("userData")
-    const persistence = createStatePersistence(path.join(userData, "state.json"))
-    const initial: DomainState = persistence.load() ?? initialState()
-
-    const settings = createSettingsStore(path.join(userData, "settings.json"))
-    registerSettingsBroadcast(settings)
-
-    const extStorage = createExtensionStorage(path.join(userData, "extension-storage.json"))
-    extStorage.load()
-    registerExtensionStorageIpc(extStorage)
-
-    const store: StoreService = AppRuntime.runSync(
-        Effect.gen(function* () {
-            return yield* BrowserStore
-        }).pipe(Effect.provide(BrowserStore.layer(initial))),
+    const scope = AppRuntime.runSync(Scope.make())
+    const services = await AppRuntime.runPromise(
+        Layer.buildWithScope(AppServicesLive(app.getPath("userData")), scope),
     )
+    const store: StoreService = Context.get(services, BrowserStore)
+    const settings = Context.get(services, SettingsStore)
+    registerSettingsBroadcast(settings)
+    registerExtensionStorageIpc(Context.get(services, ExtensionStorage))
 
     const rt: HostRuntime = {
         win: null,
         store,
         settings,
         getState: () => AppRuntime.runSync(store.state),
+        getSettings: () => AppRuntime.runSync(settings.get),
         previousActiveTab: null,
         lastOmniboxQuery: "",
         rebuildMenu: () => undefined,
     }
 
-    // Keep app in sync with the store: JSON files and menu app
+    // Keep app menu in sync with the store
     AppRuntime.runFork(
         store.changes.pipe(
             Stream.drop(1), // first emission is the state just loaded, so skip it
-            Stream.runForEach((next) =>
-                Effect.sync(() => {
-                    persistence.schedule(next)
-                    rt.rebuildMenu()
-                }).pipe(
+            Stream.runForEach(() =>
+                Effect.sync(() => rt.rebuildMenu()).pipe(
                     Effect.catchCause((cause) => Effect.logError("State observer failed", cause)),
                 ),
             ),
@@ -145,17 +133,11 @@ const bootApplication = async (): Promise<Application> => {
     const handleOmniboxActivate = makeOmniboxActivator(rt)
     registerOverlayEvents(rt, handleOmniboxActivate)
 
-    const flush = (): void => {
-        persistence.flush()
-        extStorage.flush()
-        settings.flush()
-    }
-
     const ensureSeedTab = async (): Promise<void> => {
         if (rt.getState().containers.length === 0) await runRequest(store.createContainer())
     }
 
-    return { store, rt, flush, ensureSeedTab }
+    return { store, rt, scope, ensureSeedTab }
 }
 
 const openMainWindow = async (appInstance: Application): Promise<void> => {
@@ -170,7 +152,7 @@ const openMainWindow = async (appInstance: Application): Promise<void> => {
         },
     })
 
-    const win = await createWindow(() => rt.settings.get())
+    const win = await createWindow(rt.getSettings)
     rt.win = win
     markMainWindowOpened()
     attachWindowEvents(win)
@@ -196,8 +178,13 @@ const openMainWindow = async (appInstance: Application): Promise<void> => {
     win.on("closed", () => AppRuntime.runFork(Fiber.interrupt(syncFiber)))
 
     // Showing or hiding a bar changes how much of the window the page gets.
-    const stopRelayout = rt.settings.subscribe(() => layoutViews(win))
-    win.on("closed", stopRelayout)
+    const relayoutFiber = AppRuntime.runFork(
+        rt.settings.changes.pipe(
+            Stream.drop(1),
+            Stream.runForEach(() => Effect.sync(() => layoutViews(win))),
+        ),
+    )
+    win.on("closed", () => AppRuntime.runFork(Fiber.interrupt(relayoutFiber)))
 
     await ensureSeedTab()
 }
@@ -220,12 +207,24 @@ app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) void startMainWindow()
 })
 
-// before-quit covers Cmd+Q and app.quit();
-// window-all-closed covers macOS re-activate
-// (state must be flushed before a possible reload from disk).
-app.on("before-quit", () => application?.flush())
+// Quitting closes the app scope: every persisted service writes its pending change in a finalizer.
+// The runtime itself stays up, so events fired while windows close still run.
+let scopeClosed = false
+app.on("before-quit", (event) => {
+    if (scopeClosed || !application) return
+    event.preventDefault()
+    const { scope } = application
+    void (async () => {
+        // Finalizers write synchronously, the timeout only guards against a hung one.
+        await Promise.race([
+            AppRuntime.runPromise(Scope.close(scope, Exit.void)),
+            new Promise((resolve) => setTimeout(resolve, 2_000)),
+        ])
+        scopeClosed = true
+        app.quit()
+    })()
+})
 
 app.on("window-all-closed", () => {
-    application?.flush()
     if (process.platform !== "darwin") app.quit()
 })

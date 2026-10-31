@@ -1,10 +1,10 @@
-import { Data, Result, Schema } from "effect"
+import { Context, Effect, Layer, Option, Result, Schema, type Duration, type Stream } from "effect"
 
 import { decodeOr, orDefault } from "../shared/decode"
 import { DEFAULT_SEARCH_TEMPLATE, DEFAULT_SETTINGS } from "../shared/settings"
 import { Settings, SettingsPatch } from "../shared/settings-schema"
-import { createDebouncedSaver, loadOwnedFile, writeJsonSafely } from "./persistence"
-import { AppRuntime } from "./runtime"
+import { JsonFile } from "./persistence/json-file"
+import * as PersistedRef from "./persistence/persisted-ref"
 
 const PersistedSettings = Schema.Struct({
     searchTemplate: orDefault(Settings.fields.searchTemplate, () => DEFAULT_SEARCH_TEMPLATE),
@@ -47,98 +47,85 @@ export const fromPersistedSettings = (data: unknown): Settings | null => {
     }
 }
 
-export class SettingsError extends Data.TaggedError("SettingsError")<{ message: string }> {
-    constructor(message: string) {
-        super({ message })
-    }
+/** A patch the settings could not take; nothing is written in that case. */
+export class SettingsRejected extends Schema.TaggedError<SettingsRejected>()("SettingsRejected", {
+    message: Schema.String,
+}) {}
+
+export interface SettingsService {
+    readonly get: Effect.Effect<Settings>
+    /** The current settings on subscribe, then every change. */
+    readonly changes: Stream.Stream<Settings>
+    /** Decode a patch, merge and persist it. Unknown keys are dropped. */
+    readonly set: (patch: unknown) => Effect.Effect<Settings, SettingsRejected>
+    /** No-op (and no publish) when the extension is already pinned. */
+    readonly pin: (extensionId: string) => Effect.Effect<void>
+    /** No-op (and no publish) when the extension is not pinned. */
+    readonly unpin: (extensionId: string) => Effect.Effect<void>
 }
 
-export interface SettingsStore {
-    /** Current settings; a frozen copy, safe to hand to renderers. */
-    readonly get: () => Settings
-    /**
-     * Decode a patch, merge, persist, and notify subscribers. Unknown keys are dropped.
-     * Throws {@link SettingsError} when a value is rejected; nothing is written in that case.
-     */
-    readonly set: (patch: unknown) => Settings
-    readonly pinExtension: (extensionId: string) => Settings
-    readonly unpinExtension: (extensionId: string) => Settings
-    readonly subscribe: (callback: (settings: Settings) => void) => () => void
-    /** Synchronously write any pending settings (quit path). */
-    readonly flush: () => void
-}
-
-export interface SettingsStoreOptions {
-    debounceMs?: number
-}
+const defaults = (): Settings => ({ ...DEFAULT_SETTINGS, pinnedExtensionIds: [] })
 
 /**
  * Global user preferences, persisted apart from browser state so that clearing tabs and
  * containers never resets them.
  */
-export const createSettingsStore = (
-    filePath: string,
-    options: SettingsStoreOptions = {},
-): SettingsStore => {
-    let current: Settings = AppRuntime.runSync(
-        loadOwnedFile(filePath, fromPersistedSettings, "Settings"),
-    ) ?? {
-        ...DEFAULT_SETTINGS,
-        pinnedExtensionIds: [],
-    }
-    const subscribers = new Set<(settings: Settings) => void>()
+const make = (path: string, debounce?: Duration.Input) =>
+    Effect.gen(function* () {
+        const file = yield* JsonFile
+        const ref = yield* PersistedRef.make({
+            path,
+            read: file.read(path, fromPersistedSettings),
+            encode: (settings: Settings) => settings,
+            empty: defaults,
+            debounce,
+        })
 
-    const saver = createDebouncedSaver({
-        write: () => writeJsonSafely(filePath, current, "settings"),
-        delayMs: options.debounceMs,
+        const set = (input: unknown): Effect.Effect<Settings, SettingsRejected> => {
+            const decoded = decodePatch(input)
+            if (Result.isFailure(decoded)) {
+                return Effect.fail(new SettingsRejected({ message: decoded.failure.message }))
+            }
+            const patch = decoded.success
+            return ref.modifySome((current) => {
+                const next: Settings = {
+                    ...current,
+                    ...patch,
+                    ...(patch.pinnedExtensionIds && {
+                        pinnedExtensionIds: cleanPinned(patch.pinnedExtensionIds),
+                    }),
+                }
+                return [next, Option.some(next)] as const
+            })
+        }
+
+        const updatePins = (f: (ids: readonly string[]) => readonly string[] | null) =>
+            ref.modifySome((current) => {
+                const ids = f(current.pinnedExtensionIds)
+                return [
+                    undefined,
+                    ids === null
+                        ? Option.none()
+                        : Option.some({ ...current, pinnedExtensionIds: ids }),
+                ] as const
+            })
+
+        return SettingsStore.of({
+            get: ref.get,
+            changes: ref.changes,
+            set,
+            pin: (extensionId) =>
+                updatePins((ids) => (ids.includes(extensionId) ? null : [...ids, extensionId])),
+            unpin: (extensionId) =>
+                updatePins((ids) =>
+                    ids.includes(extensionId) ? ids.filter((id) => id !== extensionId) : null,
+                ),
+        })
     })
 
-    const commit = (next: Settings): Settings => {
-        current = next
-        saver.schedule()
-        for (const subscriber of subscribers) subscriber(next)
-        return next
-    }
-
-    return {
-        get: () => current,
-
-        set: (input) => {
-            const decoded = decodePatch(input)
-            if (Result.isFailure(decoded)) throw new SettingsError(decoded.failure.message)
-            const patch = decoded.success
-            return commit({
-                ...current,
-                ...patch,
-                ...(patch.pinnedExtensionIds && {
-                    pinnedExtensionIds: cleanPinned(patch.pinnedExtensionIds),
-                }),
-            })
-        },
-
-        pinExtension: (extensionId) => {
-            if (current.pinnedExtensionIds.includes(extensionId)) return current
-            return commit({
-                ...current,
-                pinnedExtensionIds: [...current.pinnedExtensionIds, extensionId],
-            })
-        },
-
-        unpinExtension: (extensionId) => {
-            if (!current.pinnedExtensionIds.includes(extensionId)) return current
-            return commit({
-                ...current,
-                pinnedExtensionIds: current.pinnedExtensionIds.filter((id) => id !== extensionId),
-            })
-        },
-
-        subscribe: (callback) => {
-            subscribers.add(callback)
-            return () => {
-                subscribers.delete(callback)
-            }
-        },
-
-        flush: () => saver.flush(),
-    }
+export class SettingsStore extends Context.Service<SettingsStore, SettingsService>()(
+    "arbor.Settings",
+) {
+    static readonly layer = (path: string, debounce?: Duration.Input) =>
+        Layer.effect(SettingsStore, make(path, debounce))
 }
