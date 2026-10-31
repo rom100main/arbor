@@ -22,12 +22,13 @@
 
 - **Location**: `src/preload/index.ts`
 - **Runtime**: isolated bridge. Runs before renderer. Access to both `electron` and `window`.
-- **Exposes**: `contextBridge.exposeInMainWorld("arbor", api)` -> `window.arbor: ArborApi`.
-- **Contains**: no state, no logic. Thin wrappers only:
-    - `invoke(channel, ...args)` for request/response.
-    - `send(channel, ...args)` for fire-and-forget.
-    - `on(channel, cb)` for subscriptions.
-- **Type contract**: `src/preload/arbor.d.ts` -> `Window.arbor`.
+- **Exposes**: `contextBridge.exposeInMainWorld("arbor", …)` -> `window.arbor: ArborApi`.
+- **Contains**: no state, no logic, no code per channel. Built from the channel tables in `shared/ipc/channels.ts`:
+    - one `invoke` method per request.
+    - one `send` method per event.
+    - one `on<Key>` subscription per push.
+- **Type contract**: `ArborApi` in `shared/ipc/contract.ts`, declared on `Window` by `src/preload/arbor.d.ts`.
+- **Sandboxed**: it can only `require("electron")`, so it loads nothing from `effect`. `vp run build` checks the built files.
 
 ## 3. Renderer
 
@@ -41,11 +42,12 @@
 
 - **Location**: `src/shared/`
 - **Runtime**: none. Pure logic + types, no `electron` import.
-- **Effect**: the renderer and preload load nothing from `effect` at runtime. They import schema modules (`protocol.ts`, `errors.ts`, `settings-schema.ts`) with `import type` only; runtime values live in schema-free modules (`constants.ts`, `settings.ts`). `tests/architecture.test.ts` follows imports to enforce it.
+- **Effect**: the renderer and preload load nothing from `effect` at runtime. They import schema modules (`protocol.ts`, `errors.ts`, `settings-schema.ts`, `ipc/contract.ts`) with `import type` only; runtime values live in schema-free modules (`constants.ts`, `settings.ts`, `ipc/channels.ts`). `tests/architecture.test.ts` follows imports to enforce it.
 - **Membership**: only code loaded into **both** processes, main and renderer (the latter directly or through a preload). Code a single process uses belongs in that process's tree.
 - **Contents**:
+    - `ipc/channels.ts` / `ipc/contract.ts`: every IPC channel name / its schemas, `Reply` and `ArborApi`. See `02-ipc.md`.
     - `protocol.ts`: Schemas for every shape crossing processes or onto disk (`TabId`, `ContainerId`, `TabNode`, `ContainerMeta`, `BrowserSnapshot`, IPC payloads, `Anchor` / `Rect`). Types derive from them (`typeof X.Type`). IDs are template literals (`` `tab-${string}` ``, `` `container-${string}` ``): distinct types, no runtime cost.
-    - `errors.ts`: `DomainError`, a tagged union (`UnknownTab`, `UnknownContainer`, `LastTab`, `InvalidMove`, `EmptyContainer`, `NoContainer`, `NothingToReopen`).
+    - `errors.ts`: `DomainError`, a tagged union (`UnknownTab`, `UnknownContainer`, `LastTab`, `InvalidMove`, `EmptyContainer`, `NoContainer`, `NothingToReopen`), plus the errors other requests answer (`SettingsRejected`, `NoActionPopup`, `NoWindow`).
     - `settings.ts` / `settings-schema.ts`: settings constants and helpers / the `Settings` and `SettingsPatch` schemas.
     - `constants.ts`: `CONTAINER_COLORS`, `CONTAINER_ICONS`, `containerPartition()`.
     - `url.ts`: `omniboxTarget()`, `isUrlLike()`.
@@ -60,8 +62,7 @@
 flowchart TB
     subgraph M["main"]
         S["index.ts:start()"]
-        H["ipc/handlers.ts"]
-        E["ipc/events.ts"]
+        H["ipc/router.ts<br/>handlers.ts, events.ts"]
         ST["state/store.ts"]
         W["windows/*"]
     end
@@ -85,7 +86,6 @@ flowchart TB
     end
 
     S --> H
-    S --> E
     S --> ST
     S --> W
     A --> SH
@@ -120,7 +120,7 @@ sequenceDiagram
     participant R as renderer:MainShell
     M->>M: app.whenReady()
     M->>M: BrowserStore.layer(initial)
-    M->>M: registerIpc(store)
+    M->>M: serveRequests / serveEvents
     M->>W: createWindow() + preloadPath
     W->>P: load preload/index.cjs
     P->>W: expose window.arbor
@@ -129,7 +129,7 @@ sequenceDiagram
     P->>M: invoke arbor:get-snapshot
     M-->>R: BrowserSnapshot
     R->>P: onState(cb)
-    M->>M: createContainer() -> changes -> send arbor:state
+    M->>M: createContainer() -> changes -> push state
 ```
 
 # Rules

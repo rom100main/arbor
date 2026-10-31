@@ -18,8 +18,8 @@ English
 flowchart LR
     subgraph Main["main process : Node + Electron"]
         Store["StoreService<br/>Ref(DomainState)"]
-        IPC_H["ipcMain.handle<br/>handlers.ts"]
-        IPC_E["ipcMain.on<br/>events.ts"]
+        IPC_H["requests<br/>ipc/handlers.ts"]
+        IPC_E["events<br/>ipc/events.ts"]
         Views["WebContentsViews<br/>1 per tab"]
         ShellV["Shell WebContentsView<br/>sidebar + toolbar, transparent"]
         Win["BrowserWindow"]

@@ -65,32 +65,31 @@ flowchart LR
 ```mermaid
 sequenceDiagram
     participant R as renderer
-    participant H as handlers.ts:runRequest
+    participant H as ipc/router.ts
     participant S as StoreService
     participant F as SubscriptionRef
     participant C as window consumer
-    R->>H: invoke arbor:tab:close(tabId)
+    R->>H: invoke arbor:tab:close({ tabId })
     H->>S: closeTab(tabId): Effect
     S->>F: commit(op): modifySome
     F-->>H: void
-    H-->>R: resolve
+    H-->>R: { ok: true }
     F->>C: changes: next
-    C->>R: send arbor:state(snapshot_{t+1})
+    C->>R: push state(snapshot_{t+1})
 ```
 
 # Why Two Files
 
 - **`store.ts`**: Effect shell. Concurrency, IDs, time, change stream. No tree math.
-- **`preload/index.ts`**: IPC shell. Serialization boundary. No domain logic.
-- **Relation**: `preload.api[f] ≈ invoke(store[f])`. Types mirror 1:1. Example: `createContainer(name?, color?) -> Promise<ContainerId>` on both sides.
-- **Separation payoff**: change transport (e.g. add validation) in preload. Change semantics (e.g. promotion on close) in `close-reopen.ts`. Neither leaks into the other.
+- **`shared/ipc/contract.ts`**: IPC boundary. Payload, success and error schemas per channel. No domain logic.
+- **Relation**: `window.arbor[f](payload) ≈ store[f](...)`, through a one-line handler in `ipc/handlers.ts`. The contract declares the same error union as the store method, and the compiler checks the handler against it.
+- **Separation payoff**: change the wire (e.g. a new field) in the contract. Change semantics (e.g. promotion on close) in `close-reopen.ts`. Neither leaks into the other.
 
 ```mermaid
 flowchart LR
-    Ren["renderer: window.arbor.createContainer()"] --> Pre["preload: invoke(arbor:container:create)"]
-    Pre --> Han["handlers.ts: runRequest(store.createContainer())"]
-    Han --> Eff["AppRuntime.runPromiseExit"]
-    Eff --> Pure["state/containers.ts: createContainer(state, ...): Result"]
+    Ren["renderer: window.arbor.createContainer({})"] --> Pre["preload: invoke(arbor:container:create)"]
+    Pre --> Han["router.ts: decode, then handlers.ts: store.createContainer()"]
+    Han --> Pure["state/containers.ts: createContainer(state, ...): Result"]
     Pure --> Commit["changes -> broadcast"]
 ```
 
@@ -103,6 +102,6 @@ flowchart LR
 
 # Rules
 
-1. Add mutation in 4 steps: pure op in `state/*.ts` -> method on `StoreService` -> wiring in `BrowserStore.layer` -> `handle()` in `handlers.ts` + `api` in preload.
+1. Add mutation in 4 steps: pure op in `state/*.ts` -> method on `StoreService` -> wiring in `BrowserStore.layer` -> a key in `shared/ipc/channels.ts` and `contract.ts` -> the handler in `ipc/handlers.ts` (the compiler asks for it).
 2. Keep ops pure: `(state, …) -> Result<DomainState, E>`, failures as tagged errors from `shared/errors.ts`, never `throw`. Side effects (`loadURL`, `send`) live in `events.ts` / `handlers.ts` / `changes` consumers only.
-3. Convert errors at boundary: `DomainError -> throw new Error(error.message)` via `runRequest()`. Renderer receives rejected promise with `message: string`.
+3. Errors cross the boundary as values: the router encodes a store failure into `{ ok: false, error: { _tag, … } }`. Only bugs reject.
