@@ -14,19 +14,23 @@ import {
     setCollapsed,
 } from "../src/main/state/tabs"
 import type { ContainerMeta, TabNode } from "../src/shared/protocol"
+import { newChild, newContainer, newTab, nextTabId, ok } from "./support/domain"
 
 const buildRichState = (): DomainState => {
-    let state = createContainer(initialState(), { name: "Work", color: "#ef4444" }).state
+    let state = ok(
+        createContainer(initialState(), newContainer({ name: "Work", color: "#ef4444" })),
+    )
     const rootA = state.containers[0].activeTabId!
-    const childResult = createChildTab(state, rootA, { url: "https://example.com/child" })
-    state = childResult.state
-    const child = childResult.value
-    state = setCollapsed(state, rootA, true)
-    state = renameTab(state, child, "My label")
-    state = createTab(state, { url: "https://example.org" }).state
-    state = createContainer(state, { name: "Personal", color: "#22c55e" }).state
-    state = switchContainer(state, state.containers[0].id)
-    state = selectTab(state, rootA)
+    const child = nextTabId()
+    state = ok(
+        createChildTab(state, rootA, newChild({ id: child, url: "https://example.com/child" })),
+    )
+    state = ok(setCollapsed(state, rootA, true))
+    state = ok(renameTab(state, child, "My label"))
+    state = ok(createTab(state, newTab({ url: "https://example.org" })))
+    state = ok(createContainer(state, newContainer({ name: "Personal", color: "#22c55e" })))
+    state = ok(switchContainer(state, state.containers[0].id, 0))
+    state = ok(selectTab(state, rootA, 0))
     return state
 }
 
@@ -84,10 +88,12 @@ describe("persist round-trip", () => {
 
     it("round-trips extensionConsent", () => {
         let state = buildRichState()
-        state = setExtensionConsent(state, "ext-aaa", {
-            permissions: ["storage"],
-            origins: ["https://example.com/*"],
-        })
+        state = ok(
+            setExtensionConsent(state, "ext-aaa", {
+                permissions: ["storage"],
+                origins: ["https://example.com/*"],
+            }),
+        )
         const restored = fromPersisted(toPersisted(state))!
         expect(restored.extensionConsent).toEqual({
             "ext-aaa": { permissions: ["storage"], origins: ["https://example.com/*"] },

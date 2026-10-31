@@ -1,108 +1,172 @@
-import { Effect } from "effect"
+import { Deferred, Effect, Exit, Result, Stream, type Scope } from "effect"
+import { TestClock } from "effect/testing"
 import { describe, expect, it } from "vite-plus/test"
 
 import { createContainer } from "../src/main/state/containers"
 import { initialState, type DomainState } from "../src/main/state/state"
-import { BrowserStore, makeStoreLayer } from "../src/main/state/store"
+import { BrowserStore, type StoreService } from "../src/main/state/store"
+import { LastTab } from "../src/shared/errors"
+import { runTest } from "./support/effect"
 
-const makeStore = (onCommit?: (state: DomainState) => void) => {
-    const commits: DomainState[] = []
-    const track = (state: DomainState): void => {
-        commits.push(state)
-        onCommit?.(state)
-    }
-    const layer = makeStoreLayer(initialState(), track)
-    const store = Effect.runSync(
-        Effect.gen(function* () {
-            return yield* BrowserStore
-        }).pipe(Effect.provide(layer)),
-    )
-    return { store, commits }
-}
+const makeStore = (initial: DomainState = initialState()) =>
+    Effect.gen(function* () {
+        return yield* BrowserStore
+    }).pipe(Effect.provide(BrowserStore.layer(initial)))
 
-const run = <A, E>(effect: Effect.Effect<A, E>): Promise<A> => Effect.runPromise(effect)
+/** Every change published after the call, collected by a consumer fiber like the app's. */
+const collectChanges = (store: StoreService): Effect.Effect<DomainState[], never, Scope.Scope> =>
+    Effect.gen(function* () {
+        const changes: DomainState[] = []
+        const subscribed = yield* Deferred.make<void>()
+        yield* store.changes.pipe(
+            Stream.tap(() => Deferred.succeed(subscribed, undefined)),
+            // The first emission is the state at subscription, not a change.
+            Stream.drop(1),
+            Stream.runForEach((state) => Effect.sync(() => changes.push(state))),
+            Effect.forkScoped,
+        )
+        yield* Deferred.await(subscribed)
+        return changes
+    })
+
+/** Let consumer fibers catch up with what was just published. */
+const settle = Effect.repeat(Effect.yieldNow, { times: 10 })
+
+const scopedTest = <A, E>(effect: Effect.Effect<A, E, Scope.Scope | TestClock.TestClock>) =>
+    runTest(Effect.scoped(effect))
 
 describe("store transitions", () => {
-    it("creators return the IDs of the entities they created", async () => {
-        const { store } = makeStore()
-        const containerId = await run(store.createContainer("Work", "#ef4444"))
-        const tabId = await run(store.createTab("https://example.com"))
-        const childId = await run(store.createChildTab(tabId, "https://example.com/x"))
-        const snap = await run(store.snapshot)
-        expect(snap.containers.map((c) => c.id)).toContain(containerId)
-        const tabIds = new Set(snap.tabs.map((t) => t.id))
-        expect(tabIds.has(tabId)).toBe(true)
-        expect(tabIds.has(childId)).toBe(true)
-    })
+    it("creators return the IDs of the entities they created", () =>
+        scopedTest(
+            Effect.gen(function* () {
+                const store = yield* makeStore()
+                const containerId = yield* store.createContainer("Work", "#ef4444")
+                const tabId = yield* store.createTab("https://example.com")
+                const childId = yield* store.createChildTab(tabId, "https://example.com/x")
+                const snap = yield* store.snapshot
+                expect(snap.containers.map((c) => c.id)).toContain(containerId)
+                const tabIds = new Set(snap.tabs.map((t) => t.id))
+                expect(tabIds.has(tabId)).toBe(true)
+                expect(tabIds.has(childId)).toBe(true)
+            }),
+        ))
 
-    it("domain failure leaves state unchanged and publishes zero times", async () => {
-        const { store, commits } = makeStore()
-        await run(store.createContainer())
-        commits.length = 0
-        await expect(run(store.closeTab("tab-missing"))).rejects.toThrow()
-        expect(commits).toHaveLength(0)
-    })
+    it("a domain failure is a typed failure, leaves state unchanged and publishes nothing", () =>
+        scopedTest(
+            Effect.gen(function* () {
+                const store = yield* makeStore()
+                yield* store.createContainer()
+                const before = yield* store.state
+                const tabId = (yield* store.snapshot).activeTabId!
+                const changes = yield* collectChanges(store)
 
-    it("a changed state publishes once; a no-op publishes zero times", async () => {
-        const { store, commits } = makeStore()
-        await run(store.createContainer())
-        commits.length = 0
-        // setCollapsed on a real tab with the same value is a no-op.
-        const snap = await run(store.snapshot)
-        const tabId = snap.activeTabId!
-        await run(store.setCollapsed(tabId, false)) // already false → no-op
-        expect(commits).toHaveLength(0)
-        await run(store.setCollapsed(tabId, true))
-        expect(commits).toHaveLength(1)
-    })
+                const exit = yield* Effect.exit(store.closeTab(tabId))
+                yield* settle
 
-    it("updateTabMeta with unchanged metadata does not publish", async () => {
-        const { store, commits } = makeStore()
-        await run(store.createContainer())
-        const snap = await run(store.snapshot)
-        const tabId = snap.activeTabId!
-        const tab = snap.tabs.find((t) => t.id === tabId)!
-        commits.length = 0
-        await run(store.updateTabMeta(tabId, { title: tab.title, url: tab.url }))
-        expect(commits).toHaveLength(0)
-    })
+                // A failure, not a defect: the error channel carries the tag.
+                expect(Exit.isFailure(exit) && Exit.hasFails(exit)).toBe(true)
+                const error = yield* Effect.flip(store.closeTab(tabId))
+                expect(error).toBeInstanceOf(LastTab)
+                expect(yield* store.state).toBe(before)
+                expect(changes).toHaveLength(0)
+            }),
+        ))
 
-    it("post-commit observer failure does not fail the mutation", async () => {
-        const { store } = makeStore((state) => {
-            if (state.tabs.size > 0) throw new Error("observer boom")
-        })
-        // First createContainer triggers the throwing observer, but the mutation must succeed.
-        const id = await run(store.createContainer())
-        const snap = await run(store.snapshot)
-        expect(snap.containers.map((c) => c.id)).toContain(id)
-    })
+    it("a changed state publishes once; a no-op publishes nothing", () =>
+        scopedTest(
+            Effect.gen(function* () {
+                const store = yield* makeStore()
+                yield* store.createContainer()
+                const tabId = (yield* store.snapshot).activeTabId!
+                const changes = yield* collectChanges(store)
 
-    it("concurrent mutations retain all successful updates", async () => {
-        const { store } = makeStore()
-        await run(store.createContainer())
-        const results = await Promise.all([
-            run(store.createTab("https://a.test")),
-            run(store.createTab("https://b.test")),
-            run(store.createTab("https://c.test")),
-        ])
-        expect(results).toHaveLength(3)
-        expect(new Set(results).size).toBe(3)
-        const snap = await run(store.snapshot)
-        expect(snap.tabs.length).toBe(4) // 1 initial + 3 created
-    })
+                yield* store.setCollapsed(tabId, false) // already false: a no-op
+                yield* settle
+                expect(changes).toHaveLength(0)
+
+                yield* store.setCollapsed(tabId, true)
+                yield* settle
+                expect(changes).toHaveLength(1)
+            }),
+        ))
+
+    it("updateTabMeta with unchanged metadata does not publish", () =>
+        scopedTest(
+            Effect.gen(function* () {
+                const store = yield* makeStore()
+                yield* store.createContainer()
+                const snap = yield* store.snapshot
+                const tab = snap.tabs.find((t) => t.id === snap.activeTabId)!
+                const changes = yield* collectChanges(store)
+
+                yield* store.updateTabMeta(tab.id, { title: tab.title, url: tab.url })
+                yield* settle
+                expect(changes).toHaveLength(0)
+            }),
+        ))
+
+    it("a failing consumer cannot fail a mutation", () =>
+        scopedTest(
+            Effect.gen(function* () {
+                const store = yield* makeStore()
+                yield* store.changes.pipe(
+                    Stream.drop(1),
+                    Stream.runForEach(() => Effect.die(new Error("observer boom"))),
+                    Effect.forkScoped,
+                )
+                const id = yield* store.createContainer()
+                yield* settle
+                const snap = yield* store.snapshot
+                expect(snap.containers.map((c) => c.id)).toContain(id)
+            }),
+        ))
+
+    it("stamps lastActiveAt with the clock's time", () =>
+        scopedTest(
+            Effect.gen(function* () {
+                const store = yield* makeStore()
+                yield* store.createContainer()
+                const first = (yield* store.snapshot).activeTabId!
+                yield* store.createTab()
+
+                yield* TestClock.setTime(1_234_567)
+                yield* store.selectTab(first)
+
+                const tab = (yield* store.state).tabs.get(first)!
+                expect(tab.lastActiveAt).toBe(1_234_567)
+            }),
+        ))
+
+    it("concurrent mutations retain all successful updates", () =>
+        scopedTest(
+            Effect.gen(function* () {
+                const store = yield* makeStore()
+                yield* store.createContainer()
+                const results = yield* Effect.all(
+                    [
+                        store.createTab("https://a.test"),
+                        store.createTab("https://b.test"),
+                        store.createTab("https://c.test"),
+                    ],
+                    { concurrency: "unbounded" },
+                )
+                expect(new Set(results).size).toBe(3)
+                const snap = yield* store.snapshot
+                expect(snap.tabs.length).toBe(4) // 1 initial + 3 created
+            }),
+        ))
 })
 
 describe("store with pre-built state", () => {
-    it("starts from the provided initial state", async () => {
-        const seeded = createContainer(initialState()).state
-        const commits: DomainState[] = []
-        const layer = makeStoreLayer(seeded, (s) => commits.push(s))
-        const store = Effect.runSync(
+    it("starts from the provided initial state", () =>
+        scopedTest(
             Effect.gen(function* () {
-                return yield* BrowserStore
-            }).pipe(Effect.provide(layer)),
-        )
-        const snap = await run(store.snapshot)
-        expect(snap.containers).toHaveLength(1)
-    })
+                const seeded = Result.getOrThrow(
+                    createContainer(initialState(), { id: "container-1", tabId: "tab-1", now: 0 }),
+                )
+                const store = yield* makeStore(seeded)
+                const snap = yield* store.snapshot
+                expect(snap.containers).toHaveLength(1)
+            }),
+        ))
 })
