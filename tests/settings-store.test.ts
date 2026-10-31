@@ -1,7 +1,8 @@
 import { Context, Deferred, Effect, Exit, Layer, Scope, Stream } from "effect"
 import { describe, expect, it } from "vite-plus/test"
 
-import { fromPersistedSettings, SettingsRejected, SettingsStore } from "../src/main/settings"
+import { fromPersistedSettings, SettingsStore } from "../src/main/settings"
+import { SettingsRejected } from "../src/shared/errors"
 import { DEFAULT_SETTINGS } from "../src/shared/settings"
 import { runTest, settle } from "./support/effect"
 import { memoryJsonFileLayer } from "./support/json-file"
