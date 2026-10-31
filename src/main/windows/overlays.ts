@@ -2,6 +2,7 @@ import { Deferred, Effect, Exit, Predicate, Queue } from "effect"
 import { BrowserWindow, type BrowserWindow as ParentWindow } from "electron"
 
 import type { Anchor, PermissionPromptRequest, Rect, RenameTarget } from "../../shared/protocol"
+import type { Pusher } from "../ipc/router"
 import { loadRenderer, preloadPath } from "./paths"
 
 // --- omnibox popup
@@ -29,7 +30,12 @@ const repositionPopup = (win: ParentWindow): void => {
     })
 }
 
-export const showOmniboxPopup = (win: ParentWindow, rect: Anchor, query: string): void => {
+export const showOmniboxPopup = (
+    win: ParentWindow,
+    rect: Anchor,
+    query: string,
+    ipc: Pusher,
+): void => {
     anchor = rect
     lastQuery = query
     if (!popup || popup.isDestroyed()) {
@@ -56,14 +62,13 @@ export const showOmniboxPopup = (win: ParentWindow, rect: Anchor, query: string)
         popup.on("closed", () => {
             popup = null
         })
+        ipc.attach(popup.webContents)
         // Queries sent while the popup renderer is still loading would be lost.
-        popup.webContents.on("did-finish-load", () => {
-            popup?.webContents.send("arbor:omnibox:query", lastQuery)
-        })
+        popup.webContents.on("did-finish-load", () => ipc.push("omniboxQuery", lastQuery))
         void loadRenderer(popup, "omnibox")
     }
     repositionPopup(win)
-    popup.webContents.send("arbor:omnibox:query", lastQuery)
+    ipc.push("omniboxQuery", lastQuery)
     popup.showInactive()
 }
 
@@ -112,7 +117,7 @@ const repositionExtensionsPopup = (win: ParentWindow): void => {
     })
 }
 
-export const toggleExtensionsPopup = (win: ParentWindow, rect: Anchor): void => {
+export const toggleExtensionsPopup = (win: ParentWindow, rect: Anchor, ipc: Pusher): void => {
     const open = extensionsPopup
     if (open && !open.isDestroyed()) {
         closeExtensionsPopup()
@@ -145,6 +150,7 @@ export const toggleExtensionsPopup = (win: ParentWindow, rect: Anchor): void => 
         extensionsPopup = null
     })
     extensionsPopup.on("blur", () => closeExtensionsPopup(true))
+    ipc.attach(extensionsPopup.webContents)
     void loadRenderer(extensionsPopup, "extensions")
     repositionExtensionsPopup(win)
     extensionsPopup.show()
@@ -327,7 +333,7 @@ export const repositionRenameModal = (win: BrowserWindow): void => {
     modal.setBounds(win.getContentBounds())
 }
 
-export const openRenameModal = (win: BrowserWindow, target: RenameTarget): void => {
+export const openRenameModal = (win: BrowserWindow, target: RenameTarget, ipc: Pusher): void => {
     closeRenameModal()
     pendingTarget = target
 
@@ -354,9 +360,10 @@ export const openRenameModal = (win: BrowserWindow, target: RenameTarget): void 
         modal = null
         pendingTarget = null
     })
-    // The renderer registers its target listener during load; replay afterwards.
+    ipc.attach(modal.webContents)
+    // The renderer registers its target listener during load, replay afterwards.
     modal.webContents.on("did-finish-load", () => {
-        modal?.webContents.send("arbor:rename:target", pendingTarget)
+        if (pendingTarget) ipc.push("renameTarget", pendingTarget)
     })
     void loadRenderer(modal, "rename")
     modal.show()
@@ -374,7 +381,7 @@ let promptQueue: Queue.Queue<PromptJob> | null = null
 let permissionModal: BrowserWindow | null = null
 let activeAnswer: Deferred.Deferred<boolean> | null = null
 
-const showPrompt = (job: PromptJob): void => {
+const showPrompt = (job: PromptJob, ipc: Pusher): void => {
     activeAnswer = job.answer
     const win = job.parent && !job.parent.isDestroyed() ? job.parent : null
     const bounds = win?.getContentBounds()
@@ -406,17 +413,16 @@ const showPrompt = (job: PromptJob): void => {
         // Idempotent: a prior settle via `respondPermissionPrompt` wins.
         Deferred.doneUnsafe(job.answer, Exit.succeed(false))
     })
-    // The renderer registers its request listener during load; replay afterwards.
-    promptWindow.webContents.on("did-finish-load", () => {
-        promptWindow.webContents.send("arbor:permission:request", job.request)
-    })
+    ipc.attach(promptWindow.webContents)
+    // The renderer registers its request listener during load, replay afterwards.
+    promptWindow.webContents.on("did-finish-load", () => ipc.push("permissionRequest", job.request))
     void loadRenderer(promptWindow, "permission")
     promptWindow.show()
 }
 
-const runPrompt = (job: PromptJob): Effect.Effect<void> =>
+const runPrompt = (job: PromptJob, ipc: Pusher): Effect.Effect<void> =>
     Effect.suspend(() => {
-        showPrompt(job)
+        showPrompt(job, ipc)
         return Deferred.await(job.answer)
     }).pipe(
         Effect.asVoid,
@@ -424,18 +430,21 @@ const runPrompt = (job: PromptJob): Effect.Effect<void> =>
         Effect.ensuring(Deferred.succeed(job.answer, false)),
     )
 
-export const promptConsumer: Effect.Effect<never> = Effect.gen(function* () {
-    const queue = yield* Queue.unbounded<PromptJob>()
-    promptQueue = queue
-    return yield* Effect.forever(
-        Effect.gen(function* () {
-            const job = yield* Queue.take(queue)
-            yield* runPrompt(job).pipe(
-                Effect.catchCause((cause) => Effect.logError("Permission prompt failed", cause)),
-            )
-        }),
-    )
-})
+export const promptConsumer = (ipc: Pusher): Effect.Effect<never> =>
+    Effect.gen(function* () {
+        const queue = yield* Queue.unbounded<PromptJob>()
+        promptQueue = queue
+        return yield* Effect.forever(
+            Effect.gen(function* () {
+                const job = yield* Queue.take(queue)
+                yield* runPrompt(job, ipc).pipe(
+                    Effect.catchCause((cause) =>
+                        Effect.logError("Permission prompt failed", cause),
+                    ),
+                )
+            }),
+        )
+    })
 
 /** Resolves `true` on Allow, `false` on Deny or when the dialog is closed. One at a time. */
 export const openPermissionPrompt = (

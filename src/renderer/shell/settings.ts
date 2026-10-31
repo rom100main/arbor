@@ -27,7 +27,7 @@ darkQuery.addEventListener("change", () => {
  */
 export const initSettings = createInit<Settings>({
     subscribe: (callback) => window.arbor.onSettings(callback),
-    fetch: () => window.arbor.getSettings(),
+    fetch: async () => (await window.arbor.getSettings()).value,
     apply: (value) => {
         setSettings(value)
         applyTheme(value.theme)

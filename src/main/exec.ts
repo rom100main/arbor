@@ -1,21 +1,6 @@
-import { Cause, Effect, Exit, Option } from "effect"
+import { Cause, Effect } from "effect"
 
 import { AppRuntime } from "./runtime"
-
-/**
- * Request/response: run an Effect and convert its Exit into a rejected-Error promise.
- * Used at IPC invoke handlers where the renderer expects a rejected Error on failure:
- * the error's `message` is what the renderer sees.
- */
-export const runRequest = async <A, E extends { readonly message: string }>(
-    effect: Effect.Effect<A, E>,
-): Promise<A> => {
-    const exit = await AppRuntime.runPromiseExit(effect)
-    if (Exit.isSuccess(exit)) return exit.value
-    const failure = Cause.findErrorOption(exit.cause)
-    if (Option.isSome(failure)) throw new Error(failure.value.message)
-    throw new Error(Cause.pretty(exit.cause))
-}
 
 /**
  * Background: fire-and-forget, never rejects.

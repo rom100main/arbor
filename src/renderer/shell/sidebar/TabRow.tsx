@@ -47,7 +47,7 @@ export const TabRow = (props: {
             }}
             style={{ "--depth": props.tab.depth }}
             draggable="true"
-            onClick={() => void window.arbor.selectTab(props.tab.id)}
+            onClick={() => void window.arbor.selectTab({ tabId: props.tab.id })}
             onContextMenu={(event) => {
                 event.preventDefault()
                 props.onRename()
@@ -102,7 +102,10 @@ export const TabRow = (props: {
                         aria-label={props.collapsed ? "Expand" : "Collapse"}
                         onClick={(event) => {
                             event.stopPropagation()
-                            void window.arbor.setCollapsed(props.tab.id, !props.collapsed)
+                            void window.arbor.setCollapsed({
+                                tabId: props.tab.id,
+                                collapsed: !props.collapsed,
+                            })
                         }}
                     >
                         <Icon name={props.collapsed ? "chevron-right" : "chevron-down"} size={12} />
@@ -117,7 +120,7 @@ export const TabRow = (props: {
                     aria-label="Close tab"
                     onClick={(event) => {
                         event.stopPropagation()
-                        void window.arbor.closeTab(props.tab.id)
+                        void window.arbor.closeTab({ tabId: props.tab.id })
                     }}
                 >
                     <Icon name="x" size={12} />

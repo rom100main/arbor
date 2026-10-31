@@ -19,7 +19,7 @@ const fileLogger = (file: string) =>
     })
 
 /** Process-wide logging: one format, dev-only debug. Later phases merge their app-scope layers in here. */
-export const LoggingLive = Layer.unwrap(
+export const Logging = Layer.unwrap(
     // Built lazily, so app.getPath runs when the runtime first starts, not at import.
     Effect.sync(() =>
         Layer.mergeAll(
@@ -36,6 +36,6 @@ export const LoggingLive = Layer.unwrap(
     ),
 )
 
-export const AppLive = LoggingLive // grows in 04, 05, 06 and 07
+export const AppLayer = Logging // grows in 04, 05, 06 and 07
 
-export const AppRuntime = ManagedRuntime.make(AppLive)
+export const AppRuntime = ManagedRuntime.make(AppLayer)

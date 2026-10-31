@@ -1,24 +1,15 @@
-import { BrowserWindow, ipcMain } from "electron"
+import { Effect } from "effect"
 
-import { decodeOr } from "../../shared/decode"
-import { Rect, type ContainerIcon, type ContainerId, type TabId } from "../../shared/protocol"
-import { runBackground, runRequest } from "../exec"
+import { NoActionPopup, NoWindow } from "../../shared/errors"
+import type { TabId } from "../../shared/protocol"
+import { runBackground } from "../exec"
 import { pinnedActionInfo } from "../extension/action"
 import { sessionForExtension } from "../extension/loader"
-import type { SettingsService } from "../settings"
 import type { DomainState } from "../state/state"
-import type { StoreService } from "../state/store"
 import { openExtensionActionPopup, setExtensionAnchor } from "../windows/overlays"
 import { existingSessionForContainer, viewForTab } from "../windows/tab-views"
-
-const parseAnchor = decodeOr(Rect)
-
-type Handler = (event: Electron.IpcMainInvokeEvent, ...args: any[]) => unknown
-
-const handle = (channel: string, handler: Handler): void => {
-    ipcMain.removeHandler(channel)
-    ipcMain.handle(channel, async (event, ...args) => handler(event, ...args))
-}
+import type { HostRuntime } from "./events"
+import type { RequestHandlers } from "./router"
 
 const actionPopupSession = (state: DomainState, extensionId: string): Electron.Session =>
     sessionForExtension(
@@ -26,82 +17,58 @@ const actionPopupSession = (state: DomainState, extensionId: string): Electron.S
         state.activeContainerId ? existingSessionForContainer(state.activeContainerId) : undefined,
     )
 
-export const registerIpc = (
-    store: StoreService,
-    settings: SettingsService,
-    getState: () => DomainState,
-): void => {
-    handle("arbor:get-snapshot", () => runRequest(store.snapshot))
-    handle("arbor:settings:get", () => runRequest(settings.get))
-    handle("arbor:settings:set", (_event, patch: unknown) => runRequest(settings.set(patch)))
-
-    // The toolbar reads action metadata straight from the extension's manifest:
-    // electron-chrome-extensions cannot serve it,
-    // because it keeps extensions and tabs in one session and Arbor does not.
-    handle("arbor:extensions:action-info", (_event, extensionId: string) =>
-        pinnedActionInfo(extensionId),
-    )
-    handle("arbor:extensions:action-popup", (event, extensionId: unknown, anchor: unknown) => {
-        if (typeof extensionId !== "string") throw new Error("Invalid extension id")
-        const popupUrl = pinnedActionInfo(extensionId).popupUrl
-        if (!popupUrl) throw new Error(`Extension ${extensionId} has no action popup`)
-        const rect = parseAnchor(anchor)
-        if (rect) setExtensionAnchor(extensionId, rect)
-        const win = BrowserWindow.fromWebContents(event.sender)
-        if (!win) throw new Error("No window to anchor the action popup to")
-        openExtensionActionPopup(
-            win,
-            extensionId,
-            popupUrl,
-            actionPopupSession(getState(), extensionId),
-            (url) => {
-                void runBackground(store.createTab(url))
-            },
-        )
+/** Back, forward and reload do nothing for a tab with no live view. */
+const withView = (tabId: TabId, f: (wc: Electron.WebContents) => void): Effect.Effect<void> =>
+    Effect.sync(() => {
+        const view = viewForTab(tabId)
+        if (view) f(view.webContents)
     })
 
-    handle("arbor:container:create", (_event, name?: string, color?: string) =>
-        runRequest(store.createContainer(name, color)),
-    )
-    handle("arbor:container:switch", (_event, containerId: ContainerId) =>
-        runRequest(store.switchContainer(containerId)),
-    )
-    handle("arbor:container:rename", (_event, containerId: ContainerId, name: string) =>
-        runRequest(store.renameContainer(containerId, name)),
-    )
-    handle("arbor:container:set-color", (_event, containerId: ContainerId, color: string) =>
-        runRequest(store.setContainerColor(containerId, color)),
-    )
-    handle("arbor:container:set-icon", (_event, containerId: ContainerId, icon: ContainerIcon) =>
-        runRequest(store.setContainerIcon(containerId, icon)),
-    )
-    handle("arbor:container:reorder", (_event, containerId: ContainerId, toIndex: number) =>
-        runRequest(store.reorderContainer(containerId, toIndex)),
-    )
+export const requestHandlers = (rt: HostRuntime): RequestHandlers<never> => {
+    const { store, settings } = rt
+    return {
+        getSnapshot: () => store.snapshot,
+        getSettings: () => settings.get,
+        setSettings: (patch) => settings.set(patch),
 
-    handle("arbor:tab:create", (_event, url?: string) => runRequest(store.createTab(url)))
-    handle("arbor:tab:select", (_event, tabId: TabId) => runRequest(store.selectTab(tabId)))
-    handle("arbor:tab:set-collapsed", (_event, tabId: TabId, collapsed: boolean) =>
-        runRequest(store.setCollapsed(tabId, collapsed)),
-    )
-    handle("arbor:tab:close", (_event, tabId: TabId) => runRequest(store.closeTab(tabId)))
-    handle("arbor:tab:rename", (_event, tabId: TabId, label: string | null) =>
-        runRequest(store.renameTab(tabId, label)),
-    )
-    handle(
-        "arbor:tab:move",
-        (_event, options: { tabId: TabId; parentId: TabId | null; index: number }) =>
-            runRequest(store.moveTab(options)),
-    )
-    handle("arbor:tab:move-to-container", (_event, tabId: TabId, containerId: ContainerId) =>
-        runRequest(store.moveToContainer(tabId, containerId)),
-    )
+        extensionActionInfo: ({ extensionId }) => Effect.sync(() => pinnedActionInfo(extensionId)),
+        openExtensionActionPopup: ({ extensionId, anchor }) =>
+            Effect.gen(function* () {
+                const { popupUrl } = pinnedActionInfo(extensionId)
+                if (!popupUrl) return yield* new NoActionPopup({ extensionId })
+                const win = rt.win
+                if (!win) return yield* new NoWindow()
+                if (anchor) setExtensionAnchor(extensionId, anchor)
+                const state = yield* store.state
+                return openExtensionActionPopup(
+                    win,
+                    extensionId,
+                    popupUrl,
+                    actionPopupSession(state, extensionId),
+                    (url) => {
+                        void runBackground(store.createTab(url))
+                    },
+                )
+            }),
 
-    handle("arbor:tab:back", (_event, tabId: TabId) =>
-        viewForTab(tabId)?.webContents.navigationHistory.goBack(),
-    )
-    handle("arbor:tab:forward", (_event, tabId: TabId) =>
-        viewForTab(tabId)?.webContents.navigationHistory.goForward(),
-    )
-    handle("arbor:tab:reload", (_event, tabId: TabId) => viewForTab(tabId)?.webContents.reload())
+        createContainer: ({ name, color }) => store.createContainer(name, color),
+        switchContainer: ({ containerId }) => store.switchContainer(containerId),
+        renameContainer: ({ containerId, name }) => store.renameContainer(containerId, name),
+        setContainerColor: ({ containerId, color }) => store.setContainerColor(containerId, color),
+        setContainerIcon: ({ containerId, icon }) => store.setContainerIcon(containerId, icon),
+        reorderContainer: ({ containerId, toIndex }) =>
+            store.reorderContainer(containerId, toIndex),
+
+        createTab: ({ url }) => store.createTab(url),
+        selectTab: ({ tabId }) => store.selectTab(tabId),
+        setCollapsed: ({ tabId, collapsed }) => store.setCollapsed(tabId, collapsed),
+        closeTab: ({ tabId }) => store.closeTab(tabId),
+        renameTab: ({ tabId, label }) => store.renameTab(tabId, label),
+        moveTab: (move) => store.moveTab(move),
+        moveToContainer: ({ tabId, containerId }) => store.moveToContainer(tabId, containerId),
+
+        goBack: ({ tabId }) => withView(tabId, (wc) => wc.navigationHistory.goBack()),
+        goForward: ({ tabId }) => withView(tabId, (wc) => wc.navigationHistory.goForward()),
+        reload: ({ tabId }) => withView(tabId, (wc) => wc.reload()),
+    }
 }

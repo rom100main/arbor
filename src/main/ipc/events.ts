@@ -1,10 +1,9 @@
 import { Effect, Stream } from "effect"
-import { BrowserWindow, ipcMain } from "electron"
+import type { BrowserWindow } from "electron"
 
 import type {
-    Anchor,
     BrowserSnapshot,
-    ExtensionMenuRequest,
+    ContainerId,
     OmniboxActivation,
     RenameTarget,
     TabId,
@@ -13,7 +12,6 @@ import { DEFAULT_SEARCH_TEMPLATE, type Settings } from "../../shared/settings"
 import { omniboxTarget } from "../../shared/url"
 import { runBackground } from "../exec"
 import { attachExtensionTab, openExtensionMenu } from "../extension/loader"
-import { AppRuntime } from "../runtime"
 import type { SettingsService } from "../settings"
 import { snapshot as toSnapshot, type DomainState } from "../state/state"
 import type { StoreService } from "../state/store"
@@ -29,22 +27,23 @@ import {
     showOmniboxPopup,
     toggleExtensionsPopup,
 } from "../windows/overlays"
-import { setShellRaised, shellWebContents } from "../windows/shell-view"
+import { setShellRaised } from "../windows/shell-view"
 import {
     destroyView,
     ensureView,
-    internalViewWebContents,
     navigateTab,
     sessionMismatch,
     showTab,
     viewForTab,
 } from "../windows/tab-views"
+import type { EventHandlers, IpcPushService, Pusher } from "./router"
 
 /** Mutable host runtime owned by index.ts boot. */
 export interface HostRuntime {
     win: BrowserWindow | null
     store: StoreService
     settings: SettingsService
+    readonly ipc: Pusher
     readonly getState: () => DomainState
     readonly getSettings: () => Settings
     previousActiveTab: TabId | null
@@ -53,28 +52,14 @@ export interface HostRuntime {
 }
 
 /** Every settings change goes to every renderer, the first emission is what they already have. */
-export const registerSettingsBroadcast = (settings: SettingsService): void => {
-    AppRuntime.runFork(
-        settings.changes.pipe(
-            Stream.drop(1),
-            Stream.runForEach((next) =>
-                Effect.sync(() => {
-                    for (const window of BrowserWindow.getAllWindows()) {
-                        window.webContents.send("arbor:settings:changed", next)
-                    }
-                    shellWebContents()?.send("arbor:settings:changed", next)
-                    for (const wc of internalViewWebContents()) {
-                        wc.send("arbor:settings:changed", next)
-                    }
-                }).pipe(
-                    Effect.catchCause((cause) =>
-                        Effect.logError("Settings broadcast failed", cause),
-                    ),
-                ),
-            ),
-        ),
+export const broadcastSettings = (
+    settings: SettingsService,
+    pushes: IpcPushService,
+): Effect.Effect<void> =>
+    settings.changes.pipe(
+        Stream.drop(1),
+        Stream.runForEach((next) => pushes.push("settings", next)),
     )
-}
 
 export const makeWindowSync = (rt: HostRuntime): ((next: DomainState) => void) => {
     let previous: DomainState | null = null
@@ -98,18 +83,14 @@ export const makeWindowSync = (rt: HostRuntime): ((next: DomainState) => void) =
         if (activeTabId !== null && rt.win !== null) {
             const tab = next.tabs.get(activeTabId)
             if (tab && (activeTabId !== rt.previousActiveTab || !viewForTab(activeTabId))) {
-                const view = ensureView({ store: rt.store, getState: rt.getState }, tab.id, tab.url)
+                const view = ensureView(rt, tab.id, tab.url)
                 showTab(rt.win, tab.id)
                 attachExtensionTab(rt.win, view.webContents)
             }
             rt.previousActiveTab = activeTabId
         }
 
-        // The popup window renders omnibox suggestions, so state goes to every window.
-        for (const window of BrowserWindow.getAllWindows()) {
-            window.webContents.send("arbor:state", snapshot)
-        }
-        shellWebContents()?.send("arbor:state", snapshot)
+        rt.ipc.push("state", snapshot)
     }
 }
 
@@ -127,71 +108,76 @@ export const makeOmniboxActivator =
                     payload.query,
                     rt.getSettings().searchTemplate ?? DEFAULT_SEARCH_TEMPLATE,
                 )
-                await navigateTab({ store, getState: rt.getState }, tabId, target)
+                await navigateTab(rt, tabId, target)
             }
         }
         hideOmniboxPopup()
-        shellWebContents()?.send("arbor:omnibox:activated")
+        rt.ipc.push("omniboxActivated")
     }
 
-/** Fire-and-forget overlay channels previously inline in index.ts. */
-export const registerOverlayEvents = (
+/** Rename the container or tab as it is now, not as the renderer last saw it. */
+const renameTarget = (
+    state: DomainState,
+    target: { kind: "container"; containerId: ContainerId } | { kind: "tab"; tabId: TabId },
+): RenameTarget | null => {
+    if (target.kind === "tab") {
+        const tab = state.tabs.get(target.tabId)
+        return tab ? { kind: "tab", tab } : null
+    }
+    const container = state.containers.find((c) => c.id === target.containerId)
+    return container ? { kind: "container", container } : null
+}
+
+export const eventHandlers = (
     rt: HostRuntime,
-    handleOmniboxActivate: (payload: OmniboxActivation) => Promise<void>,
-): void => {
-    ipcMain.on(
-        "arbor:omnibox:update",
-        (_event, payload: { query: string; rect: Anchor | null }) => {
-            rt.lastOmniboxQuery = payload.query
+    activateOmnibox: (payload: OmniboxActivation) => Promise<void>,
+): EventHandlers<never> => ({
+    omniboxUpdate: ({ query, rect }) =>
+        Effect.sync(() => {
+            rt.lastOmniboxQuery = query
             if (!rt.win) return
-            if (!payload.rect || payload.query.trim().length === 0) {
+            if (!rect || query.trim().length === 0) {
                 hideOmniboxPopup()
                 return
             }
-            showOmniboxPopup(rt.win, payload.rect, payload.query)
-        },
-    )
-    ipcMain.on("arbor:omnibox:move-selection", (_event, delta: number) => {
-        popupWebContents()?.send("arbor:omnibox:move-selection", delta)
-    })
-    ipcMain.on("arbor:omnibox:activate-selected", () => {
-        const webContents = popupWebContents()
-        if (webContents) {
-            webContents.send("arbor:omnibox:activate-selected")
-            return
-        }
-        // Popup not loaded yet: fall back to the go/search action.
-        const fallback = rt.lastOmniboxQuery.trim()
-        if (fallback.length > 0) void handleOmniboxActivate({ kind: "go", query: fallback })
-    })
-    ipcMain.on("arbor:omnibox:popup-height", (_event, height: number) => {
-        if (rt.win) setOmniboxPopupHeight(rt.win, height)
-    })
-    ipcMain.on("arbor:omnibox:activate", (_event, payload: OmniboxActivation) => {
-        void handleOmniboxActivate(payload)
-    })
+            showOmniboxPopup(rt.win, rect, query, rt.ipc)
+        }),
+    omniboxSetPopupHeight: (height) =>
+        Effect.sync(() => {
+            if (rt.win) setOmniboxPopupHeight(rt.win, height)
+        }),
+    omniboxActivate: (payload) => Effect.promise(() => activateOmnibox(payload)),
+    omniboxMoveSelection: (delta) => Effect.sync(() => rt.ipc.push("omniboxMoveSelection", delta)),
+    omniboxActivateSelected: () =>
+        Effect.promise(async () => {
+            if (popupWebContents()) {
+                rt.ipc.push("omniboxActivateSelected")
+                return
+            }
+            // Popup not loaded yet: fall back to the go/search action.
+            const fallback = rt.lastOmniboxQuery.trim()
+            if (fallback.length > 0) await activateOmnibox({ kind: "go", query: fallback })
+        }),
     // The rename modal renders in a transparent child window above the web view.
-    ipcMain.on("arbor:rename-modal:open", (_event, target: RenameTarget) => {
-        if (!rt.win) return
-        hideOmniboxPopup()
-        openRenameModal(rt.win, target)
-    })
-    ipcMain.on("arbor:rename-modal:close", () => closeRenameModal())
-    ipcMain.on("arbor:extensions:toggle", (_event, rect: Anchor) => {
-        if (rt.win) toggleExtensionsPopup(rt.win, rect)
-    })
-    ipcMain.on("arbor:extensions:close", () => hideExtensionsPopup())
-    ipcMain.on("arbor:extensions:popup-height", (_event, height: number) => {
-        if (rt.win) setExtensionsPopupHeight(rt.win, height)
-    })
-    ipcMain.on("arbor:extensions:menu", (_event, payload: ExtensionMenuRequest) => {
-        void openExtensionMenu(payload)
-    })
-    ipcMain.on("arbor:permission:respond", (_event, allowed: boolean) => {
-        respondPermissionPrompt(allowed)
-    })
-    // A revealed bar floats over the page, so the shell rises above it for as long as one is out.
-    ipcMain.on("arbor:shell:raise", (_event, raised: boolean) => {
-        setShellRaised(raised)
-    })
-}
+    openRenameModal: (target) =>
+        Effect.sync(() => {
+            const win = rt.win
+            const current = renameTarget(rt.getState(), target)
+            if (!win || !current) return
+            hideOmniboxPopup()
+            openRenameModal(win, current, rt.ipc)
+        }),
+    closeRenameModal: () => Effect.sync(() => closeRenameModal()),
+    extensionsToggle: (anchor) =>
+        Effect.sync(() => {
+            if (rt.win) toggleExtensionsPopup(rt.win, anchor, rt.ipc)
+        }),
+    extensionsClose: () => Effect.sync(() => hideExtensionsPopup()),
+    extensionsSetPopupHeight: (height) =>
+        Effect.sync(() => {
+            if (rt.win) setExtensionsPopupHeight(rt.win, height)
+        }),
+    extensionsMenu: (request) => Effect.promise(() => openExtensionMenu(request)),
+    permissionRespond: (allowed) => Effect.sync(() => respondPermissionPrompt(allowed)),
+    shellRaise: (raised) => Effect.sync(() => setShellRaised(raised)),
+})

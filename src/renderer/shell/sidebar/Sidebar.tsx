@@ -60,11 +60,11 @@ export const Sidebar = (props: { visibility: SidebarVisibility; open: boolean })
             const index = activeIndex()
             if (index === -1) return
             if (direction === 1 && index === snap.containers.length - 1) {
-                void window.arbor.createContainer()
+                void window.arbor.createContainer({})
                 return
             }
             const target = snap.containers[index + direction]
-            if (target) void window.arbor.switchContainer(target.id)
+            if (target) void window.arbor.switchContainer({ containerId: target.id })
         },
     })
     const onSwipeWheel = (event: WheelEvent): void => {
@@ -93,7 +93,7 @@ export const Sidebar = (props: { visibility: SidebarVisibility; open: boolean })
                                         onRename={() =>
                                             window.arbor.openRenameModal({
                                                 kind: "container",
-                                                container,
+                                                containerId: container.id,
                                             })
                                         }
                                     />
@@ -104,7 +104,7 @@ export const Sidebar = (props: { visibility: SidebarVisibility; open: boolean })
                                 type="button"
                                 aria-label="New container"
                                 title="New container"
-                                onClick={() => void window.arbor.createContainer()}
+                                onClick={() => void window.arbor.createContainer({})}
                             >
                                 <Icon name="plus" />
                             </button>
@@ -147,7 +147,7 @@ export const Sidebar = (props: { visibility: SidebarVisibility; open: boolean })
                     type="button"
                     aria-label="New tab"
                     onClick={async () => {
-                        await window.arbor.createTab()
+                        await window.arbor.createTab({})
                         requestOmniboxFocus()
                     }}
                 >
@@ -169,7 +169,9 @@ const TabPage = (props: { containerId: ContainerId; active: boolean; treeMeta: T
                         tab={tab}
                         hasChildren={props.treeMeta.parentIds.has(tab.id)}
                         collapsed={props.treeMeta.collapsedIds.has(tab.id)}
-                        onRename={() => window.arbor.openRenameModal({ kind: "tab", tab })}
+                        onRename={() =>
+                            window.arbor.openRenameModal({ kind: "tab", tabId: tab.id })
+                        }
                     />
                 )}
             </For>

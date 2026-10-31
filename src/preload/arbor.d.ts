@@ -1,4 +1,4 @@
-import type { ArborApi } from "./index"
+import type { ArborApi } from "../shared/ipc/contract"
 
 declare global {
     interface Window {

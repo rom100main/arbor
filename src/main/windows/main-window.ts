@@ -1,6 +1,7 @@
 import { BrowserWindow, nativeTheme } from "electron"
 
 import type { Settings } from "../../shared/settings"
+import type { Pusher } from "../ipc/router"
 import { hideOmniboxPopup, repositionRenameModal } from "./overlays"
 import { createShellView, layoutShell } from "./shell-view"
 import { layoutViews } from "./tab-views"
@@ -17,7 +18,10 @@ const windowBackground = (settings: Settings): string =>
           ? "#111315"
           : "#ffffff"
 
-export const createWindow = async (getSettings: () => Settings): Promise<BrowserWindow> => {
+export const createWindow = async (
+    getSettings: () => Settings,
+    ipc: Pusher,
+): Promise<BrowserWindow> => {
     const settings = getSettings()
     const win = new BrowserWindow({
         width: 1440,
@@ -29,7 +33,7 @@ export const createWindow = async (getSettings: () => Settings): Promise<Browser
         backgroundColor: windowBackground(settings),
     })
 
-    const shell = await createShellView(win, getSettings)
+    const shell = await createShellView(win, getSettings, ipc)
     win.show()
     if (process.env.VITE_DEV_SERVER_URL) shell.webContents.openDevTools({ mode: "detach" })
 

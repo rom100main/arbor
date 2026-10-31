@@ -1,18 +1,19 @@
 import { Context, Effect, Exit, Fiber, Layer, Option, Schema, Scope, Stream } from "effect"
 import { BrowserWindow, app } from "electron"
 
-import { AppServicesLive } from "./app-services"
-import { runRequest } from "./exec"
+import { AppServices } from "./app-services"
+import { runBackground } from "./exec"
 import { initExtensions, markMainWindowOpened } from "./extension/loader"
 import { ExtensionStorage, registerExtensionStorageIpc } from "./extension/storage"
 import {
+    broadcastSettings,
+    eventHandlers,
     makeOmniboxActivator,
     makeWindowSync,
-    registerOverlayEvents,
-    registerSettingsBroadcast,
     type HostRuntime,
 } from "./ipc/events"
-import { registerIpc } from "./ipc/handlers"
+import { requestHandlers } from "./ipc/handlers"
+import { IpcPush, serveEvents, serveRequests, type Pusher } from "./ipc/router"
 import { AppRuntime } from "./runtime"
 import { SettingsStore } from "./settings"
 import { BrowserStore, type StoreService } from "./state/store"
@@ -20,7 +21,7 @@ import { installMenu } from "./windows/app-menu"
 import { registerInternalPages, registerInternalScheme } from "./windows/internal-pages"
 import { attachWindowEvents, createWindow } from "./windows/main-window"
 import { promptConsumer } from "./windows/overlays"
-import { focusShell, shellWebContents } from "./windows/shell-view"
+import { focusShell } from "./windows/shell-view"
 import {
     destroyAllViews,
     ensureView,
@@ -81,21 +82,28 @@ let booting: Promise<Application> | null = null
 const bootApplication = async (): Promise<Application> => {
     filterBenignExtensionLoadWarnings()
     await app.whenReady()
-    AppRuntime.runFork(promptConsumer)
 
     const scope = AppRuntime.runSync(Scope.make())
     const services = await AppRuntime.runPromise(
-        Layer.buildWithScope(AppServicesLive(app.getPath("userData")), scope),
+        Layer.buildWithScope(AppServices(app.getPath("userData")), scope),
     )
     const store: StoreService = Context.get(services, BrowserStore)
     const settings = Context.get(services, SettingsStore)
-    registerSettingsBroadcast(settings)
+    const pushes = Context.get(services, IpcPush)
+    // Windows and overlays are not Effect code yet (06): they push through this.
+    const ipc: Pusher = {
+        push: (key, ...value) => AppRuntime.runSync(pushes.push(key, ...value)),
+        attach: (renderer) => AppRuntime.runSync(pushes.attach(renderer)),
+    }
+    AppRuntime.runFork(promptConsumer(ipc))
+    AppRuntime.runFork(broadcastSettings(settings, pushes))
     registerExtensionStorageIpc(Context.get(services, ExtensionStorage))
 
     const rt: HostRuntime = {
         win: null,
         store,
         settings,
+        ipc,
         getState: () => AppRuntime.runSync(store.state),
         getSettings: () => AppRuntime.runSync(settings.get),
         previousActiveTab: null,
@@ -115,8 +123,6 @@ const bootApplication = async (): Promise<Application> => {
         ),
     )
 
-    registerIpc(store, settings, rt.getState)
-
     // arbor:// internal pages: their own session, so only they carry the preload bridge.
     registerInternalPages()
 
@@ -126,15 +132,20 @@ const bootApplication = async (): Promise<Application> => {
         settings,
         getWindow: () => rt.win,
         viewForTab,
-        ensureView: (tabId, url) => ensureView({ store, getState: rt.getState }, tabId, url),
+        ensureView: (tabId, url) => ensureView(rt, tabId, url),
         tabIdForWebContents,
     })
 
-    const handleOmniboxActivate = makeOmniboxActivator(rt)
-    registerOverlayEvents(rt, handleOmniboxActivate)
+    // Every Arbor channel, answered until the app scope closes.
+    await AppRuntime.runPromise(
+        Effect.all([
+            serveRequests(requestHandlers(rt)),
+            serveEvents(eventHandlers(rt, makeOmniboxActivator(rt))),
+        ]).pipe(Scope.provide(scope), Effect.provide(services)),
+    )
 
     const ensureSeedTab = async (): Promise<void> => {
-        if (rt.getState().containers.length === 0) await runRequest(store.createContainer())
+        if (rt.getState().containers.length === 0) await runBackground(store.createContainer())
     }
 
     return { store, rt, scope, ensureSeedTab }
@@ -148,11 +159,11 @@ const openMainWindow = async (appInstance: Application): Promise<void> => {
         getState: rt.getState,
         focusOmnibox: () => {
             focusShell()
-            shellWebContents()?.send("arbor:focus-omnibox")
+            rt.ipc.push("focusOmnibox")
         },
     })
 
-    const win = await createWindow(rt.getSettings)
+    const win = await createWindow(rt.getSettings, rt.ipc)
     rt.win = win
     markMainWindowOpened()
     attachWindowEvents(win)

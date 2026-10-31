@@ -8,7 +8,7 @@ const [snapshot, setSnapshot] = createSignal<BrowserSnapshot | null>(null)
 
 export const initState = createInit<BrowserSnapshot | null>({
     subscribe: (callback) => window.arbor.onState(callback),
-    fetch: () => window.arbor.getSnapshot(),
+    fetch: async () => (await window.arbor.getSnapshot()).value,
     apply: (value) => setSnapshot(value),
 })
 

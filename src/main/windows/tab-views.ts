@@ -13,6 +13,7 @@ import { isInternalUrl } from "../../shared/internal-pages"
 import type { ContainerId, TabId } from "../../shared/protocol"
 import { runBackground } from "../exec"
 import { extensionsReady, setupSessionExtensions } from "../extension/loader"
+import type { Pusher } from "../ipc/router"
 import { AppRuntime } from "../runtime"
 import type { DomainState } from "../state/state"
 import type { StoreService } from "../state/store"
@@ -22,6 +23,7 @@ import { restackShell, shellInsets, watchShellEdges } from "./shell-view"
 export interface ViewDeps {
     readonly store: StoreService
     readonly getState: () => DomainState
+    readonly ipc: Pusher
 }
 
 const views = new Map<TabId, WebContentsView>()
@@ -56,21 +58,6 @@ export const existingSessionForContainer = (containerId: ContainerId): Session |
 // --- tab views
 
 export const viewForTab = (tabId: TabId): WebContentsView | undefined => views.get(tabId)
-
-/**
- * The web contents of tabs showing an Arbor page, the only ones carrying the preload bridge.
- *
- * Tabs are `WebContentsView`s rather than windows,
- * so broadcasting to `BrowserWindow.getAllWindows()` skipped them
- * and the settings page never heard about settings changes.
- * The internal session is what identifies them.
- */
-export const internalViewWebContents = (): WebContents[] => {
-    const ses = internalSession()
-    return [...views.values()]
-        .filter((view) => view.webContents.session === ses)
-        .map((view) => view.webContents)
-}
 
 /**
  * Whether a tab's live view sits on the wrong session for its URL and must be rebuilt.
@@ -125,7 +112,9 @@ export const ensureView = (deps: ViewDeps, tabId: TabId, url: string): WebConten
         menu.popup()
     })
     views.set(tabId, view)
-    watchShellEdges(view)
+    // `arbor://` pages run the Arbor preload, so they get pushes too (the settings page needs them).
+    if (view.webContents.session === internalSession()) deps.ipc.attach(view.webContents)
+    watchShellEdges(view, deps.ipc)
     trackPageMeta(deps.store, tabId, view)
     void loadTabUrl(tabId, tab.containerId, url, view)
     return view

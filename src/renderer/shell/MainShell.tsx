@@ -121,10 +121,10 @@ export const MainShell = () => {
         const snap = snapshot()
         const existing = snap?.tabs.find((tab) => tab.url.startsWith(SETTINGS_URL))
         if (existing) {
-            void window.arbor.selectTab(existing.id)
+            void window.arbor.selectTab({ tabId: existing.id })
             return
         }
-        void window.arbor.createTab(SETTINGS_URL)
+        void window.arbor.createTab({ url: SETTINGS_URL })
     }
 
     return (

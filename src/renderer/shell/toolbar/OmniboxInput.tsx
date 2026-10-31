@@ -42,7 +42,7 @@ export const OmniboxInput = (props: { tabId: TabId | null; url: string }) => {
         const rect = restingRect(input)
         window.arbor.omniboxUpdate({
             query,
-            rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+            rect: { x: rect.x, y: rect.y, width: rect.width },
         })
     }
     const hidePopup = (): void => {

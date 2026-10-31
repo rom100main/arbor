@@ -122,15 +122,14 @@ const SearchSection = () => {
     )
 
     const apply = async (): Promise<void> => {
-        const next = draft()
-        try {
-            await window.arbor.setSettings({ searchTemplate: next })
+        const reply = await window.arbor.setSettings({ searchTemplate: draft() })
+        if (reply.ok) {
             setError(null)
-        } catch {
-            // The store refused it, so nothing was written: keep showing what is stored.
-            setDraft(settings().searchTemplate)
-            setError("Must contain %s and be a valid http(s) URL.")
+            return
         }
+        // The store refused it, so nothing was written: keep showing what is stored.
+        setDraft(settings().searchTemplate)
+        setError(reply.error.message)
     }
 
     // Matching on the name is what makes typing narrow the list rather than hide the input's own value

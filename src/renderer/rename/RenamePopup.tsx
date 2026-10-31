@@ -28,16 +28,28 @@ export const RenamePopup = (props: { target: RenameTarget }) => {
         const trimmed = name().trim()
         if (props.target.kind === "container") {
             if (trimmed.length > 0 && trimmed !== props.target.container.name) {
-                void window.arbor.renameContainer(props.target.container.id, trimmed)
+                void window.arbor.renameContainer({
+                    containerId: props.target.container.id,
+                    name: trimmed,
+                })
             }
             if (color() !== props.target.container.color) {
-                void window.arbor.setContainerColor(props.target.container.id, color())
+                void window.arbor.setContainerColor({
+                    containerId: props.target.container.id,
+                    color: color(),
+                })
             }
             if (icon() !== props.target.container.icon) {
-                void window.arbor.setContainerIcon(props.target.container.id, icon())
+                void window.arbor.setContainerIcon({
+                    containerId: props.target.container.id,
+                    icon: icon(),
+                })
             }
         } else {
-            void window.arbor.renameTab(props.target.tab.id, trimmed.length > 0 ? trimmed : null)
+            void window.arbor.renameTab({
+                tabId: props.target.tab.id,
+                label: trimmed.length > 0 ? trimmed : null,
+            })
         }
         close()
     }
@@ -120,7 +132,10 @@ export const RenamePopup = (props: { target: RenameTarget }) => {
                             type="button"
                             onClick={() => {
                                 if (props.target.kind === "tab") {
-                                    void window.arbor.renameTab(props.target.tab.id, null)
+                                    void window.arbor.renameTab({
+                                        tabId: props.target.tab.id,
+                                        label: null,
+                                    })
                                     close()
                                 }
                             }}

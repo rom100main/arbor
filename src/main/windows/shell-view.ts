@@ -2,6 +2,7 @@ import { WebContentsView, type BrowserWindow, type WebContents } from "electron"
 
 import type { RevealEdge } from "../../shared/protocol"
 import { chromeInsets, REVEAL_EDGE, type ChromeInsets, type Settings } from "../../shared/settings"
+import type { Pusher } from "../ipc/router"
 import { loadRenderer, preloadPath } from "./paths"
 
 /**
@@ -28,8 +29,10 @@ let lastEdge: RevealEdge | null = null
 export const createShellView = async (
     win: BrowserWindow,
     getSettings: () => Settings,
+    ipc: Pusher,
 ): Promise<WebContentsView> => {
     const view = new WebContentsView({ webPreferences: { preload: preloadPath } })
+    ipc.attach(view.webContents)
     view.setBackgroundColor("#00000000")
     win.contentView.addChildView(view)
     const current: Shell = { win, view, getSettings, raised: false }
@@ -96,7 +99,7 @@ const edgeAt = (
     return null
 }
 
-export const watchShellEdges = (view: WebContentsView): void => {
+export const watchShellEdges = (view: WebContentsView, ipc: Pusher): void => {
     view.webContents.on("before-mouse-event", (_event, mouse) => {
         if (!shell || shell.raised) return
         if (mouse.type === "mouseLeave") {
@@ -107,6 +110,6 @@ export const watchShellEdges = (view: WebContentsView): void => {
         const edge = edgeAt(shell.getSettings(), view.getBounds(), mouse)
         if (edge === lastEdge) return
         lastEdge = edge
-        if (edge !== null) shell.view.webContents.send("arbor:shell:edge", edge)
+        if (edge !== null) ipc.push("shellEdge", edge)
     })
 }

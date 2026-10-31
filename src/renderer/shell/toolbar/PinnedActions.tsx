@@ -50,8 +50,8 @@ const PinnedAction = (props: { extensionId: string }) => {
                 live = false
             })
             spawn("failed to read extension action", async () => {
-                const next = await window.arbor.extensionActionInfo(extensionId)
-                if (live) setInfo(next)
+                const reply = await window.arbor.extensionActionInfo({ extensionId })
+                if (live) setInfo(reply.value)
             })
         },
     )
@@ -67,7 +67,7 @@ const PinnedAction = (props: { extensionId: string }) => {
             ? { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }
             : null
         spawn("failed to open the action popup", async () => {
-            await window.arbor.openExtensionActionPopup(props.extensionId, anchor)
+            await window.arbor.openExtensionActionPopup({ extensionId: props.extensionId, anchor })
         })
     }
 

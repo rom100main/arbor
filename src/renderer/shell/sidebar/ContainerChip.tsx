@@ -39,7 +39,7 @@ export const ContainerChip = (props: { container: ContainerMeta; onRename: () =>
             type="button"
             title={props.container.name}
             aria-label={props.container.name}
-            onClick={() => void window.arbor.switchContainer(props.container.id)}
+            onClick={() => void window.arbor.switchContainer({ containerId: props.container.id })}
             onContextMenu={(event) => {
                 event.preventDefault()
                 props.onRename()
@@ -94,13 +94,20 @@ export const ContainerChip = (props: { container: ContainerMeta; onRename: () =>
                             props.container.id,
                             target.position,
                         )
-                        void window.arbor.reorderContainer(draggedContainer, toIndex)
+                        void window.arbor.reorderContainer({
+                            containerId: draggedContainer,
+                            toIndex,
+                        })
                     }
                     clearDragState()
                     return
                 }
                 const dragId = getDraggedTabId()
-                if (dragId) void window.arbor.moveToContainer(dragId, props.container.id)
+                if (dragId)
+                    void window.arbor.moveToContainer({
+                        tabId: dragId,
+                        containerId: props.container.id,
+                    })
                 clearDragState()
             }}
             onDragEnd={clearDragState}

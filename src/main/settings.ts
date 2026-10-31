@@ -1,6 +1,7 @@
 import { Context, Effect, Layer, Option, Result, Schema, type Duration, type Stream } from "effect"
 
 import { decodeOr, orDefault } from "../shared/decode"
+import { SettingsRejected } from "../shared/errors"
 import { DEFAULT_SEARCH_TEMPLATE, DEFAULT_SETTINGS } from "../shared/settings"
 import { Settings, SettingsPatch } from "../shared/settings-schema"
 import { JsonFile } from "./persistence/json-file"
@@ -46,11 +47,6 @@ export const fromPersistedSettings = (data: unknown): Settings | null => {
         urlBarVisibility: parsed.urlBarVisibility,
     }
 }
-
-/** A patch the settings could not take; nothing is written in that case. */
-export class SettingsRejected extends Schema.TaggedError<SettingsRejected>()("SettingsRejected", {
-    message: Schema.String,
-}) {}
 
 export interface SettingsService {
     readonly get: Effect.Effect<Settings>
