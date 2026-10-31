@@ -59,7 +59,7 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    Commit["onCommit(next)"] --> Snap["snapshot(next)"]
+    Commit["store.changes: next"] --> Snap["snapshot(next)"]
     Snap --> All["for each window"]
     All --> W1["main: arbor:state"]
     All --> W2["omnibox popup: arbor:state"]

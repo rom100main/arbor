@@ -41,7 +41,7 @@ flowchart LR
     API -->|"IPC"| IPC_E
     IPC_H --> Store
     IPC_E --> Views
-    Store -->|"onCommit -> send arbor:state"| Shell
+    Store -->|"changes -> send arbor:state"| Shell
     Store -->|"ensureView / showTab / destroyView"| Views
     Win -.->|"embeds"| Views
     Win -.->|"embeds"| ShellV

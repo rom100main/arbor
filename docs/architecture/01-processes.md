@@ -114,7 +114,7 @@ sequenceDiagram
     participant P as preload
     participant R as renderer:MainShell
     M->>M: app.whenReady()
-    M->>M: makeStoreLayer(onCommit)
+    M->>M: BrowserStore.layer(initial)
     M->>M: registerIpc(store)
     M->>W: createWindow() + preloadPath
     W->>P: load preload/index.cjs
@@ -124,7 +124,7 @@ sequenceDiagram
     P->>M: invoke arbor:get-snapshot
     M-->>R: BrowserSnapshot
     R->>P: onState(cb)
-    M->>M: createContainer() -> onCommit -> send arbor:state
+    M->>M: createContainer() -> changes -> send arbor:state
 ```
 
 # Rules
