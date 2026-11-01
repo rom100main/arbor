@@ -1,8 +1,7 @@
 import type { Result } from "effect"
-import { describe, expect, it } from "vite-plus/test"
 
 import type { closeTab } from "../src/main/state/close-reopen"
-import { PersistedTab } from "../src/main/state/persist"
+import type { PersistedTab } from "../src/main/state/persist"
 import type { LastTab, UnknownContainer, UnknownTab } from "../src/shared/errors"
 import type { ContainerId, TabId, TabNode } from "../src/shared/protocol"
 
@@ -22,9 +21,3 @@ type ErrorOf<R> = R extends Result.Result<unknown, infer E> ? E : never
 export type CloseTabFailsPrecisely = Expect<
     Equals<ErrorOf<ReturnType<typeof closeTab>>, UnknownTab | UnknownContainer | LastTab>
 >
-
-describe("protocol types", () => {
-    it("are checked by the compiler", () => {
-        expect(PersistedTab.fields.id).toBeDefined()
-    })
-})

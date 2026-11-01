@@ -45,6 +45,12 @@ const handlersFor = (store: StoreService): RequestHandlers<never> => ({
     reload: () => Effect.void,
 })
 
+// Type-level guard (checked by `vp check`): a handler is required for every request.
+type Expect<T extends false> = T
+export type EveryRequestNeedsAHandler = Expect<
+    Omit<RequestHandlers<never>, "reload"> extends RequestHandlers<never> ? true : false
+>
+
 const eventsSeen: unknown[] = []
 
 const quietEvents: EventHandlers<never> = {
@@ -167,15 +173,4 @@ describe("IPC pushes", () => {
                 expect(popup.received).toEqual([{ channel: PUSHES.omniboxQuery, value: "arbor" }])
             }),
         ))
-})
-
-describe("IPC contract types", () => {
-    it("requires a handler for every request", () => {
-        const check = (
-            missingOne: Omit<RequestHandlers<never>, "reload">,
-        ): RequestHandlers<never> =>
-            // @ts-expect-error a handler is missing
-            missingOne
-        expect(check).toBeTypeOf("function")
-    })
 })
