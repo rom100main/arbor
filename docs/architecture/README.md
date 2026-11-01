@@ -17,12 +17,12 @@ English
 ```mermaid
 flowchart LR
     subgraph Main["main process : Node + Electron"]
-        Store["StoreService<br/>Ref(DomainState)"]
-        IPC_H["requests<br/>ipc/handlers.ts"]
-        IPC_E["events<br/>ipc/events.ts"]
-        Views["WebContentsViews<br/>1 per tab"]
-        ShellV["Shell WebContentsView<br/>sidebar + toolbar, transparent"]
-        Win["BrowserWindow"]
+        Store["StoreService<br/>SubscriptionRef(DomainState)"]
+        subgraph MW["WindowManager module: the one window"]
+            IPC["window channels<br/>ipc/window-channels.ts"]
+            Rec["reconcile"]
+            Host["electron-host.ts<br/>window, shell view, tab views"]
+        end
     end
     subgraph Pre["preload : contextBridge"]
         API["window.arbor"]
@@ -37,14 +37,11 @@ flowchart LR
     Shell -->|"invoke / send"| API
     Omni -->|"send"| API
     Rename -->|"send"| API
-    API -->|"IPC"| IPC_H
-    API -->|"IPC"| IPC_E
-    IPC_H --> Store
-    IPC_E --> Views
-    Store -->|"changes -> send arbor:state"| Shell
-    Store -->|"ensureView / showTab / destroyView"| Views
-    Win -.->|"embeds"| Views
-    Win -.->|"embeds"| ShellV
+    API -->|"IPC"| IPC
+    IPC --> Store
+    Store -->|"changes"| Rec
+    Rec -->|"push state"| Shell
+    Rec -->|"create / show / close views"| Host
     Shared -.->|"import"| Main
     Shared -.->|"import"| Pre
     Shared -.->|"import"| Ren

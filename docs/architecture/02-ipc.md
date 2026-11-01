@@ -17,7 +17,7 @@ Every Arbor channel is declared once, in `src/shared/ipc/`:
 
 From the contract:
 
-- **Main** (`src/main/ipc/router.ts`): `serveRequests(handlers)` and `serveEvents(handlers)` take one handler per key. A missing handler, or an error the contract does not declare, does not compile. The router checks each payload against its schema, so handlers get typed values.
+- **Main** (`src/main/ipc/router.ts`): `serveRequests(handlers)` and `serveEvents(handlers)` take one handler per key. The handlers (`ipc/window-channels.ts`) are built for one open window and served from its scope: every Arbor renderer lives in that window, so the channels go away with it. A missing handler, or an error the contract does not declare, does not compile. The router checks each payload against its schema, so handlers get typed values.
 - **Preload** (`src/preload/index.ts`): builds `window.arbor` from the three tables. No code per channel. Only contract channels are reachable: never a generic `invoke(channel)`, which would expose the handlers extension libraries register on `ipcMain`.
 - **Renderer**: calls take one payload object, e.g. `window.arbor.closeTab({ tabId })`.
 
@@ -28,7 +28,7 @@ From the contract:
 ## 1. Request/response
 
 - **Use**: mutations + initial read. The caller awaits the answer.
-- **Primitives**: `ipcRenderer.invoke(channel, payload)` -> `IpcTransport.handle`.
+- **Primitives**: `ipcRenderer.invoke(channel, payload)` -> `handle` in `ipc/transport.ts`.
 - **Answer** (`Reply`): `{ ok: true, value }` or `{ ok: false, error }`, `error` being the encoded tagged error (`{ _tag: "LastTab" }`). A request that cannot fail is always `ok: true`.
 - **Rejection** means a bug: a payload that fails its schema, or a defect in a handler. Main logs it with its full cause.
 
@@ -51,18 +51,18 @@ sequenceDiagram
 ## 2. Fire-and-forget
 
 - **Use**: high-frequency or no-result events. No await.
-- **Primitives**: `ipcRenderer.send(channel, payload)` -> `IpcTransport.on`.
+- **Primitives**: `ipcRenderer.send(channel, payload)` -> `on` in `ipc/transport.ts`.
 - **Property**: lossy by design. A bad payload is logged in main and dropped.
 
 ```mermaid
 sequenceDiagram
     participant R as renderer:OmniboxInput
     participant P as preload
-    participant M as main:events.ts
+    participant M as main:window-channels.ts
     participant W as omnibox popup
     R->>P: omniboxUpdate({query, rect})
     P->>M: send("arbor:omnibox:update")
-    M->>M: rect == null ∨ query == ∅ ? hide : showOmniboxPopup()
+    M->>M: rect == null ∨ query == ∅ ? hideOmnibox() : showOmnibox()
     M->>W: push omniboxQuery
 ```
 
@@ -71,6 +71,7 @@ sequenceDiagram
 - **Use**: main -> renderer. State commits, settings changes, focus requests, popup navigation.
 - **Primitives**: `IpcPush.push(key, value)` -> `ipcRenderer.on` wrapped in preload as `window.arbor.on<Key>`.
 - **Audience**: every renderer that called `attach`: the shell view, the omnibox and extensions popups, the rename and permission modals, and tabs showing an `arbor://` page. A renderer leaves when its web contents is destroyed. Extension popups never attach, so they never get Arbor's state.
+- `state` is pushed by the window's reconciliation, `settings` by the window's settings broadcast.
 - `push` encodes once and sends to all. Each push has one listener mode, so a renderer simply ignores the pushes it does not listen to.
 
 ```mermaid
@@ -80,13 +81,13 @@ flowchart LR
     Push --> W1["shell view"]
     Push --> W2["omnibox popup"]
     Push --> W3["rename modal"]
-    Commit --> Menu["rebuildMenu()"]
-    Commit --> Views["ensureView / showTab / destroyView"]
+    Commit --> Menu["menu model changed? setMenu"]
+    Commit --> Views["reconcile: close stale views, show active tab"]
 ```
 
 # Testing
 
-`IpcTransport` is a port with two adapters: Electron (`ipc/transport.ts`) and in-memory (`tests/support/ipc.ts`). `tests/ipc.test.ts` serves the contract over the in-memory one with the real store.
+`tests/ipc.test.ts` serves the contract with the real store. It replaces `ipc/transport.ts` with the in-memory version in `tests/support/ipc.ts` (`vi.mock`): src holds no code for tests.
 
 # Rules
 
