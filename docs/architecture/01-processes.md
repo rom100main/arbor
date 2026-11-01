@@ -80,7 +80,7 @@ flowchart LR
 - The UI, built with SolidJS.
 - No Node access. It only talks through `window.arbor`.
 - One bundle with several modes: the main sidebar, the omnibox, rename, extensions and permission popups.
-- Internal pages like `arbor://settings` load inside a tab, on their own session.
+- Internal pages like `arbor://settings` load inside a tab, on their own session. This way only Arbor pages get `window.arbor`, and websites never do.
 
 # Shared
 

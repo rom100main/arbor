@@ -4,7 +4,7 @@ The UI and the main process run in separate processes. They do not share memory.
 
 # The Contract
 
-Every message type is declared once, in one shared place. The rest is built from it.
+Every message type is declared once, in Shared. Main, Preload and Renderer are all built from it.
 
 ```mermaid
 flowchart TB
