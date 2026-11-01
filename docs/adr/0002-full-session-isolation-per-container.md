@@ -1,3 +1,5 @@
-# Full session isolation per container
+# One session per container
 
-Each Container gets its own Electron session partition (`persist:container-<id>`), giving it separate cookies, storage, and cache, Firefox Multi-Account Containers semantics. Cost: N live sessions and more memory; accepted because isolation is the core value of the feature.
+- Each container gets its own Electron session: separate cookies, storage and cache.
+- Same idea as Firefox Multi-Account Containers.
+- Cost: more memory, one live session per container. Accepted, since isolation is the point of containers.
