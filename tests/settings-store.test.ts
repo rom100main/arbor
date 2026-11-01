@@ -1,26 +1,26 @@
 import { Context, Deferred, Effect, Exit, Layer, Scope, Stream } from "effect"
-import { describe, expect, it } from "vite-plus/test"
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { fromPersistedSettings, SettingsStore } from "../src/main/settings"
 import { SettingsRejected } from "../src/shared/errors"
 import { DEFAULT_SETTINGS } from "../src/shared/settings"
 import { runTest, settle } from "./support/effect"
-import { memoryJsonFileLayer } from "./support/json-file"
+import { files } from "./support/memory-fs"
+
+vi.mock("node:fs", () => import("./support/memory-fs"))
+beforeEach(() => files.clear())
 
 const FILE = "/data/settings.json"
 
-/** A settings store over `files`; closing `scope` writes what is pending, as quitting does. */
-const open = (files: Map<string, string>) =>
+/** A settings store over the in-memory files; closing `scope` writes what is pending, as quitting does. */
+const open = () =>
     Effect.gen(function* () {
         const scope = yield* Scope.make()
-        const context = yield* Layer.buildWithScope(
-            SettingsStore.layer(FILE).pipe(Layer.provide(memoryJsonFileLayer(files))),
-            scope,
-        )
+        const context = yield* Layer.buildWithScope(SettingsStore.layer(FILE), scope)
         return { store: Context.get(context, SettingsStore), scope }
     })
 
-const onDisk = (files: Map<string, string>): unknown => JSON.parse(files.get(FILE)!)
+const onDisk = (): unknown => JSON.parse(files.get(FILE)!)
 
 /** Every change published after the call. */
 const collect = <A>(changes: Stream.Stream<A>) =>
@@ -80,7 +80,7 @@ describe("settings store", () => {
     it("starts from defaults when there is no file", () =>
         runTest(
             Effect.gen(function* () {
-                const { store } = yield* open(new Map())
+                const { store } = yield* open()
                 expect(yield* store.get).toEqual(DEFAULT_SETTINGS)
             }),
         ))
@@ -88,14 +88,13 @@ describe("settings store", () => {
     it("loads what a previous run wrote", () =>
         runTest(
             Effect.gen(function* () {
-                const files = new Map<string, string>()
-                const first = yield* open(files)
+                const first = yield* open()
                 yield* first.store.set({
                     theme: "dark",
                     searchTemplate: "https://kagi.com/search?q=%s",
                 })
                 yield* Scope.close(first.scope, Exit.void)
-                expect(fromPersistedSettings(onDisk(files))).toEqual({
+                expect(fromPersistedSettings(onDisk())).toEqual({
                     theme: "dark",
                     searchTemplate: "https://kagi.com/search?q=%s",
                     pinnedExtensionIds: [],
@@ -103,7 +102,7 @@ describe("settings store", () => {
                     urlBarVisibility: DEFAULT_SETTINGS.urlBarVisibility,
                 })
 
-                const reloaded = yield* (yield* open(files)).store.get
+                const reloaded = yield* (yield* open()).store.get
                 expect(reloaded.theme).toBe("dark")
                 expect(reloaded.searchTemplate).toBe("https://kagi.com/search?q=%s")
             }),
@@ -112,7 +111,7 @@ describe("settings store", () => {
     it("normalises a bare-host template on the way in", () =>
         runTest(
             Effect.gen(function* () {
-                const { store } = yield* open(new Map())
+                const { store } = yield* open()
                 const next = yield* store.set({ searchTemplate: "kagi.com/search?q=%s" })
                 expect(next.searchTemplate).toBe("https://kagi.com/search?q=%s")
             }),
@@ -121,13 +120,12 @@ describe("settings store", () => {
     it("rejects a template with no %s and writes nothing", () =>
         runTest(
             Effect.gen(function* () {
-                const files = new Map<string, string>()
-                const first = yield* open(files)
+                const first = yield* open()
                 yield* first.store.set({ theme: "light" })
                 yield* Scope.close(first.scope, Exit.void)
-                const before = onDisk(files)
+                const before = onDisk()
 
-                const { store, scope } = yield* open(files)
+                const { store, scope } = yield* open()
                 const error = yield* Effect.flip(
                     store.set({ searchTemplate: "https://duckduckgo.com/" }),
                 )
@@ -135,7 +133,7 @@ describe("settings store", () => {
                 expect((yield* store.get).searchTemplate).toBe(DEFAULT_SETTINGS.searchTemplate)
                 yield* Scope.close(scope, Exit.void)
                 // Disk still holds what the last accepted write left there.
-                expect(onDisk(files)).toEqual(before)
+                expect(onDisk()).toEqual(before)
                 expect(before).toMatchObject({ theme: "light" })
             }),
         ))
@@ -143,23 +141,21 @@ describe("settings store", () => {
     it("drops unknown keys in a patch", () =>
         runTest(
             Effect.gen(function* () {
-                const files = new Map<string, string>()
-                const { store, scope } = yield* open(files)
+                const { store, scope } = yield* open()
                 const next = yield* store.set({ theme: "dark", injected: "nope" })
                 expect(next).not.toHaveProperty("injected")
                 yield* Scope.close(scope, Exit.void)
-                expect(onDisk(files)).not.toHaveProperty("injected")
+                expect(onDisk()).not.toHaveProperty("injected")
             }),
         ))
 
     it("persists bar visibility", () =>
         runTest(
             Effect.gen(function* () {
-                const files = new Map<string, string>()
-                const first = yield* open(files)
+                const first = yield* open()
                 yield* first.store.set({ sidebarVisibility: "hidden", urlBarVisibility: "hidden" })
                 yield* Scope.close(first.scope, Exit.void)
-                const reloaded = yield* (yield* open(files)).store.get
+                const reloaded = yield* (yield* open()).store.get
                 expect(reloaded.sidebarVisibility).toBe("hidden")
                 expect(reloaded.urlBarVisibility).toBe("hidden")
             }),
@@ -168,7 +164,7 @@ describe("settings store", () => {
     it("publishes each change", () =>
         runTest(
             Effect.gen(function* () {
-                const { store } = yield* open(new Map())
+                const { store } = yield* open()
                 const { seen } = yield* collect(store.changes)
                 yield* store.set({ theme: "dark" })
                 yield* store.set({ theme: "light" })
@@ -180,7 +176,7 @@ describe("settings store", () => {
     it("pins in order, dedupes, and unpins", () =>
         runTest(
             Effect.gen(function* () {
-                const { store } = yield* open(new Map())
+                const { store } = yield* open()
                 yield* store.pin("ext-bbb")
                 yield* store.pin("ext-aaa")
                 yield* store.pin("ext-bbb")
@@ -197,7 +193,7 @@ describe("settings store", () => {
     it("does not publish when a pin is a no-op", () =>
         runTest(
             Effect.gen(function* () {
-                const { store } = yield* open(new Map())
+                const { store } = yield* open()
                 yield* store.pin("ext-aaa")
                 const { seen } = yield* collect(store.changes)
                 yield* store.pin("ext-aaa")

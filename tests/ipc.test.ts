@@ -1,5 +1,5 @@
-import { Effect, Exit, Layer, Scope } from "effect"
-import { describe, expect, it } from "vite-plus/test"
+import { Effect, Exit, Scope } from "effect"
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import {
     IpcPush,
@@ -13,7 +13,11 @@ import { BrowserStore, type StoreService } from "../src/main/state/store"
 import { EVENTS, PUSHES, REQUESTS } from "../src/shared/ipc/channels"
 import { DEFAULT_SETTINGS } from "../src/shared/settings"
 import { captureLogs, runTest } from "./support/effect"
-import { fakeRenderer, memoryIpc } from "./support/ipc"
+import * as ipc from "./support/ipc"
+import { fakeRenderer } from "./support/ipc"
+
+vi.mock("../src/main/ipc/transport", () => import("./support/ipc"))
+beforeEach(() => ipc.resetIpc())
 
 /** The store requests served by the real store, the rest by stubs. */
 const handlersFor = (store: StoreService): RequestHandlers<never> => ({
@@ -61,17 +65,16 @@ const quietEvents: EventHandlers<never> = {
 
 /** Every Arbor channel served over an in-memory transport, with a real store behind it. */
 const serve = Effect.gen(function* () {
-    const ipc = memoryIpc()
     const logs = captureLogs()
     const scope = yield* Scope.make()
     const store = yield* BrowserStore.pipe(Effect.provide(BrowserStore.layer(initialState())))
     yield* Effect.all([serveRequests(handlersFor(store)), serveEvents(quietEvents)]).pipe(
         Scope.provide(scope),
-        Effect.provide(Layer.merge(ipc.layer, logs.layer)),
+        Effect.provide(logs.layer),
     )
     const invoke = (channel: string, raw?: unknown) =>
         Effect.promise(() => ipc.invoke(channel, raw))
-    return { ipc, logs, scope, store, invoke }
+    return { logs, scope, store, invoke }
 })
 
 describe("IPC requests", () => {
@@ -106,7 +109,7 @@ describe("IPC requests", () => {
     it("rejects a malformed payload and logs it once", () =>
         runTest(
             Effect.gen(function* () {
-                const { ipc, logs } = yield* serve
+                const { logs } = yield* serve
                 const exit = yield* Effect.exit(
                     Effect.tryPromise(() => ipc.invoke(REQUESTS.closeTab, { tabId: 42 })),
                 )
@@ -118,7 +121,7 @@ describe("IPC requests", () => {
     it("serves every channel while the scope is open, and none after", () =>
         runTest(
             Effect.gen(function* () {
-                const { ipc, scope } = yield* serve
+                const { scope } = yield* serve
                 expect([...ipc.answers.keys()].sort()).toEqual(Object.values(REQUESTS).sort())
                 expect([...ipc.receivers.keys()].sort()).toEqual(Object.values(EVENTS).sort())
                 yield* Scope.close(scope, Exit.void)
@@ -132,7 +135,7 @@ describe("IPC events", () => {
     it("runs the handler on a good payload, and logs a bad one", () =>
         runTest(
             Effect.gen(function* () {
-                const { ipc, logs } = yield* serve
+                const { logs } = yield* serve
                 eventsSeen.length = 0
                 ipc.emit(EVENTS.shellRaise, true)
                 ipc.emit(EVENTS.shellRaise, "yes")
@@ -147,10 +150,7 @@ describe("IPC pushes", () => {
     it("reach every attached renderer, until it is destroyed", () =>
         runTest(
             Effect.gen(function* () {
-                const ipc = memoryIpc()
-                const pushes = yield* IpcPush.pipe(
-                    Effect.provide(IpcPush.layer.pipe(Layer.provide(ipc.layer))),
-                )
+                const pushes = yield* IpcPush.pipe(Effect.provide(IpcPush.layer))
                 const shell = fakeRenderer()
                 const popup = fakeRenderer()
                 yield* pushes.attach(shell.renderer)

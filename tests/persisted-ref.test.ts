@@ -1,52 +1,45 @@
-import { mkdtempSync } from "node:fs"
-import { tmpdir } from "node:os"
-import path from "node:path"
-
 import { Context, Effect, Exit, Layer, Option, Scope } from "effect"
 import { TestClock } from "effect/testing"
-import { describe, expect, it } from "vite-plus/test"
+import { beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
-import { JsonFile } from "../src/main/persistence/json-file"
+import { readJson } from "../src/main/persistence/json-file"
 import * as PersistedRef from "../src/main/persistence/persisted-ref"
 import { browserStoreFromFile } from "../src/main/persistence/state-file"
 import { PERSIST_VERSION } from "../src/main/state/persist"
 import { BrowserStore } from "../src/main/state/store"
 import { captureLogs, runTest, settle } from "./support/effect"
-import { memoryJsonFile, memoryJsonFileLayer } from "./support/json-file"
+import { files, writeCount } from "./support/memory-fs"
+
+vi.mock("node:fs", () => import("./support/memory-fs"))
+beforeEach(() => {
+    files.clear()
+    writeCount.value = 0
+})
 
 const FILE = "/data/value.json"
 
 /** A file of numbers, counting how many times it was written. */
 const setup = (initial?: string) =>
     Effect.gen(function* () {
-        const files = new Map<string, string>()
+        files.clear()
+        writeCount.value = 0
         if (initial !== undefined) files.set(FILE, initial)
-        let writes = 0
-        const memory = memoryJsonFile(files)
-        const counting = Layer.succeed(JsonFile, {
-            read: memory.read,
-            write: (filePath, value) =>
-                Effect.tap(memory.write(filePath, value), () => Effect.sync(() => (writes += 1))),
-        })
         const scope = yield* Scope.make()
         const ref = yield* PersistedRef.make({
             path: FILE,
-            read: Effect.gen(function* () {
-                const file = yield* JsonFile
-                return yield* file.read(FILE, (data) => (typeof data === "number" ? data : null))
-            }),
+            read: readJson(FILE, (data) => (typeof data === "number" ? data : null)),
             encode: (n: number) => n,
             empty: () => 0,
-        }).pipe(Effect.provide(counting), Scope.provide(scope))
+        }).pipe(Scope.provide(scope))
         const increment = ref.modifySome((n) => [undefined, Option.some(n + 1)] as const)
-        return { ref, files, scope, increment, writes: () => writes }
+        return { ref, scope, increment, writes: () => writeCount.value }
     })
 
 describe("PersistedRef", () => {
     it("writes a burst of changes once, after the debounce", () =>
         runTest(
             Effect.gen(function* () {
-                const { files, increment, writes } = yield* setup()
+                const { increment, writes } = yield* setup()
                 yield* increment
                 yield* increment
                 yield* increment
@@ -63,7 +56,7 @@ describe("PersistedRef", () => {
     it("closing the scope writes a pending change at once", () =>
         runTest(
             Effect.gen(function* () {
-                const { files, scope, increment, writes } = yield* setup()
+                const { scope, increment, writes } = yield* setup()
                 yield* increment
                 // No settle, no clock: the change has not reached the debounce yet.
                 yield* Scope.close(scope, Exit.void)
@@ -111,15 +104,14 @@ describe("state file", () => {
 
     const loadStore = (content: string) =>
         Effect.gen(function* () {
-            const files = new Map([[STATE, content]])
+            files.set(STATE, content)
             const logs = captureLogs()
             const scope = yield* Scope.make()
-            const context = yield* Layer.buildWithScope(
-                browserStoreFromFile(STATE).pipe(Layer.provide(memoryJsonFileLayer(files))),
-                scope,
-            ).pipe(Effect.provide(logs.layer))
+            const context = yield* Layer.buildWithScope(browserStoreFromFile(STATE), scope).pipe(
+                Effect.provide(logs.layer),
+            )
             const store = Context.get(context, BrowserStore)
-            return { store, files, scope, levels: logs.entries.map((entry) => entry.level) }
+            return { store, scope, levels: logs.entries.map((entry) => entry.level) }
         })
 
     it("starts empty and logs on bad JSON, an unknown version, or no live container", () =>
@@ -146,28 +138,9 @@ describe("state file", () => {
                 const id = yield* first.store.createContainer("Work")
                 yield* Scope.close(first.scope, Exit.void)
 
-                const second = yield* loadStore(first.files.get(STATE)!)
+                const second = yield* loadStore(files.get(STATE)!)
                 const containers = (yield* second.store.state).containers
                 expect(containers.map((c) => [c.id, c.name])).toEqual([[id, "Work"]])
             }),
-        ))
-})
-
-describe("JsonFile (node adapter)", () => {
-    it("writes atomically and reads back; a missing file is FileMissing", () =>
-        runTest(
-            Effect.gen(function* () {
-                const file = yield* JsonFile
-                const filePath = path.join(
-                    mkdtempSync(path.join(tmpdir(), "arbor-json-")),
-                    "a.json",
-                )
-
-                const missing = yield* Effect.flip(file.read(filePath, (data) => data))
-                expect(missing).toMatchObject({ path: filePath })
-
-                yield* file.write(filePath, { a: 1 })
-                expect(yield* file.read(filePath, (data) => data)).toEqual({ a: 1 })
-            }).pipe(Effect.provide(JsonFile.layer)),
         ))
 })
