@@ -11,7 +11,6 @@ import {
     LastTab,
     NoActionPopup,
     NoContainer,
-    NoWindow,
     SettingsRejected,
     UnknownContainer,
     UnknownTab,
@@ -116,7 +115,7 @@ export const Requests = {
     // Main reads the popup URL from the manifest: the renderer only names the extension.
     openExtensionActionPopup: request({
         payload: Schema.Struct({ extensionId: Schema.String, anchor: Schema.NullOr(Rect) }),
-        error: Schema.Union([NoActionPopup, NoWindow]),
+        error: NoActionPopup,
     }),
 
     createContainer: request({

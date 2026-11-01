@@ -19,14 +19,8 @@ import { preloadPath, rendererPath } from "./paths"
 
 const INTERNAL_PARTITION = "arbor:internal"
 
-let internal: Session | null = null
-
-/** The session `arbor://` resolves on. Never a Container's partition. */
-export const internalSession = (): Session => {
-    if (internal) return internal
-    internal = session.fromPartition(INTERNAL_PARTITION)
-    return internal
-}
+/** The session `arbor://` resolves on. Never a Container's partition. Electron returns the same one each time. */
+export const internalSession = (): Session => session.fromPartition(INTERNAL_PARTITION)
 
 /**
  * Must run before `app.whenReady()`.

@@ -14,7 +14,7 @@ import {
     type PushKey,
     type RequestKey,
 } from "../../shared/ipc/contract"
-import { IpcTransport } from "./transport"
+import * as transport from "./transport"
 
 type RequestOf<K extends RequestKey> = (typeof Requests)[K]
 
@@ -39,9 +39,8 @@ export type EventHandlers<R> = {
  */
 export const serveRequests = <R>(
     handlers: RequestHandlers<R>,
-): Effect.Effect<void, never, IpcTransport | Scope.Scope | R> =>
+): Effect.Effect<void, never, Scope.Scope | R> =>
     Effect.gen(function* () {
-        const transport = yield* IpcTransport
         const run = yield* FiberSet.makeRuntimePromise<R>()
         // Generic in `K`, so TS pairs each handler with its own payload, success and error.
         const serve = <K extends RequestKey>(key: K, handler: RequestHandlers<R>[K]) => {
@@ -75,9 +74,8 @@ export const serveRequests = <R>(
 /** Receives every event channel while the current scope is open. A bad payload or a defect is logged. */
 export const serveEvents = <R>(
     handlers: EventHandlers<R>,
-): Effect.Effect<void, never, IpcTransport | Scope.Scope | R> =>
+): Effect.Effect<void, never, Scope.Scope | R> =>
     Effect.gen(function* () {
-        const transport = yield* IpcTransport
         const run = yield* FiberSet.makeRuntime<R>()
         const serve = <K extends EventKey>(key: K, handler: EventHandlers<R>[K]) => {
             const channel = EVENTS[key]
@@ -110,38 +108,46 @@ export interface IpcPushService {
 }
 
 export class IpcPush extends Context.Service<IpcPush, IpcPushService>()("arbor.IpcPush") {
-    static readonly layer = Layer.effect(
-        IpcPush,
-        Effect.gen(function* () {
-            const transport = yield* IpcTransport
-            const audience = new Set<WebContents>()
-            return {
-                push: (key, ...value) =>
-                    Schema.encodeUnknownEffect(Pushes[key].value)(value[0]).pipe(
-                        Effect.flatMap((encoded) =>
-                            Effect.forEach(
-                                audience,
-                                (renderer) => transport.send(renderer, PUSHES[key], encoded),
-                                { discard: true },
-                            ),
-                        ),
-                        Effect.catchCause((cause) =>
-                            Effect.logError(`IPC push ${PUSHES[key]}`, cause),
+    static readonly layer = Layer.sync(IpcPush, () => {
+        const audience = new Set<WebContents>()
+        return {
+            push: (key, ...value) =>
+                Schema.encodeUnknownEffect(Pushes[key].value)(value[0]).pipe(
+                    Effect.flatMap((encoded) =>
+                        Effect.forEach(
+                            audience,
+                            (renderer) => transport.send(renderer, PUSHES[key], encoded),
+                            { discard: true },
                         ),
                     ),
-                attach: (renderer) =>
-                    Effect.sync(() => {
-                        if (renderer.isDestroyed() || audience.has(renderer)) return
-                        audience.add(renderer)
-                        renderer.once("destroyed", () => audience.delete(renderer))
-                    }),
-            }
-        }),
-    )
+                    Effect.catchCause((cause) => Effect.logError(`IPC push ${PUSHES[key]}`, cause)),
+                ),
+            attach: (renderer) =>
+                Effect.sync(() => {
+                    if (renderer.isDestroyed() || audience.has(renderer)) return
+                    audience.add(renderer)
+                    renderer.once("destroyed", () => audience.delete(renderer))
+                }),
+        }
+    })
 }
 
-/** `IpcPushService` for code outside Effect (windows, overlays), until 06 gives them a scope. */
+/** `IpcPushService` for Electron callbacks (overlay windows, modals), which cannot wait on an effect. */
 export interface Pusher {
     readonly push: <K extends PushKey>(key: K, ...value: PushArgs<K>) => void
     readonly attach: (renderer: WebContents) => void
 }
+
+/**
+ * A `Pusher` for the life of the current scope.
+ * Both effects are synchronous inside, and a fiber runs at once until it waits, so the order is kept.
+ */
+export const makePusher = (pushes: IpcPushService): Effect.Effect<Pusher, never, Scope.Scope> =>
+    Effect.map(FiberSet.makeRuntime(), (run) => ({
+        push: (key, ...value) => {
+            run(pushes.push(key, ...value))
+        },
+        attach: (renderer) => {
+            run(pushes.attach(renderer))
+        },
+    }))

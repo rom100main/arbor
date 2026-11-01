@@ -4,7 +4,7 @@ import { decodeOr, orDefault } from "../shared/decode"
 import { SettingsRejected } from "../shared/errors"
 import { DEFAULT_SEARCH_TEMPLATE, DEFAULT_SETTINGS } from "../shared/settings"
 import { Settings, SettingsPatch } from "../shared/settings-schema"
-import { JsonFile } from "./persistence/json-file"
+import { readJson } from "./persistence/json-file"
 import * as PersistedRef from "./persistence/persisted-ref"
 
 const PersistedSettings = Schema.Struct({
@@ -68,10 +68,9 @@ const defaults = (): Settings => ({ ...DEFAULT_SETTINGS, pinnedExtensionIds: [] 
  */
 const make = (path: string, debounce?: Duration.Input) =>
     Effect.gen(function* () {
-        const file = yield* JsonFile
         const ref = yield* PersistedRef.make({
             path,
-            read: file.read(path, fromPersistedSettings),
+            read: readJson(path, fromPersistedSettings),
             encode: (settings: Settings) => settings,
             empty: defaults,
             debounce,

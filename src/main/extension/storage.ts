@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Option, type Duration } from "effect"
+import { Context, Effect, FiberSet, Layer, Option, type Duration } from "effect"
 import {
     ipcMain,
     type IpcMainInvokeEvent,
@@ -17,9 +17,8 @@ import {
     type ExtStorageOp,
     type StorageItems,
 } from "../../shared/extension-storage"
-import { JsonFile } from "../persistence/json-file"
+import { readJson } from "../persistence/json-file"
 import * as PersistedRef from "../persistence/persisted-ref"
-import { AppRuntime } from "../runtime"
 
 /** Frame invoke (extension pages) and service-worker invoke carry different event shapes. */
 type StorageInvokeEvent = IpcMainInvokeEvent | IpcMainServiceWorkerInvokeEvent
@@ -29,6 +28,8 @@ export interface ExtensionStorageService {
     readonly handle: (event: StorageInvokeEvent, op: ExtStorageOp) => Effect.Effect<unknown>
     /** Drop an extension's areas (uninstall teardown). */
     readonly purge: (extensionId: string) => Effect.Effect<void>
+    /** Serve the service workers of `session`: each one has its own IPC bus, not `ipcMain`. */
+    readonly bind: (session: Session) => Effect.Effect<void>
 }
 
 const EXTENSION_URL = /^chrome-extension:\/\/([^/?#]+)/
@@ -54,10 +55,6 @@ const extensionIdOf = (event: StorageInvokeEvent): string | null => {
     return null
 }
 
-let currentService: ExtensionStorageService | null = null
-const wiredSessions = new WeakSet<Session>()
-const wiredWorkers = new WeakSet<ServiceWorkerMain>()
-
 type LocalAreas = Readonly<Record<string, StorageItems>>
 
 const encodeLocal = (local: LocalAreas): unknown =>
@@ -73,18 +70,19 @@ const decodeLocal = (data: unknown): LocalAreas | null => {
     return Object.fromEntries(Object.entries(restored).map(([id, areas]) => [id, areas.local]))
 }
 
+const CHANNEL = "arbor:ext-storage"
+
 /**
  * Single authoritative chrome.storage for every container session
  * (Firefox model: containers isolate web storage, extensions share one store).
- * `local`/`sync`/`managed` persist to disk; `session` is process-lifetime only, so it lives in a `Map`.
+ * `local`/`sync`/`managed` persist to disk, `session` is process-lifetime only, so it lives in a `Map`.
  * Each op is applied atomically in main, so N extension service workers cannot interleave.
  */
 const make = (path: string, debounce?: Duration.Input) =>
     Effect.gen(function* () {
-        const file = yield* JsonFile
         const local = yield* PersistedRef.make<LocalAreas>({
             path,
-            read: file.read(path, decodeLocal),
+            read: readJson(path, decodeLocal),
             encode: encodeLocal,
             empty: () => ({}),
             debounce,
@@ -124,7 +122,48 @@ const make = (path: string, debounce?: Duration.Input) =>
                 })
             })
 
-        return ExtensionStorage.of({ handle, purge })
+        const runPromise = yield* FiberSet.makeRuntimePromise()
+        const dispatch = (event: StorageInvokeEvent, op: unknown): Promise<unknown> => {
+            const decoded = parseExtStorageOp(op)
+            if (!decoded) return Promise.reject(new Error(`Invalid ${CHANNEL} request`))
+            return runPromise(handle(event, decoded))
+        }
+
+        // Extension pages and popups call this through `ipcMain`.
+        // The extension ID comes from the sending frame (`event.senderFrame`).
+        // `IpcTransport` only passes the sender's web contents, not the frame, so this handler skips it.
+        yield* Effect.acquireRelease(
+            Effect.sync(() => ipcMain.handle(CHANNEL, (event, op: unknown) => dispatch(event, op))),
+            () => Effect.sync(() => ipcMain.removeHandler(CHANNEL)),
+        )
+
+        const wiredSessions = new WeakSet<Session>()
+        const wiredWorkers = new WeakSet<ServiceWorkerMain>()
+
+        const attachWorker = (serviceWorker: ServiceWorkerMain | undefined): void => {
+            if (!serviceWorker) return
+            if (!serviceWorker.scope?.startsWith("chrome-extension://")) return
+            if (wiredWorkers.has(serviceWorker)) return
+            wiredWorkers.add(serviceWorker)
+            serviceWorker.ipc.removeHandler(CHANNEL)
+            serviceWorker.ipc.handle(CHANNEL, (event, op: unknown) => dispatch(event, op))
+        }
+
+        // Same pattern as electron-chrome-extensions' crx-msg router: the running workers, then each new one.
+        const bind = (ses: Session): Effect.Effect<void> =>
+            Effect.sync(() => {
+                if (wiredSessions.has(ses)) return
+                wiredSessions.add(ses)
+                for (const info of Object.values(ses.serviceWorkers.getAllRunning())) {
+                    attachWorker(ses.serviceWorkers.getWorkerFromVersionID(info.versionId))
+                }
+                ses.serviceWorkers.on("running-status-changed", ({ runningStatus, versionId }) => {
+                    if (runningStatus !== "starting") return
+                    attachWorker(ses.serviceWorkers.getWorkerFromVersionID(versionId))
+                })
+            })
+
+        return ExtensionStorage.of({ handle, purge, bind })
     })
 
 export class ExtensionStorage extends Context.Service<ExtensionStorage, ExtensionStorageService>()(
@@ -132,54 +171,4 @@ export class ExtensionStorage extends Context.Service<ExtensionStorage, Extensio
 ) {
     static readonly layer = (path: string, debounce?: Duration.Input) =>
         Layer.effect(ExtensionStorage, make(path, debounce))
-}
-
-const dispatch = (event: StorageInvokeEvent, op: unknown): Promise<unknown> => {
-    const service = currentService
-    if (!service) throw new Error("arbor:ext-storage is not ready")
-    const decoded = parseExtStorageOp(op)
-    if (!decoded) throw new Error("Invalid arbor:ext-storage request")
-    return AppRuntime.runPromise(service.handle(event, decoded))
-}
-
-/** Uninstall teardown: forget the extension's `chrome.storage` areas. */
-export const purgeExtensionStorage = (extensionId: string): Effect.Effect<void> =>
-    currentService ? currentService.purge(extensionId) : Effect.void
-
-/** Frame path: extension pages / popups use ipcRenderer → ipcMain. */
-export const registerExtensionStorageIpc = (service: ExtensionStorageService): void => {
-    currentService = service
-    // start() can run again on macOS activate; rebind instead of stacking handlers.
-    ipcMain.removeHandler("arbor:ext-storage")
-    ipcMain.handle("arbor:ext-storage", (event, op: unknown) => dispatch(event, op))
-}
-
-const attachWorker = (serviceWorker: ServiceWorkerMain | undefined): void => {
-    if (!serviceWorker) return
-    if (!serviceWorker.scope?.startsWith("chrome-extension://")) return
-    if (wiredWorkers.has(serviceWorker)) return
-    wiredWorkers.add(serviceWorker)
-    // SW ipcRenderer.invoke is served by ServiceWorkerMain.ipc, not ipcMain.
-    serviceWorker.ipc.removeHandler("arbor:ext-storage")
-    serviceWorker.ipc.handle("arbor:ext-storage", (event, op: unknown) => dispatch(event, op))
-}
-
-/**
- * Service-worker path: each extension SW gets its own IpcMainServiceWorker bus.
- * Wire every session (default + each container) after it exists,
- * same pattern as electron-chrome-extensions' crx-msg router.
- */
-export const bindExtensionStorageToSession = (ses: Session): void => {
-    if (wiredSessions.has(ses)) return
-    wiredSessions.add(ses)
-
-    for (const info of Object.values(ses.serviceWorkers.getAllRunning())) {
-        attachWorker(ses.serviceWorkers.getWorkerFromVersionID(info.versionId))
-    }
-
-    ses.serviceWorkers.on("running-status-changed", (details) => {
-        const { runningStatus, versionId } = details
-        if (runningStatus !== "starting") return
-        attachWorker(ses.serviceWorkers.getWorkerFromVersionID(versionId))
-    })
 }

@@ -5,8 +5,6 @@ import { Effect, Layer, LogLevel, Logger, ManagedRuntime, References } from "eff
 import { app } from "electron"
 
 const isDev = process.env.VITE_DEV_SERVER_URL !== undefined
-/** Tests run in plain Node, where Electron's `app` does not exist. */
-const inElectron = process.versions.electron !== undefined
 
 const fileLogger = (file: string) =>
     Logger.make((options) => {
@@ -24,7 +22,7 @@ export const Logging = Layer.unwrap(
     Effect.sync(() =>
         Layer.mergeAll(
             Logger.layer(
-                isDev || !inElectron
+                isDev
                     ? [Logger.consolePretty()]
                     : [
                           Logger.consolePretty(),

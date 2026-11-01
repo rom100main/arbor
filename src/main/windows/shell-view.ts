@@ -1,9 +1,8 @@
-import { WebContentsView, type BrowserWindow, type WebContents } from "electron"
+import { WebContentsView, type BrowserWindow } from "electron"
 
 import type { RevealEdge } from "../../shared/protocol"
 import { chromeInsets, REVEAL_EDGE, type ChromeInsets, type Settings } from "../../shared/settings"
-import type { Pusher } from "../ipc/router"
-import { loadRenderer, preloadPath } from "./paths"
+import { preloadPath } from "./paths"
 
 /**
  * The shell (sidebar and toolbar) renders in a transparent view of its own,
@@ -15,76 +14,17 @@ import { loadRenderer, preloadPath } from "./paths"
  * and is raised above it while a hidden or compact bar is revealed.
  * Lowering it again hands the page its input back.
  */
-interface Shell {
-    readonly win: BrowserWindow
+export interface Shell {
     readonly view: WebContentsView
-    readonly getSettings: () => Settings
-    raised: boolean
-}
-
-let shell: Shell | null = null
-
-let lastEdge: RevealEdge | null = null
-
-export const createShellView = async (
-    win: BrowserWindow,
-    getSettings: () => Settings,
-    ipc: Pusher,
-): Promise<WebContentsView> => {
-    const view = new WebContentsView({ webPreferences: { preload: preloadPath } })
-    ipc.attach(view.webContents)
-    view.setBackgroundColor("#00000000")
-    win.contentView.addChildView(view)
-    const current: Shell = { win, view, getSettings, raised: false }
-    shell = current
-    win.on("closed", () => {
-        if (shell === current) shell = null
-    })
-    layoutShell()
-    await loadRenderer(view.webContents)
-    return view
-}
-
-export const shellWebContents = (): WebContents | null =>
-    shell && !shell.view.webContents.isDestroyed() ? shell.view.webContents : null
-
-export const focusShell = (): void => {
-    if (!shell || shell.win.isDestroyed()) return
-    shell.win.focus()
-    shell.view.webContents.focus()
-}
-
-export const shellInsets = (): ChromeInsets =>
-    chromeInsets(
-        shell
-            ? shell.getSettings()
-            : { sidebarVisibility: "displayed", urlBarVisibility: "displayed" },
-    )
-
-export const layoutShell = (): void => {
-    if (!shell || shell.win.isDestroyed()) return
-    const { width, height } = shell.win.getContentBounds()
-    shell.view.setBounds({ x: 0, y: 0, width, height })
-}
-
-export const setShellRaised = (raised: boolean): void => {
-    if (!shell) return
-    shell.raised = raised
-    lastEdge = null
-    restackShell()
-}
-
-export const restackShell = (): void => {
-    if (!shell || shell.win.isDestroyed()) return
-    const { win, view, raised } = shell
-    const { children } = win.contentView
-    if (raised) {
-        if (children.at(-1) !== view) win.contentView.addChildView(view) // if view already in the windows is moved instead
-        return
-    }
-    for (const child of children) {
-        if (child !== view) win.contentView.addChildView(child)
-    }
+    /** Space the shell keeps along the left and bottom edges, from the current settings. */
+    readonly insets: () => ChromeInsets
+    readonly layout: () => void
+    readonly focus: () => void
+    readonly setRaised: (raised: boolean) => void
+    /** Put the shell back in its place after a tab view was added. */
+    readonly restack: () => void
+    /** Tell the shell when the mouse reaches a hidden bar's edge of `page`. */
+    readonly watchEdges: (page: WebContentsView) => void
 }
 
 const edgeAt = (
@@ -99,17 +39,66 @@ const edgeAt = (
     return null
 }
 
-export const watchShellEdges = (view: WebContentsView, ipc: Pusher): void => {
-    view.webContents.on("before-mouse-event", (_event, mouse) => {
-        if (!shell || shell.raised) return
-        if (mouse.type === "mouseLeave") {
-            lastEdge = null
+export const createShell = (
+    win: BrowserWindow,
+    settings: () => Settings,
+    onEdge: (edge: RevealEdge) => void,
+): Shell => {
+    const view = new WebContentsView({ webPreferences: { preload: preloadPath } })
+    view.setBackgroundColor("#00000000")
+    win.contentView.addChildView(view)
+    let raised = false
+    let lastEdge: RevealEdge | null = null
+
+    const alive = (): boolean => !win.isDestroyed()
+
+    const restack = (): void => {
+        if (!alive()) return
+        const { children } = win.contentView
+        if (raised) {
+            // Adding a view that is already a child moves it to the top.
+            if (children.at(-1) !== view) win.contentView.addChildView(view)
             return
         }
-        if (mouse.type !== "mouseMove") return
-        const edge = edgeAt(shell.getSettings(), view.getBounds(), mouse)
-        if (edge === lastEdge) return
-        lastEdge = edge
-        if (edge !== null) ipc.push("shellEdge", edge)
-    })
+        for (const child of children) {
+            if (child !== view) win.contentView.addChildView(child)
+        }
+    }
+
+    const shell: Shell = {
+        view,
+        insets: () => chromeInsets(settings()),
+        layout: () => {
+            if (!alive()) return
+            const { width, height } = win.getContentBounds()
+            view.setBounds({ x: 0, y: 0, width, height })
+        },
+        focus: () => {
+            if (!alive()) return
+            win.focus()
+            view.webContents.focus()
+        },
+        setRaised: (next) => {
+            raised = next
+            lastEdge = null
+            restack()
+        },
+        restack,
+        watchEdges: (page) => {
+            page.webContents.on("before-mouse-event", (_event, mouse) => {
+                if (raised) return
+                if (mouse.type === "mouseLeave") {
+                    lastEdge = null
+                    return
+                }
+                if (mouse.type !== "mouseMove") return
+                const edge = edgeAt(settings(), page.getBounds(), mouse)
+                if (edge === lastEdge) return
+                lastEdge = edge
+                if (edge !== null) onEdge(edge)
+            })
+        },
+    }
+    shell.layout()
+    return shell
 }

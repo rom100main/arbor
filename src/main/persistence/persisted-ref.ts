@@ -14,7 +14,7 @@ import {
     type Scope,
 } from "effect"
 
-import { JsonFile, type FileMissing, type FileUnreadable } from "./json-file"
+import { writeJson, type FileMissing, type FileUnreadable } from "./json-file"
 
 /** A value that loads itself, can be read, modified and observed, and writes itself back. */
 export interface PersistedRef<A> {
@@ -29,9 +29,9 @@ export const DEFAULT_DEBOUNCE = Duration.millis(500)
 
 /** Read the file at boot. Missing file: use defaults. Broken file: log it, then use defaults. */
 export const loadOrEmpty = <A>(
-    read: Effect.Effect<A, FileMissing | FileUnreadable, JsonFile>,
+    read: Effect.Effect<A, FileMissing | FileUnreadable>,
     empty: () => A,
-): Effect.Effect<A, never, JsonFile> =>
+): Effect.Effect<A> =>
     read.pipe(
         Effect.catchTags({
             FileMissing: () => Effect.succeed(empty()),
@@ -57,9 +57,8 @@ export const persistChanges = <A>(
         readonly encode: (a: A) => unknown
         readonly debounce?: Duration.Input
     },
-): Effect.Effect<void, never, JsonFile | Scope.Scope> =>
+): Effect.Effect<void, never, Scope.Scope> =>
     Effect.gen(function* () {
-        const file = yield* JsonFile
         // What is on disk now: the value just loaded.
         const written = yield* Ref.make(yield* source.current)
 
@@ -67,13 +66,11 @@ export const persistChanges = <A>(
             const value = yield* source.current
             if (value === (yield* Ref.get(written))) return
             yield* Ref.set(written, value)
-            yield* file
-                .write(options.path, options.encode(value))
-                .pipe(
-                    Effect.catchTag("FileUnwritable", (error) =>
-                        Effect.logError(`Save failed ${error.path}`, error.reason),
-                    ),
-                )
+            yield* writeJson(options.path, options.encode(value)).pipe(
+                Effect.catchTag("FileUnwritable", (error) =>
+                    Effect.logError(`Save failed ${error.path}`, error.reason),
+                ),
+            )
         })
 
         // Return only once subscribed: a change made right after setup must reach the debounce.
@@ -91,11 +88,11 @@ export const persistChanges = <A>(
 
 export const make = <A>(options: {
     readonly path: string
-    readonly read: Effect.Effect<A, FileMissing | FileUnreadable, JsonFile>
+    readonly read: Effect.Effect<A, FileMissing | FileUnreadable>
     readonly encode: (a: A) => unknown
     readonly empty: () => A
     readonly debounce?: Duration.Input
-}): Effect.Effect<PersistedRef<A>, never, JsonFile | Scope.Scope> =>
+}): Effect.Effect<PersistedRef<A>, never, Scope.Scope> =>
     Effect.gen(function* () {
         const ref = yield* SubscriptionRef.make(yield* loadOrEmpty(options.read, options.empty))
         const current = SubscriptionRef.get(ref)

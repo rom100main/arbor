@@ -1,184 +1,58 @@
-import { Deferred, Effect, Exit, Predicate, Queue } from "effect"
-import { BrowserWindow, type BrowserWindow as ParentWindow } from "electron"
+/**
+ * Small windows over the main window:
+ * the omnibox popup, the extensions popup, extension action popups and the rename modal.
+ */
 
-import type { Anchor, PermissionPromptRequest, Rect, RenameTarget } from "../../shared/protocol"
+import { Predicate } from "effect"
+import { BrowserWindow, type BrowserWindowConstructorOptions } from "electron"
+
+import type { Anchor, Rect, RenameTarget } from "../../shared/protocol"
 import type { Pusher } from "../ipc/router"
 import { loadRenderer, preloadPath } from "./paths"
 
-// --- omnibox popup
+const OVERLAY_DEFAULTS = {
+    show: false,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    hasShadow: false,
+} satisfies BrowserWindowConstructorOptions
 
-const POPUP_GAP = 6
-const DEFAULT_HEIGHT = 160
-const MAX_HEIGHT = 400
+/** A frameless child window of `parent`. */
+const overlayWindow = (
+    parent: BrowserWindow,
+    options: BrowserWindowConstructorOptions,
+): BrowserWindow => new BrowserWindow({ ...OVERLAY_DEFAULTS, ...options, parent })
 
-let popup: BrowserWindow | null = null
-let anchor: Anchor | null = null
-let popupHeight = DEFAULT_HEIGHT
-let lastQuery = ""
-
-export const popupWebContents = (): Electron.WebContents | null =>
-    popup && !popup.isDestroyed() ? popup.webContents : null
-
-const repositionPopup = (win: ParentWindow): void => {
-    if (!popup || popup.isDestroyed() || !anchor) return
-    const bounds = win.getContentBounds()
-    popup.setBounds({
-        x: Math.round(bounds.x + anchor.x),
-        y: Math.round(bounds.y + anchor.y - popupHeight - POPUP_GAP),
-        width: Math.round(anchor.width),
-        height: Math.round(popupHeight),
-    })
-}
-
-export const showOmniboxPopup = (
-    win: ParentWindow,
-    rect: Anchor,
-    query: string,
-    ipc: Pusher,
-): void => {
-    anchor = rect
-    lastQuery = query
-    if (!popup || popup.isDestroyed()) {
-        const bounds = win.getContentBounds()
-        popup = new BrowserWindow({
-            x: Math.round(bounds.x + rect.x),
-            y: Math.round(bounds.y + rect.y - popupHeight - POPUP_GAP),
-            width: Math.round(rect.width),
-            height: Math.round(popupHeight),
-            show: false,
-            frame: false,
-            transparent: true,
-            resizable: false,
-            movable: false,
-            minimizable: false,
-            maximizable: false,
-            fullscreenable: false,
-            skipTaskbar: true,
-            focusable: false,
-            hasShadow: false,
-            parent: win,
-            webPreferences: { preload: preloadPath },
-        })
-        popup.on("closed", () => {
-            popup = null
-        })
-        ipc.attach(popup.webContents)
-        // Queries sent while the popup renderer is still loading would be lost.
-        popup.webContents.on("did-finish-load", () => ipc.push("omniboxQuery", lastQuery))
-        void loadRenderer(popup, "omnibox")
+/** The click that closes a popup by blurring it also hits its toggle: ignore a reopen just after. */
+const dismissGuard = (windowMs: number) => {
+    let last: { readonly key: string; readonly at: number } | null = null
+    return {
+        mark: (key: string): void => {
+            last = { key, at: Date.now() }
+        },
+        suppressed: (key: string): boolean =>
+            last !== null && last.key === key && Date.now() - last.at < windowMs,
     }
-    repositionPopup(win)
-    ipc.push("omniboxQuery", lastQuery)
-    popup.showInactive()
 }
 
-export const setOmniboxPopupHeight = (win: ParentWindow, height: number): void => {
-    if (typeof height !== "number" || !Number.isFinite(height) || height <= 0) return
-    popupHeight = Math.min(MAX_HEIGHT, Math.round(height))
-    repositionPopup(win)
-}
+const DISMISS_WINDOW_MS = 400
+const POPUP_GAP = 6
 
-export const hideOmniboxPopup = (): void => {
-    if (popup && !popup.isDestroyed()) popup.hide()
-}
-
-// --- extensions popup
+const OMNIBOX_MAX_HEIGHT = 400
 
 const EXTENSIONS_POPUP_WIDTH = 320
 const EXTENSIONS_POPUP_DEFAULT_HEIGHT = 72
 const EXTENSIONS_POPUP_MAX_HEIGHT = 480
 
-let extensionsPopup: BrowserWindow | null = null
-let extensionsAnchor: Anchor | null = null
-let extensionsPopupHeight = EXTENSIONS_POPUP_DEFAULT_HEIGHT
-
-/** When a popup closed because focus moved away; gates an immediate toggle reopen. */
-let extensionsDismissedAt = 0
-const DISMISS_WINDOW_MS = 400
-
-const closeExtensionsPopup = (markDismissed = false): void => {
-    if (extensionsPopup && !extensionsPopup.isDestroyed()) {
-        if (markDismissed) extensionsDismissedAt = Date.now()
-        extensionsPopup.destroy()
-    }
-    extensionsPopup = null
-}
-
-const repositionExtensionsPopup = (win: ParentWindow): void => {
-    if (!extensionsPopup || extensionsPopup.isDestroyed() || !extensionsAnchor) return
-    const bounds = win.getContentBounds()
-    extensionsPopup.setBounds({
-        x: Math.round(
-            bounds.x + extensionsAnchor.x + extensionsAnchor.width - EXTENSIONS_POPUP_WIDTH,
-        ),
-        y: Math.round(bounds.y + extensionsAnchor.y - extensionsPopupHeight - POPUP_GAP),
-        width: EXTENSIONS_POPUP_WIDTH,
-        height: Math.round(extensionsPopupHeight),
-    })
-}
-
-export const toggleExtensionsPopup = (win: ParentWindow, rect: Anchor, ipc: Pusher): void => {
-    const open = extensionsPopup
-    if (open && !open.isDestroyed()) {
-        closeExtensionsPopup()
-        return
-    }
-    // Clicking the puzzle button to close an open popup races with its blur-close.
-    if (Date.now() - extensionsDismissedAt < DISMISS_WINDOW_MS) return
-    extensionsAnchor = rect
-    extensionsPopupHeight = EXTENSIONS_POPUP_DEFAULT_HEIGHT
-    const bounds = win.getContentBounds()
-    extensionsPopup = new BrowserWindow({
-        x: Math.round(bounds.x + rect.x + rect.width - EXTENSIONS_POPUP_WIDTH),
-        y: Math.round(bounds.y + rect.y - extensionsPopupHeight - POPUP_GAP),
-        width: EXTENSIONS_POPUP_WIDTH,
-        height: Math.round(extensionsPopupHeight),
-        show: false,
-        frame: false,
-        transparent: true,
-        resizable: false,
-        movable: false,
-        minimizable: false,
-        maximizable: false,
-        fullscreenable: false,
-        skipTaskbar: true,
-        hasShadow: false,
-        parent: win,
-        webPreferences: { preload: preloadPath },
-    })
-    extensionsPopup.on("closed", () => {
-        extensionsPopup = null
-    })
-    extensionsPopup.on("blur", () => closeExtensionsPopup(true))
-    ipc.attach(extensionsPopup.webContents)
-    void loadRenderer(extensionsPopup, "extensions")
-    repositionExtensionsPopup(win)
-    extensionsPopup.show()
-}
-
-export const setExtensionsPopupHeight = (win: ParentWindow, height: number): void => {
-    if (typeof height !== "number" || !Number.isFinite(height) || height <= 0) return
-    extensionsPopupHeight = Math.min(EXTENSIONS_POPUP_MAX_HEIGHT, Math.round(height))
-    repositionExtensionsPopup(win)
-}
-
-export const hideExtensionsPopup = (): void => {
-    closeExtensionsPopup()
-}
-
-// --- extension action popups (chrome.action popup windows)
-
-const EXTENSION_POPUP_MIN_WIDTH = 360
-const EXTENSION_POPUP_MIN_HEIGHT = 480
-const EXTENSION_POPUP_GAP = 5
-
-/** Toolbar anchors of pinned extensions' action popups, in window content coords. */
-const extensionAnchors = new Map<string, Rect>()
-
-/** Remember where a pinned toolbar icon sits so its action popup opens above it. */
-export const setExtensionAnchor = (extensionId: string, rect: Rect): void => {
-    extensionAnchors.set(extensionId, rect)
-}
+const ACTION_POPUP_MIN_WIDTH = 360
+const ACTION_POPUP_MIN_HEIGHT = 480
+const ACTION_POPUP_GAP = 5
 
 /** Shape of electron-chrome-extensions' PopupView used for re-anchoring. */
 export interface ExtensionPopupView {
@@ -190,285 +64,311 @@ export interface ExtensionPopupView {
 export const isExtensionPopupView = (value: unknown): value is ExtensionPopupView =>
     Predicate.hasProperty(value, "browserWindow") && Predicate.hasProperty(value, "parent")
 
-/** Apply the minimum size and place the popup above its anchor. */
-const anchorAbove = (
-    rect: Electron.Rectangle,
-    parent: Electron.BaseWindow | undefined,
-    extensionId: string | undefined,
-): Electron.Rectangle => {
-    const width = Math.max(rect.width, EXTENSION_POPUP_MIN_WIDTH)
-    const height = Math.max(rect.height, EXTENSION_POPUP_MIN_HEIGHT)
-    // Pinned toolbar icon when present, else the puzzle button that lists extensions.
-    const target = (extensionId ? extensionAnchors.get(extensionId) : undefined) ?? extensionsAnchor
-    if (!target || !parent || parent.isDestroyed()) return { x: rect.x, y: rect.y, width, height }
-    const content = parent.getContentBounds()
-    return {
-        x: Math.round(content.x + target.x + target.width - width),
-        y: Math.round(content.y + target.y - height - EXTENSION_POPUP_GAP),
-        width,
-        height,
-    }
+const alive = (win: BrowserWindow | null): win is BrowserWindow =>
+    win !== null && !win.isDestroyed()
+
+/** A height a popup renderer reports, within bounds. `null` for a nonsense value. */
+const clampHeight = (height: number, max: number): number | null =>
+    Number.isFinite(height) && height > 0 ? Math.min(max, Math.round(height)) : null
+
+export interface Overlays {
+    readonly showOmnibox: (anchor: Anchor, query: string) => void
+    readonly hideOmnibox: () => void
+    readonly setOmniboxHeight: (height: number) => void
+    /** Whether the omnibox popup exists, so it can take Enter itself. */
+    readonly omniboxOpen: () => boolean
+
+    readonly toggleExtensions: (anchor: Anchor) => void
+    readonly closeExtensions: () => void
+    readonly setExtensionsHeight: (height: number) => void
+
+    /** Open (or, clicked again, close) a pinned extension's action popup above its toolbar button. */
+    readonly toggleActionPopup: (options: {
+        readonly extensionId: string
+        readonly popupUrl: string
+        readonly anchor: Rect | null
+        readonly session: Electron.Session
+        readonly onWindowOpen: (url: string) => void
+    }) => void
+    /**
+     * Re-anchor an action popup the extension library opened, and give it a readable minimum size.
+     * `window.open` from the popup goes to `onWindowOpen`
+     * (some extensions fall back to it when `browser.tabs` is missing).
+     */
+    readonly positionLibraryPopup: (
+        view: ExtensionPopupView,
+        onWindowOpen: (url: string) => void,
+    ) => void
+
+    readonly openRename: (target: RenameTarget) => void
+    readonly closeRename: () => void
+
+    /** Destroy every overlay: the window is closing. */
+    readonly closeAll: () => void
 }
 
-/**
- * Re-anchor action popups above the toolbar button
- * and enforce a readable minimum size.
- * Routes window.open from the popup through `onWindowOpen`
- * (some extension falls back to window.open when browser.tabs is missing).
- */
-export const attachExtensionPopupPositioning = (
-    view: ExtensionPopupView,
-    onWindowOpen?: (url: string) => void,
-): void => {
-    const popupWin = view.browserWindow
-    if (!popupWin || popupWin.isDestroyed()) return
-    const origSetBounds = popupWin.setBounds.bind(popupWin)
-    popupWin.setBounds = (rect: Electron.Rectangle): void => {
-        origSetBounds(anchorAbove(rect, view.parent, view.extensionId))
-    }
-    popupWin.webContents.setWindowOpenHandler(({ url }) => {
-        if (url && url !== "about:blank") onWindowOpen?.(url)
-        return { action: "deny" }
-    })
-}
+export const createOverlays = (win: BrowserWindow, ipc: Pusher): Overlays => {
+    const dismissed = dismissGuard(DISMISS_WINDOW_MS)
 
-// --- pinned extension action popup
+    // --- omnibox popup
 
-/**
- * A `chrome.action` popup opened by Arbor rather than by electron-chrome-extensions.
- *
- * The library only opens popups from its own surfaces (the extensions list, the chrome.action API);
- * pinned toolbar buttons are Arbor's UI, so Arbor opens their popups itself,
- * hosting each on the session its extension instance lives in.
- */
-let actionPopup: BrowserWindow | null = null
-let actionPopupExtensionId: string | null = null
+    let omnibox: BrowserWindow | null = null
+    let omniboxAnchor: Anchor | null = null
+    let omniboxHeight = 12
+    let lastQuery = ""
 
-let dismissedAt = 0
-let dismissedExtensionId: string | null = null
-
-const closeExtensionActionPopup = (extensionId?: string, markDismissed = false): void => {
-    // records the close, so the click that caused it is not mistaken for a reopen
-    if (actionPopup && !actionPopup.isDestroyed()) {
-        if (markDismissed && extensionId) {
-            dismissedAt = Date.now()
-            dismissedExtensionId = extensionId
-        }
-        actionPopup.destroy()
-    }
-    actionPopup = null
-    actionPopupExtensionId = null
-}
-
-export const openExtensionActionPopup = (
-    win: BrowserWindow,
-    extensionId: string,
-    popupUrl: string,
-    extensionSession: Electron.Session,
-    onWindowOpen: (url: string) => void,
-): void => {
-    // Clicking the same button again closes the popup.
-    if (actionPopupExtensionId === extensionId) {
-        closeExtensionActionPopup(extensionId)
-        return
-    }
-    // Clicking the pinned button to close an open popup races with the popup's focus-loss close.
-    if (dismissedExtensionId === extensionId && Date.now() - dismissedAt < DISMISS_WINDOW_MS) {
-        dismissedExtensionId = null
-        return
-    }
-    closeExtensionActionPopup()
-
-    const bounds = win.getContentBounds()
-    const actionWin = new BrowserWindow({
-        x: bounds.x,
-        y: bounds.y,
-        width: EXTENSION_POPUP_MIN_WIDTH,
-        height: EXTENSION_POPUP_MIN_HEIGHT,
-        show: false,
-        frame: false,
-        resizable: false,
-        movable: false,
-        minimizable: false,
-        maximizable: false,
-        fullscreenable: false,
-        skipTaskbar: true,
-        hasShadow: true,
-        parent: win,
-        webPreferences: { session: extensionSession },
-    })
-    actionPopup = actionWin
-    actionPopupExtensionId = extensionId
-
-    actionWin.on("closed", () => {
-        if (actionPopup === actionWin) {
-            actionPopup = null
-            actionPopupExtensionId = null
-        }
-    })
-    // Anchor above the pinned button and keep a readable minimum size.
-    attachExtensionPopupPositioning(
-        { browserWindow: actionWin, parent: win, extensionId },
-        onWindowOpen,
-    )
-    actionWin.setBounds(actionWin.getBounds())
-    actionWin.show()
-    actionWin.on("blur", () => closeExtensionActionPopup(extensionId, true))
-    void actionWin.loadURL(popupUrl)
-}
-
-// --- rename modal
-
-let modal: BrowserWindow | null = null
-let pendingTarget: RenameTarget | null = null
-
-export const closeRenameModal = (): void => {
-    if (modal && !modal.isDestroyed()) modal.destroy()
-    modal = null
-    pendingTarget = null
-}
-
-export const repositionRenameModal = (win: BrowserWindow): void => {
-    if (!modal || modal.isDestroyed()) return
-    modal.setBounds(win.getContentBounds())
-}
-
-export const openRenameModal = (win: BrowserWindow, target: RenameTarget, ipc: Pusher): void => {
-    closeRenameModal()
-    pendingTarget = target
-
-    const bounds = win.getContentBounds()
-    modal = new BrowserWindow({
-        x: bounds.x,
-        y: bounds.y,
-        width: bounds.width,
-        height: bounds.height,
-        show: false,
-        frame: false,
-        transparent: true,
-        resizable: false,
-        movable: false,
-        minimizable: false,
-        maximizable: false,
-        fullscreenable: false,
-        skipTaskbar: true,
-        hasShadow: false,
-        parent: win,
-        webPreferences: { preload: preloadPath },
-    })
-    modal.on("closed", () => {
-        modal = null
-        pendingTarget = null
-    })
-    ipc.attach(modal.webContents)
-    // The renderer registers its target listener during load, replay afterwards.
-    modal.webContents.on("did-finish-load", () => {
-        if (pendingTarget) ipc.push("renameTarget", pendingTarget)
-    })
-    void loadRenderer(modal, "rename")
-    modal.show()
-}
-
-// --- permission prompt modal (extension install / permissions.request)
-
-interface PromptJob {
-    readonly request: PermissionPromptRequest
-    readonly parent: BrowserWindow | null
-    readonly answer: Deferred.Deferred<boolean>
-}
-
-let promptQueue: Queue.Queue<PromptJob> | null = null
-let permissionModal: BrowserWindow | null = null
-let activeAnswer: Deferred.Deferred<boolean> | null = null
-
-const showPrompt = (job: PromptJob, ipc: Pusher): void => {
-    activeAnswer = job.answer
-    const win = job.parent && !job.parent.isDestroyed() ? job.parent : null
-    const bounds = win?.getContentBounds()
-    const promptWindow = new BrowserWindow({
-        x: bounds?.x,
-        y: bounds?.y,
-        width: bounds?.width,
-        height: bounds?.height,
-        show: false,
-        frame: false,
-        transparent: true,
-        resizable: false,
-        movable: false,
-        minimizable: false,
-        maximizable: false,
-        fullscreenable: false,
-        skipTaskbar: true,
-        hasShadow: false,
-        ...(win ? { parent: win } : {}),
-        webPreferences: { preload: preloadPath },
-    })
-    permissionModal = promptWindow
-    promptWindow.on("closed", () => {
-        if (permissionModal === promptWindow) {
-            permissionModal = null
-            activeAnswer = null
-        }
-        // Closing the dialog without answering is a refusal.
-        // Idempotent: a prior settle via `respondPermissionPrompt` wins.
-        Deferred.doneUnsafe(job.answer, Exit.succeed(false))
-    })
-    ipc.attach(promptWindow.webContents)
-    // The renderer registers its request listener during load, replay afterwards.
-    promptWindow.webContents.on("did-finish-load", () => ipc.push("permissionRequest", job.request))
-    void loadRenderer(promptWindow, "permission")
-    promptWindow.show()
-}
-
-const runPrompt = (job: PromptJob, ipc: Pusher): Effect.Effect<void> =>
-    Effect.suspend(() => {
-        showPrompt(job, ipc)
-        return Deferred.await(job.answer)
-    }).pipe(
-        Effect.asVoid,
-        // Never leave a waiter hanging if window creation fails.
-        Effect.ensuring(Deferred.succeed(job.answer, false)),
-    )
-
-export const promptConsumer = (ipc: Pusher): Effect.Effect<never> =>
-    Effect.gen(function* () {
-        const queue = yield* Queue.unbounded<PromptJob>()
-        promptQueue = queue
-        return yield* Effect.forever(
-            Effect.gen(function* () {
-                const job = yield* Queue.take(queue)
-                yield* runPrompt(job, ipc).pipe(
-                    Effect.catchCause((cause) =>
-                        Effect.logError("Permission prompt failed", cause),
-                    ),
-                )
-            }),
-        )
-    })
-
-/** Resolves `true` on Allow, `false` on Deny or when the dialog is closed. One at a time. */
-export const openPermissionPrompt = (
-    win: ParentWindow | null,
-    request: PermissionPromptRequest,
-): Effect.Effect<boolean> =>
-    Effect.gen(function* () {
-        if (!promptQueue) return yield* Effect.die(new Error("Prompt consumer is not running"))
-        const answer = yield* Deferred.make<boolean>()
-        yield* Queue.offer(promptQueue, {
-            request,
-            parent: win && !win.isDestroyed() ? win : null,
-            answer,
+    const placeOmnibox = (): void => {
+        if (!alive(omnibox) || !omniboxAnchor) return
+        const bounds = win.getContentBounds()
+        omnibox.setBounds({
+            x: Math.round(bounds.x + omniboxAnchor.x),
+            y: Math.round(bounds.y + omniboxAnchor.y - omniboxHeight - POPUP_GAP),
+            width: Math.round(omniboxAnchor.width),
+            height: Math.round(omniboxHeight),
         })
-        return yield* Deferred.await(answer)
-    })
+    }
 
-/** Answer for the visible prompt (`arbor:permission:respond`). */
-export const respondPermissionPrompt = (allowed: boolean): void => {
-    const answer = activeAnswer
-    if (!answer) return
-    activeAnswer = null
-    const promptWindow = permissionModal
-    permissionModal = null
-    Deferred.doneUnsafe(answer, Exit.succeed(allowed))
-    if (promptWindow && !promptWindow.isDestroyed()) promptWindow.destroy()
+    const showOmnibox = (anchor: Anchor, query: string): void => {
+        omniboxAnchor = anchor
+        lastQuery = query
+        if (!alive(omnibox)) {
+            const created = overlayWindow(win, {
+                focusable: false,
+                webPreferences: { preload: preloadPath },
+            })
+            omnibox = created
+            created.on("closed", () => {
+                if (omnibox === created) omnibox = null
+            })
+            ipc.attach(created.webContents)
+            // Queries sent while the popup renderer is still loading would be lost.
+            created.webContents.on("did-finish-load", () => ipc.push("omniboxQuery", lastQuery))
+            void loadRenderer(created, "omnibox")
+        }
+        placeOmnibox()
+        ipc.push("omniboxQuery", lastQuery)
+        omnibox?.showInactive()
+    }
+
+    const hideOmnibox = (): void => {
+        if (alive(omnibox)) omnibox.hide()
+    }
+
+    // --- extensions popup
+
+    let extensions: BrowserWindow | null = null
+    let extensionsAnchor: Anchor | null = null
+    let extensionsHeight = EXTENSIONS_POPUP_DEFAULT_HEIGHT
+
+    const closeExtensions = (markDismissed = false): void => {
+        if (alive(extensions)) {
+            if (markDismissed) dismissed.mark("extensions")
+            extensions.destroy()
+        }
+        extensions = null
+    }
+
+    const placeExtensions = (): void => {
+        if (!alive(extensions) || !extensionsAnchor) return
+        const bounds = win.getContentBounds()
+        extensions.setBounds({
+            x: Math.round(
+                bounds.x + extensionsAnchor.x + extensionsAnchor.width - EXTENSIONS_POPUP_WIDTH,
+            ),
+            y: Math.round(bounds.y + extensionsAnchor.y - extensionsHeight - POPUP_GAP),
+            width: EXTENSIONS_POPUP_WIDTH,
+            height: Math.round(extensionsHeight),
+        })
+    }
+
+    const toggleExtensions = (anchor: Anchor): void => {
+        if (alive(extensions)) {
+            closeExtensions()
+            return
+        }
+        // Clicking the puzzle button to close an open popup races with its blur-close.
+        if (dismissed.suppressed("extensions")) return
+        extensionsAnchor = anchor
+        extensionsHeight = EXTENSIONS_POPUP_DEFAULT_HEIGHT
+        const created = overlayWindow(win, {
+            width: EXTENSIONS_POPUP_WIDTH,
+            height: extensionsHeight,
+            webPreferences: { preload: preloadPath },
+        })
+        extensions = created
+        created.on("closed", () => {
+            if (extensions === created) extensions = null
+        })
+        created.on("blur", () => closeExtensions(true))
+        ipc.attach(created.webContents)
+        void loadRenderer(created, "extensions")
+        placeExtensions()
+        created.show()
+    }
+
+    // --- extension action popups
+
+    const actionAnchors = new Map<string, Rect>()
+
+    const anchorAbove = (
+        rect: Electron.Rectangle,
+        parent: Electron.BaseWindow | undefined,
+        extensionId: string | undefined,
+    ): Electron.Rectangle => {
+        const width = Math.max(rect.width, ACTION_POPUP_MIN_WIDTH)
+        const height = Math.max(rect.height, ACTION_POPUP_MIN_HEIGHT)
+        // The pinned button when there is one, else the puzzle button that lists extensions.
+        const target =
+            (extensionId ? actionAnchors.get(extensionId) : undefined) ?? extensionsAnchor
+        if (!target || !parent || parent.isDestroyed())
+            return { x: rect.x, y: rect.y, width, height }
+        const content = parent.getContentBounds()
+        return {
+            x: Math.round(content.x + target.x + target.width - width),
+            y: Math.round(content.y + target.y - height - ACTION_POPUP_GAP),
+            width,
+            height,
+        }
+    }
+
+    const positionLibraryPopup = (
+        view: ExtensionPopupView,
+        onWindowOpen: (url: string) => void,
+    ): void => {
+        const popupWin = view.browserWindow
+        if (!popupWin || popupWin.isDestroyed()) return
+        const setBounds = popupWin.setBounds.bind(popupWin)
+        popupWin.setBounds = (rect: Electron.Rectangle): void => {
+            setBounds(anchorAbove(rect, view.parent, view.extensionId))
+        }
+        popupWin.webContents.setWindowOpenHandler(({ url }) => {
+            if (url && url !== "about:blank") onWindowOpen(url)
+            return { action: "deny" }
+        })
+    }
+
+    /**
+     * A pinned button's popup, opened by Arbor rather than by electron-chrome-extensions:
+     * the library only opens popups from its own surfaces, and pinned buttons are Arbor's UI.
+     */
+    let actionPopup: { readonly win: BrowserWindow; readonly extensionId: string } | null = null
+
+    const closeActionPopup = (markDismissed = false): void => {
+        const open = actionPopup
+        actionPopup = null
+        if (!open || open.win.isDestroyed()) return
+        // Records the close, so the click that caused it is not mistaken for a reopen.
+        if (markDismissed) dismissed.mark(`action:${open.extensionId}`)
+        open.win.destroy()
+    }
+
+    const toggleActionPopup: Overlays["toggleActionPopup"] = (options) => {
+        const { extensionId } = options
+        if (options.anchor) actionAnchors.set(extensionId, options.anchor)
+        // Clicking the same button again closes the popup.
+        if (actionPopup?.extensionId === extensionId) {
+            closeActionPopup()
+            return
+        }
+        // Clicking the button to close an open popup races with the popup's blur-close.
+        if (dismissed.suppressed(`action:${extensionId}`)) return
+        closeActionPopup()
+
+        const bounds = win.getContentBounds()
+        const created = new BrowserWindow({
+            ...OVERLAY_DEFAULTS,
+            transparent: false,
+            hasShadow: true,
+            x: bounds.x,
+            y: bounds.y,
+            width: ACTION_POPUP_MIN_WIDTH,
+            height: ACTION_POPUP_MIN_HEIGHT,
+            parent: win,
+            webPreferences: { session: options.session },
+        })
+        actionPopup = { win: created, extensionId }
+        created.on("closed", () => {
+            if (actionPopup?.win === created) actionPopup = null
+        })
+        positionLibraryPopup(
+            { browserWindow: created, parent: win, extensionId },
+            options.onWindowOpen,
+        )
+        created.setBounds(created.getBounds())
+        created.show()
+        created.on("blur", () => closeActionPopup(true))
+        void created.loadURL(options.popupUrl)
+    }
+
+    // --- rename modal
+
+    let rename: BrowserWindow | null = null
+    let renameTarget: RenameTarget | null = null
+
+    const closeRename = (): void => {
+        if (alive(rename)) rename.destroy()
+        rename = null
+        renameTarget = null
+    }
+
+    const openRename = (target: RenameTarget): void => {
+        closeRename()
+        renameTarget = target
+        const bounds = win.getContentBounds()
+        const created = overlayWindow(win, { ...bounds, webPreferences: { preload: preloadPath } })
+        rename = created
+        created.on("closed", () => {
+            if (rename !== created) return
+            rename = null
+            renameTarget = null
+        })
+        ipc.attach(created.webContents)
+        // Sent once the page has loaded.
+        created.webContents.on("did-finish-load", () => {
+            if (renameTarget) ipc.push("renameTarget", renameTarget)
+        })
+        void loadRenderer(created, "rename")
+        created.show()
+    }
+
+    // --- window wiring
+
+    win.on("resize", () => {
+        if (alive(rename)) rename.setBounds(win.getContentBounds())
+    })
+    win.on("move", () => {
+        hideOmnibox()
+        if (alive(rename)) rename.setBounds(win.getContentBounds())
+    })
+    win.on("blur", hideOmnibox)
+
+    return {
+        showOmnibox,
+        hideOmnibox,
+        setOmniboxHeight: (height) => {
+            const next = clampHeight(height, OMNIBOX_MAX_HEIGHT)
+            if (next === null) return
+            omniboxHeight = next
+            placeOmnibox()
+        },
+        omniboxOpen: () => alive(omnibox),
+        toggleExtensions,
+        closeExtensions: () => closeExtensions(),
+        setExtensionsHeight: (height) => {
+            const next = clampHeight(height, EXTENSIONS_POPUP_MAX_HEIGHT)
+            if (next === null) return
+            extensionsHeight = next
+            placeExtensions()
+        },
+        toggleActionPopup,
+        positionLibraryPopup,
+        openRename,
+        closeRename,
+        closeAll: () => {
+            if (alive(omnibox)) omnibox.destroy()
+            closeExtensions()
+            closeActionPopup()
+            closeRename()
+        },
+    }
 }

@@ -77,9 +77,3 @@ export class NoActionPopup extends Schema.TaggedError<NoActionPopup>()("NoAction
         return `Extension ${this.extensionId} has no action popup`
     }
 }
-
-export class NoWindow extends Schema.TaggedError<NoWindow>()("NoWindow", {}) {
-    override get message(): string {
-        return "No window is open"
-    }
-}

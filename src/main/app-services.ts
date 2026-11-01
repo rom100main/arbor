@@ -2,22 +2,27 @@ import path from "node:path"
 
 import { Layer } from "effect"
 
+import { Extensions } from "./extension/extensions"
+import { PermissionPrompts } from "./extension/prompts"
 import { ExtensionStorage } from "./extension/storage"
 import { IpcPush } from "./ipc/router"
-import { IpcTransport } from "./ipc/transport"
-import { JsonFile } from "./persistence/json-file"
 import { browserStoreFromFile } from "./persistence/state-file"
 import { SettingsStore } from "./settings"
+import { CurrentWindow } from "./windows/current-window"
+import { WindowManager } from "./windows/window-manager"
 
 const PersistedServices = (userData: string) =>
     Layer.mergeAll(
         browserStoreFromFile(path.join(userData, "state.json")),
         SettingsStore.layer(path.join(userData, "settings.json")),
         ExtensionStorage.layer(path.join(userData, "extension-storage.json")),
-    ).pipe(Layer.provide(JsonFile.layer))
+    )
 
-/** The transport stays in the output: serving requests and events needs it too. */
-const IpcServices = IpcPush.layer.pipe(Layer.provideMerge(IpcTransport.electron))
-
-export const AppServices = (userData: string) =>
-    Layer.mergeAll(PersistedServices(userData), IpcServices)
+export const AppServices = (userData: string) => {
+    const base = Layer.mergeAll(PersistedServices(userData), IpcPush.layer, CurrentWindow.layer)
+    const extensions = Extensions.layer.pipe(
+        Layer.provideMerge(PermissionPrompts.modal),
+        Layer.provideMerge(base),
+    )
+    return WindowManager.layer.pipe(Layer.provideMerge(extensions))
+}

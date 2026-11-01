@@ -6,7 +6,6 @@ import { app, nativeImage, session } from "electron"
 
 import type { PinnedActionInfo } from "../../shared/protocol"
 import { readJsonLenient } from "../persistence/json-file"
-import { AppRuntime } from "../runtime"
 import { parseManifest, type ParsedManifest } from "./manifest"
 
 const ICON_SIZE = 32
@@ -86,44 +85,64 @@ export const resolveIcon = (root: string, relative: string): string | null => {
     return full
 }
 
-const iconCache = new Map<string, string | null>()
-
-const iconDataUrl = (root: string, spec: string | Record<string, string> | null): string | null => {
-    if (!spec) return null
-    const file = iconPathFor(root, spec, ICON_SIZE)
-    if (!file) return null
-    const cached = iconCache.get(file)
-    if (cached !== undefined) return cached
-    let dataUrl: string | null = null
-    try {
-        const image = nativeImage.createFromPath(file)
-        if (!image.isEmpty()) dataUrl = image.resize({ width: ICON_SIZE }).toDataURL()
-    } catch (error) {
-        AppRuntime.runSync(Effect.logError(`Failed to read extension icon ${file}`, error))
-    }
-    iconCache.set(file, dataUrl)
-    return dataUrl
-}
-
-/** Drop a cached icon, so a reinstall or update is picked up. */
-export const forgetExtensionIcon = (extensionId: string): void => {
-    for (const key of iconCache.keys()) {
-        if (key.includes(`${path.sep}${extensionId}${path.sep}`)) iconCache.delete(key)
-    }
-}
-
 const EMPTY: PinnedActionInfo = { extensionId: "", title: "", iconDataUrl: null, popupUrl: null }
 
-export const pinnedActionInfo = (extensionId: string): PinnedActionInfo => {
-    const manifest = manifestFor(extensionId)
-    if (!manifest) return { ...EMPTY, extensionId }
-    const root = installedRoot(extensionId)
+export interface ActionInfo {
+    /** What the toolbar shows for an extension's action: title, icon, popup. */
+    readonly info: (extensionId: string) => Effect.Effect<PinnedActionInfo>
+    /** Drop its cached icon, so a reinstall or update is picked up. */
+    readonly forget: (extensionId: string) => void
+}
+
+/** Action info with its own icon cache: decoding an icon is not done again on every render. */
+export const makeActionInfo = (): ActionInfo => {
+    const iconCache = new Map<string, string | null>()
+
+    const iconDataUrl = (
+        root: string,
+        spec: string | Record<string, string> | null,
+    ): Effect.Effect<string | null> =>
+        Effect.suspend(() => {
+            const file = spec ? iconPathFor(root, spec, ICON_SIZE) : null
+            if (!file) return Effect.succeed(null)
+            const cached = iconCache.get(file)
+            if (cached !== undefined) return Effect.succeed(cached)
+            return Effect.try(() => {
+                const image = nativeImage.createFromPath(file)
+                return image.isEmpty() ? null : image.resize({ width: ICON_SIZE }).toDataURL()
+            }).pipe(
+                Effect.catchCause((cause) =>
+                    Effect.as(
+                        Effect.logError(`Failed to read extension icon ${file}`, cause),
+                        null,
+                    ),
+                ),
+                Effect.tap((dataUrl) => Effect.sync(() => iconCache.set(file, dataUrl))),
+            )
+        })
+
     return {
-        extensionId,
-        title: manifest.actionTitle || extensionId,
-        iconDataUrl: root ? iconDataUrl(root, manifest.actionIcon) : null,
-        popupUrl: manifest.actionPopup
-            ? `chrome-extension://${extensionId}/${manifest.actionPopup.replace(/^\/+/, "")}`
-            : null,
+        info: (extensionId) =>
+            Effect.suspend(() => {
+                const manifest = manifestFor(extensionId)
+                if (!manifest) return Effect.succeed({ ...EMPTY, extensionId })
+                const root = installedRoot(extensionId)
+                return Effect.map(
+                    root ? iconDataUrl(root, manifest.actionIcon) : Effect.succeed(null),
+                    (dataUrl) => ({
+                        extensionId,
+                        title: manifest.actionTitle || extensionId,
+                        iconDataUrl: dataUrl,
+                        popupUrl: manifest.actionPopup
+                            ? `chrome-extension://${extensionId}/${manifest.actionPopup.replace(/^\/+/, "")}`
+                            : null,
+                    }),
+                )
+            }),
+        forget: (extensionId) => {
+            for (const key of iconCache.keys()) {
+                if (key.includes(`${path.sep}${extensionId}${path.sep}`)) iconCache.delete(key)
+            }
+        },
     }
 }
