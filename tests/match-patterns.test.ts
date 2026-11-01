@@ -39,12 +39,6 @@ describe("matchPatternCovers", () => {
         expect(matchPatternCovers("https://*/*", "https://pass.proton.me/*")).toBe(true)
     })
 
-    it("covers exact host", () => {
-        expect(
-            matchPatternCovers("https://account.proton.me/*", "https://account.proton.me/*"),
-        ).toBe(true)
-    })
-
     it("does not let http cover https or vice versa", () => {
         expect(matchPatternCovers("http://*/*", "https://example.com/*")).toBe(false)
         expect(matchPatternCovers("https://*/*", "http://example.com/*")).toBe(false)

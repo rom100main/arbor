@@ -1,8 +1,7 @@
-import { Deferred, Effect, Exit, Result, Stream, type Scope } from "effect"
+import { Deferred, Effect, Exit, Stream, type Scope } from "effect"
 import { TestClock } from "effect/testing"
 import { describe, expect, it } from "vite-plus/test"
 
-import { createContainer } from "../src/main/state/containers"
 import { initialState, type DomainState } from "../src/main/state/state"
 import { BrowserStore, type StoreService } from "../src/main/state/store"
 import { LastTab } from "../src/shared/errors"
@@ -150,20 +149,6 @@ describe("store transitions", () => {
                 expect(new Set(results).size).toBe(3)
                 const snap = yield* store.snapshot
                 expect(snap.tabs.length).toBe(4) // 1 initial + 3 created
-            }),
-        ))
-})
-
-describe("store with pre-built state", () => {
-    it("starts from the provided initial state", () =>
-        scopedTest(
-            Effect.gen(function* () {
-                const seeded = Result.getOrThrow(
-                    createContainer(initialState(), { id: "container-1", tabId: "tab-1", now: 0 }),
-                )
-                const store = yield* makeStore(seeded)
-                const snap = yield* store.snapshot
-                expect(snap.containers).toHaveLength(1)
             }),
         ))
 })

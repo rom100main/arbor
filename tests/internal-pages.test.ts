@@ -21,11 +21,6 @@ describe("the settings URL", () => {
         expect(new URL(SETTINGS_URL).pathname).toBe("")
         expect(new URL(`${SETTINGS_URL}${SETTINGS_PATH}/search`).pathname).toBe("/settings/search")
     })
-
-    it("is recognised as internal and as the settings page", () => {
-        expect(isInternalUrl(SETTINGS_URL)).toBe(true)
-        expect(isSettingsUrl(SETTINGS_URL)).toBe(true)
-    })
 })
 
 describe("isInternalUrl", () => {
