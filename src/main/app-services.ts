@@ -1,7 +1,9 @@
 import path from "node:path"
 
 import { Layer } from "effect"
+import { app, shell } from "electron"
 
+import { Downloads } from "./downloads/downloads"
 import { Extensions } from "./extension/extensions"
 import { PermissionPrompts } from "./extension/prompts"
 import { ExtensionStorage } from "./extension/storage"
@@ -22,9 +24,16 @@ const PersistedServices = (userData: string) =>
 export const AppServices = (userData: string) => {
     const base = Layer.mergeAll(PersistedServices(userData), IpcPush.layer, CurrentWindow.layer)
     const updater = ElectronUpdater.pipe(Layer.provideMerge(base))
+    const downloads = Downloads.layer({
+        folder: app.getPath("downloads"),
+        opener: {
+            reveal: (file) => shell.showItemInFolder(file),
+            open: (target) => void shell.openPath(target),
+        },
+    }).pipe(Layer.provideMerge(base))
     const extensions = Extensions.layer.pipe(
         Layer.provideMerge(PermissionPrompts.modal),
         Layer.provideMerge(updater),
     )
-    return WindowManager.layer.pipe(Layer.provideMerge(extensions))
+    return WindowManager.layer.pipe(Layer.provideMerge(extensions), Layer.provideMerge(downloads))
 }

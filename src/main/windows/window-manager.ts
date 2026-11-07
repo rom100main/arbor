@@ -10,6 +10,7 @@ import { Context, Effect, FiberSet, Layer, Semaphore, Stream } from "effect"
 import { UnknownTab } from "../../shared/errors"
 import type { TabId, TabNode } from "../../shared/protocol"
 import { stepVisibleTab } from "../../shared/tree-display"
+import { Downloads } from "../downloads/downloads"
 import { Extensions } from "../extension/extensions"
 import { PermissionPrompts } from "../extension/prompts"
 import { IpcPush, serveEvents, serveRequests } from "../ipc/router"
@@ -60,6 +61,7 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
             const extensions = yield* Extensions
             const currentWindow = yield* CurrentWindow
             const updater = yield* Updater
+            const downloads = yield* Downloads
 
             const logged = (label: string) => (effect: Effect.Effect<unknown, unknown>) =>
                 effect.pipe(
@@ -238,6 +240,11 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                     Stream.runForEach((next) => pushes.push("settings", next)),
                 )
 
+                /** The download list, to every renderer. The first emission is the current list. */
+                const broadcastDownloads = downloads.changes.pipe(
+                    Stream.runForEach((next) => pushes.push("downloads", next)),
+                )
+
                 // --- start
 
                 const ctx: WindowContext = {
@@ -247,6 +254,7 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                     prompts,
                     extensions,
                     updater,
+                    downloads,
                     handle,
                     overlays,
                     viewOf: (tabId) => views.get(tabId),
@@ -276,6 +284,7 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                 )
                 yield* Effect.forkScoped(menu)
                 yield* Effect.forkScoped(broadcastSettings)
+                yield* Effect.forkScoped(broadcastDownloads)
                 // A second launch of Arbor quits at once and brings this window forward.
                 yield* host.relaunches.pipe(
                     Stream.runForEach(() => handle.focus),

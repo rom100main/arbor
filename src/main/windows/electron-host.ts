@@ -15,6 +15,7 @@ import { buildChromeContextMenu } from "electron-chrome-context-menu"
 import { containerPartition } from "../../shared/constants"
 import type { ContainerId } from "../../shared/protocol"
 import type { Settings } from "../../shared/settings"
+import { Downloads } from "../downloads/downloads"
 import { Extensions } from "../extension/extensions"
 import { IpcPush, makePusher } from "../ipc/router"
 import { SettingsStore } from "../settings"
@@ -68,11 +69,12 @@ const loadUrl = (view: WebContentsView, url: string): Effect.Effect<void, LoadFa
 export const makeWindowHost: Effect.Effect<
     WindowHostService,
     never,
-    SettingsStore | IpcPush | Extensions
+    SettingsStore | IpcPush | Extensions | Downloads
 > = Effect.gen(function* () {
     const settingsStore = yield* SettingsStore
     const pushes = yield* IpcPush
     const extensions = yield* Extensions
+    const downloads = yield* Downloads
     // arbor:// internal pages: their own session, so only they carry the preload bridge.
     registerInternalPages()
 
@@ -80,7 +82,10 @@ export const makeWindowHost: Effect.Effect<
     const sessionFor = (key: SessionKey): Effect.Effect<Session> => {
         if (key.kind === "internal") return Effect.succeed(internalSession())
         const partition = sessionForContainer(key.containerId)
-        return Effect.as(extensions.install(partition), partition)
+        return Effect.as(
+            Effect.andThen(extensions.install(partition), downloads.attach(partition)),
+            partition,
+        )
     }
 
     const open = Effect.gen(function* () {
