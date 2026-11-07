@@ -191,6 +191,11 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                                 return Effect.ignore(store.createContainer())
                             case "focusAddressBar":
                                 return focusAddressBar
+                            case "focusTabTree":
+                                return Effect.andThen(
+                                    handle.focusShell,
+                                    pushes.push("focusTabTree"),
+                                )
                             case "closeTab":
                                 return activeTabId
                                     ? Effect.ignore(store.closeTab(activeTabId))

@@ -118,6 +118,19 @@ export interface Overlays {
 export const createOverlays = (win: BrowserWindow, ipc: Pusher): Overlays => {
     const dismissed = dismissGuard(DISMISS_WINDOW_MS)
 
+    // Toolbar popups (extensions list, downloads, action popups) hang over the page.
+    // The shell keeps the toolbar revealed while one is open,
+    // then closes it once the pointer leaves the bar's edge again.
+    const libraryPopups = new Set<BrowserWindow>()
+    let toolbarPopupShown = false
+    const syncToolbarPopup = (): void => {
+        const next =
+            alive(extensions) || alive(downloads) || actionPopup !== null || libraryPopups.size > 0
+        if (next === toolbarPopupShown) return
+        toolbarPopupShown = next
+        ipc.push("toolbarPopup", next)
+    }
+
     // --- omnibox popup
 
     let omnibox: BrowserWindow | null = null
@@ -174,6 +187,7 @@ export const createOverlays = (win: BrowserWindow, ipc: Pusher): Overlays => {
             extensions.destroy()
         }
         extensions = null
+        syncToolbarPopup()
     }
 
     const placeExtensions = (): void => {
@@ -206,12 +220,14 @@ export const createOverlays = (win: BrowserWindow, ipc: Pusher): Overlays => {
         extensions = created
         created.on("closed", () => {
             if (extensions === created) extensions = null
+            syncToolbarPopup()
         })
         created.on("blur", () => closeExtensions(true))
         ipc.attach(created.webContents)
         void loadRenderer(created, "extensions")
         placeExtensions()
         created.show()
+        syncToolbarPopup()
     }
 
     // --- downloads popup
@@ -226,6 +242,7 @@ export const createOverlays = (win: BrowserWindow, ipc: Pusher): Overlays => {
             downloads.destroy()
         }
         downloads = null
+        syncToolbarPopup()
     }
 
     const placeDownloads = (): void => {
@@ -258,12 +275,14 @@ export const createOverlays = (win: BrowserWindow, ipc: Pusher): Overlays => {
         downloads = created
         created.on("closed", () => {
             if (downloads === created) downloads = null
+            syncToolbarPopup()
         })
         created.on("blur", () => closeDownloads(true))
         ipc.attach(created.webContents)
         void loadRenderer(created, "downloads")
         placeDownloads()
         created.show()
+        syncToolbarPopup()
     }
 
     // --- extension action popups
@@ -305,6 +324,14 @@ export const createOverlays = (win: BrowserWindow, ipc: Pusher): Overlays => {
             if (url && url !== "about:blank") onWindowOpen(url)
             return { action: "deny" }
         })
+        if (!libraryPopups.has(popupWin)) {
+            libraryPopups.add(popupWin)
+            popupWin.on("closed", () => {
+                libraryPopups.delete(popupWin)
+                syncToolbarPopup()
+            })
+            syncToolbarPopup()
+        }
     }
 
     /**
@@ -316,10 +343,14 @@ export const createOverlays = (win: BrowserWindow, ipc: Pusher): Overlays => {
     const closeActionPopup = (markDismissed = false): void => {
         const open = actionPopup
         actionPopup = null
-        if (!open || open.win.isDestroyed()) return
+        if (!open || open.win.isDestroyed()) {
+            syncToolbarPopup()
+            return
+        }
         // Records the close, so the click that caused it is not mistaken for a reopen.
         if (markDismissed) dismissed.mark(`action:${open.extensionId}`)
         open.win.destroy()
+        syncToolbarPopup()
     }
 
     const toggleActionPopup: Overlays["toggleActionPopup"] = (options) => {
@@ -349,6 +380,7 @@ export const createOverlays = (win: BrowserWindow, ipc: Pusher): Overlays => {
         actionPopup = { win: created, extensionId }
         created.on("closed", () => {
             if (actionPopup?.win === created) actionPopup = null
+            syncToolbarPopup()
         })
         positionLibraryPopup(
             { browserWindow: created, parent: win, extensionId },
@@ -358,6 +390,7 @@ export const createOverlays = (win: BrowserWindow, ipc: Pusher): Overlays => {
         created.show()
         created.on("blur", () => closeActionPopup(true))
         void created.loadURL(options.popupUrl)
+        syncToolbarPopup()
     }
 
     // --- rename modal
@@ -438,6 +471,8 @@ export const createOverlays = (win: BrowserWindow, ipc: Pusher): Overlays => {
             closeDownloads()
             closeActionPopup()
             closeRename()
+            libraryPopups.clear()
+            syncToolbarPopup()
         },
     }
 }

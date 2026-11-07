@@ -87,6 +87,7 @@ export type MenuAction =
     | { readonly kind: "newTab" }
     | { readonly kind: "newContainer" }
     | { readonly kind: "focusAddressBar" }
+    | { readonly kind: "focusTabTree" }
     | { readonly kind: "closeTab" }
     | { readonly kind: "reopenTab" }
     | { readonly kind: "stepTab"; readonly delta: 1 | -1 }

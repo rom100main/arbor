@@ -45,6 +45,7 @@ export const menuTemplate = (
                 item("New Tab", "CmdOrCtrl+T", { kind: "newTab" }),
                 item("New Container", "CmdOrCtrl+Shift+A", { kind: "newContainer" }),
                 item("Focus Address Bar", "CmdOrCtrl+L", { kind: "focusAddressBar" }),
+                item("Focus Tab Tree", "CmdOrCtrl+0", { kind: "focusTabTree" }),
                 { type: "separator" },
                 item("Close Tab", "CmdOrCtrl+W", { kind: "closeTab" }, model.canCloseTab),
                 item(

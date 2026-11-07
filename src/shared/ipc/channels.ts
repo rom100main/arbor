@@ -68,6 +68,8 @@ export const PUSHES = {
     state: "arbor:state",
     settings: "arbor:settings:changed",
     focusOmnibox: "arbor:focus-omnibox",
+    focusTabTree: "arbor:focus-tab-tree",
+    toolbarPopup: "arbor:toolbar:popup",
     omniboxQuery: "arbor:omnibox:query",
     omniboxMoveSelection: "arbor:omnibox:popup:move-selection",
     omniboxActivateSelected: "arbor:omnibox:popup:activate-selected",

@@ -180,8 +180,13 @@ export const Requests = {
         payload: Schema.Struct({ tabId: TabId, containerId: ContainerId }),
         error: Schema.Union([UnknownTab, UnknownContainer]),
     }),
-    goBack: request({ payload: Schema.Struct({ tabId: TabId }) }),
-    goForward: request({ payload: Schema.Struct({ tabId: TabId }) }),
+    // `background` opens the destination in a new child tab instead (middle click).
+    goBack: request({
+        payload: Schema.Struct({ tabId: TabId, background: Schema.optionalKey(Schema.Boolean) }),
+    }),
+    goForward: request({
+        payload: Schema.Struct({ tabId: TabId, background: Schema.optionalKey(Schema.Boolean) }),
+    }),
     reload: request({ payload: Schema.Struct({ tabId: TabId }) }),
 
     // No error schema: an unknown or already-settled id is a no-op, not an IPC failure.
@@ -227,6 +232,8 @@ export const Pushes = {
     state: push(BrowserSnapshot),
     settings: push(Settings),
     focusOmnibox: push(),
+    focusTabTree: push(),
+    toolbarPopup: push(Schema.Boolean),
     omniboxQuery: push(Schema.String),
     omniboxMoveSelection: push(Delta),
     omniboxActivateSelected: push(),
