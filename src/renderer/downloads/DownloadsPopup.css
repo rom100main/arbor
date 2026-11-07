@@ -160,6 +160,8 @@
     background: transparent;
     border: none;
     border-radius: var(--radius-sm);
+    opacity: 0;
+    transition: opacity 120ms ease;
 
     &:hover {
         color: var(--color-text);
@@ -167,14 +169,8 @@
     }
 }
 
-/* Cancel and Remove appear on hover, like the browser's own list. */
-.download-row-remove {
-    opacity: 0;
-    transition: opacity 120ms ease;
-}
-
-.download-row:hover .download-row-remove,
-.download-row:focus-within .download-row-remove {
+.download-row:hover .download-row-action,
+.download-row:focus-within .download-row-action {
     opacity: 1;
 }
 

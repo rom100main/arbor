@@ -85,7 +85,7 @@ const DownloadRow = (props: { readonly item: DownloadInfo }) => {
                     fallback={
                         <button
                             type="button"
-                            class="download-row-action download-row-remove"
+                            class="download-row-action"
                             aria-label="Remove from list"
                             title="Remove from list"
                             onClick={(event) => {
@@ -99,7 +99,7 @@ const DownloadRow = (props: { readonly item: DownloadInfo }) => {
                 >
                     <button
                         type="button"
-                        class="download-row-action download-row-remove"
+                        class="download-row-action"
                         aria-label="Cancel download"
                         title="Cancel download"
                         onClick={(event) => {
