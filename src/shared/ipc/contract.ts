@@ -28,6 +28,7 @@ import {
     RenameTarget,
     RevealEdge,
     TabId,
+    UpdateStatus,
 } from "../protocol"
 import { Settings, type SettingsPatch } from "../settings-schema"
 import type { EVENTS, PUSHES, REQUESTS } from "./channels"
@@ -180,6 +181,9 @@ export const Requests = {
     goBack: request({ payload: Schema.Struct({ tabId: TabId }) }),
     goForward: request({ payload: Schema.Struct({ tabId: TabId }) }),
     reload: request({ payload: Schema.Struct({ tabId: TabId }) }),
+
+    getUpdateStatus: request({ success: UpdateStatus }),
+    installUpdate: request({}),
 } satisfies { readonly [K in keyof typeof REQUESTS]: RequestDef }
 
 export const Events = {
@@ -216,6 +220,7 @@ export const Pushes = {
     renameTarget: push(RenameTarget),
     permissionRequest: push(PermissionPromptRequest),
     shellEdge: push(RevealEdge),
+    updateStatus: push(UpdateStatus),
 } satisfies { readonly [K in keyof typeof PUSHES]: PushDef }
 
 export type RequestKey = keyof typeof Requests

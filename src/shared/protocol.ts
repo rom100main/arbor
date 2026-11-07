@@ -118,6 +118,17 @@ export type OmniboxActivation = typeof OmniboxActivation.Type
 export const RevealEdge = Schema.Literals(["left", "bottom"])
 export type RevealEdge = typeof RevealEdge.Type
 
+/** Where the app update stands. The toolbar shows a button for `ready` and `manual`. */
+export const UpdateStatus = Schema.Union([
+    Schema.Struct({ kind: Schema.Literal("idle") }),
+    Schema.Struct({ kind: Schema.Literal("downloading"), percent: Schema.Finite }),
+    // Downloaded: one click quits, installs and relaunches.
+    Schema.Struct({ kind: Schema.Literal("ready"), version: Schema.String }),
+    // This build cannot install in place (unsigned macOS): the click opens the release page.
+    Schema.Struct({ kind: Schema.Literal("manual"), version: Schema.String, url: Schema.String }),
+])
+export type UpdateStatus = typeof UpdateStatus.Type
+
 export const RenameTarget = Schema.Union([
     Schema.Struct({ kind: Schema.Literal("container"), container: ContainerMeta }),
     Schema.Struct({ kind: Schema.Literal("tab"), tab: TabNode }),

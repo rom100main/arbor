@@ -30,6 +30,9 @@ export const REQUESTS = {
     goBack: "arbor:tab:back",
     goForward: "arbor:tab:forward",
     reload: "arbor:tab:reload",
+
+    getUpdateStatus: "arbor:update:get-status",
+    installUpdate: "arbor:update:install",
 } as const
 
 /** Renderer tells main, no answer. */
@@ -61,4 +64,5 @@ export const PUSHES = {
     renameTarget: "arbor:rename:target",
     permissionRequest: "arbor:permission:request",
     shellEdge: "arbor:shell:edge",
+    updateStatus: "arbor:update:status",
 } as const
