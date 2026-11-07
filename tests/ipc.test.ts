@@ -11,13 +11,22 @@ import {
 import { initialState } from "../src/main/state/state"
 import { BrowserStore, type StoreService } from "../src/main/state/store"
 import { EVENTS, PUSHES, REQUESTS } from "../src/shared/ipc/channels"
+import type { DownloadInfo, DownloadsSnapshot } from "../src/shared/protocol"
 import { DEFAULT_SETTINGS } from "../src/shared/settings"
 import { captureLogs, runTest } from "./support/effect"
 import * as ipc from "./support/ipc"
 import { fakeRenderer } from "./support/ipc"
 
 vi.mock("../src/main/ipc/transport", () => import("./support/ipc"))
-beforeEach(() => ipc.resetIpc())
+
+const downloadIds: string[] = []
+let downloadsSnapshot: DownloadsSnapshot = { items: [], folder: "/Downloads" }
+
+beforeEach(() => {
+    ipc.resetIpc()
+    downloadIds.length = 0
+    downloadsSnapshot = { items: [], folder: "/Downloads" }
+})
 
 /** The store requests served by the real store, the rest by stubs. */
 const handlersFor = (store: StoreService): RequestHandlers<never> => ({
@@ -43,8 +52,8 @@ const handlersFor = (store: StoreService): RequestHandlers<never> => ({
     goBack: () => Effect.void,
     goForward: () => Effect.void,
     reload: () => Effect.void,
-    downloadsList: () => Effect.succeed({ items: [], folder: "/Downloads" }),
-    downloadCancel: () => Effect.void,
+    downloadsList: () => Effect.succeed(downloadsSnapshot),
+    downloadCancel: ({ id }) => Effect.sync(() => void downloadIds.push(id)),
     downloadRemove: () => Effect.void,
     downloadClear: () => Effect.void,
     downloadReveal: () => Effect.void,
@@ -108,6 +117,32 @@ describe("IPC requests", () => {
                     ok: true,
                     value: { containers: [{ name: "Work" }] },
                 })
+            }),
+        ))
+
+    it("serves the download list and forwards a cancel", () =>
+        runTest(
+            Effect.gen(function* () {
+                const { invoke } = yield* serve
+                const item: DownloadInfo = {
+                    id: "download-1",
+                    filename: "a.txt",
+                    savePath: null,
+                    url: "https://example.com/a.txt",
+                    state: "pending",
+                    receivedBytes: 0,
+                    totalBytes: 10,
+                    startedAt: 1,
+                    finishedAt: null,
+                }
+                downloadsSnapshot = { items: [item], folder: "/Downloads" }
+
+                expect(yield* invoke(REQUESTS.downloadsList)).toEqual({
+                    ok: true,
+                    value: downloadsSnapshot,
+                })
+                yield* invoke(REQUESTS.downloadCancel, { id: "download-1" })
+                expect(downloadIds).toEqual(["download-1"])
             }),
         ))
 

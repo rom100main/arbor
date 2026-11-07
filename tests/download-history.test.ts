@@ -8,6 +8,7 @@ import { decodeHistory, MAX_HISTORY } from "../src/main/downloads/history"
 import { DEFAULT_DEBOUNCE } from "../src/main/persistence/persisted-ref"
 import { SettingsStore } from "../src/main/settings"
 import type { DownloadInfo } from "../src/shared/protocol"
+import { FakeItem, FakeSession } from "./support/downloads"
 import { runTest, settle } from "./support/effect"
 import { files, writeCount } from "./support/memory-fs"
 
@@ -205,69 +206,3 @@ describe("download history", () => {
             }),
         ))
 })
-
-type Listener = (...args: unknown[]) => void
-
-/** The slice of Electron's EventEmitter the Downloads service uses. */
-class FakeEmitter {
-    private readonly listeners = new Map<string, Listener[]>()
-
-    on(name: string, listener: Listener): void {
-        const list = this.listeners.get(name) ?? []
-        list.push(listener)
-        this.listeners.set(name, list)
-    }
-
-    off(name: string, listener: Listener): void {
-        this.listeners.set(
-            name,
-            (this.listeners.get(name) ?? []).filter((candidate) => candidate !== listener),
-        )
-    }
-
-    emit(name: string, ...args: unknown[]): void {
-        for (const listener of [...(this.listeners.get(name) ?? [])]) listener(...args)
-    }
-}
-
-class FakeSession extends FakeEmitter {}
-
-/** The slice of Electron's DownloadItem the service reads. */
-class FakeItem extends FakeEmitter {
-    savePath = ""
-    received = 0
-    state = "progressing"
-
-    readonly filename: string
-    readonly url: string
-    readonly totalBytes: number
-
-    constructor(filename: string, url: string, totalBytes: number) {
-        super()
-        this.filename = filename
-        this.url = url
-        this.totalBytes = totalBytes
-    }
-
-    getFilename = (): string => this.filename
-    getURL = (): string => this.url
-    getTotalBytes = (): number => this.totalBytes
-    getReceivedBytes = (): number => this.received
-    getState = (): string => this.state
-    getSavePath = (): string => this.savePath
-    setSaveDialogOptions = (): void => {}
-    setSavePath = (path: string): void => {
-        this.savePath = path
-    }
-    cancel = (): void => {
-        this.state = "cancelled"
-    }
-
-    once(name: string, listener: Listener): void {
-        const wrapper: Listener = (...args) => {
-            this.off(name, wrapper)
-            listener(...args)
-        }
-        this.on(name, wrapper)
-    }
-}

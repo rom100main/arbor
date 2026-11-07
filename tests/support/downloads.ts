@@ -66,3 +66,83 @@ export const fakeDownloads = (initial: ReadonlyArray<DownloadInfo> = []): FakeDo
         },
     }
 }
+
+type Listener = (...args: unknown[]) => void
+
+/** The slice of Electron's EventEmitter the Downloads service uses. */
+export class FakeEmitter {
+    private readonly listeners = new Map<string, Listener[]>()
+
+    on(name: string, listener: Listener): void {
+        const list = this.listeners.get(name) ?? []
+        list.push(listener)
+        this.listeners.set(name, list)
+    }
+
+    off(name: string, listener: Listener): void {
+        this.listeners.set(
+            name,
+            (this.listeners.get(name) ?? []).filter((candidate) => candidate !== listener),
+        )
+    }
+
+    emit(name: string, ...args: unknown[]): void {
+        for (const listener of [...(this.listeners.get(name) ?? [])]) listener(...args)
+    }
+
+    listenerCount(name: string): number {
+        return (this.listeners.get(name) ?? []).length
+    }
+}
+
+export class FakeSession extends FakeEmitter {}
+
+export interface FakeSaveDialogOptions {
+    readonly title?: string
+    readonly defaultPath?: string
+    readonly buttonLabel?: string
+}
+
+/** The slice of Electron's DownloadItem the service reads. */
+export class FakeItem extends FakeEmitter {
+    savePath = ""
+    saveDialogOptions: FakeSaveDialogOptions | null = null
+    received = 0
+    state = "progressing"
+    cancelCount = 0
+    readonly filename: string
+    readonly url: string
+    readonly totalBytes: number
+
+    constructor(filename: string, url: string, totalBytes: number) {
+        super()
+        this.filename = filename
+        this.url = url
+        this.totalBytes = totalBytes
+    }
+
+    getFilename = (): string => this.filename
+    getURL = (): string => this.url
+    getTotalBytes = (): number => this.totalBytes
+    getReceivedBytes = (): number => this.received
+    getState = (): string => this.state
+    getSavePath = (): string => this.savePath
+    setSaveDialogOptions = (options: FakeSaveDialogOptions): void => {
+        this.saveDialogOptions = options
+    }
+    setSavePath = (path: string): void => {
+        this.savePath = path
+    }
+    cancel = (): void => {
+        this.cancelCount += 1
+        this.state = "cancelled"
+    }
+
+    once(name: string, listener: Listener): void {
+        const wrapper: Listener = (...args) => {
+            this.off(name, wrapper)
+            listener(...args)
+        }
+        this.on(name, wrapper)
+    }
+}

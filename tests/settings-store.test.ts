@@ -64,6 +64,16 @@ describe("fromPersistedSettings", () => {
         expect(restored!.urlBarVisibility).toBe(DEFAULT_SETTINGS.urlBarVisibility)
     })
 
+    it("defaults the download save mode and rejects a non-boolean", () => {
+        expect(fromPersistedSettings({})?.downloadAskWhereToSave).toBe(true)
+        expect(
+            fromPersistedSettings({ downloadAskWhereToSave: "yes" })?.downloadAskWhereToSave,
+        ).toBe(true)
+        expect(
+            fromPersistedSettings({ downloadAskWhereToSave: false })?.downloadAskWhereToSave,
+        ).toBe(false)
+    })
+
     it("keeps a valid file intact", () => {
         const payload = {
             searchTemplate: "https://kagi.com/search?q=%s",
@@ -162,6 +172,23 @@ describe("settings store", () => {
                 const reloaded = yield* (yield* open()).store.get
                 expect(reloaded.sidebarVisibility).toBe("hidden")
                 expect(reloaded.urlBarVisibility).toBe("hidden")
+            }),
+        ))
+
+    it("persists the download save mode and publishes it", () =>
+        runTest(
+            Effect.gen(function* () {
+                const { store, scope } = yield* open()
+                const { seen } = yield* collect(store.changes)
+                yield* store.set({ downloadAskWhereToSave: false })
+                yield* settle
+                expect(seen.map((settings) => settings.downloadAskWhereToSave)).toEqual([false])
+
+                yield* Scope.close(scope, Exit.void)
+                expect(onDisk()).toMatchObject({ downloadAskWhereToSave: false })
+
+                const reloaded = yield* (yield* open()).store.get
+                expect(reloaded.downloadAskWhereToSave).toBe(false)
             }),
         ))
 
