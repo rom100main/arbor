@@ -135,6 +135,7 @@ export const DownloadsPopup = () => {
 
     // Newest first, so a download started while the popup is open appears at the top.
     const items = () => [...(snapshot()?.items ?? [])].reverse()
+    const hasSettled = () => items().some((item) => !isActive(item))
 
     // Report the content height so the frameless window fits.
     // Depend on the row count, not the whole snapshot: progress ticks must not resize.
@@ -154,9 +155,19 @@ export const DownloadsPopup = () => {
             <div class="downloads-card" ref={(el) => (card = el)}>
                 <header class="downloads-header">
                     <span>Downloads</span>
-                    <button type="button" onClick={() => void window.arbor.downloadsOpenFolder()}>
-                        <Icon name="folder" size={14} /> Open folder
-                    </button>
+                    <div class="downloads-header-actions">
+                        <Show when={hasSettled()}>
+                            <button type="button" onClick={() => void window.arbor.downloadClear()}>
+                                Clear
+                            </button>
+                        </Show>
+                        <button
+                            type="button"
+                            onClick={() => void window.arbor.downloadsOpenFolder()}
+                        >
+                            <Icon name="folder" size={14} /> Open folder
+                        </button>
+                    </div>
                 </header>
                 <Show
                     when={items().length > 0}
