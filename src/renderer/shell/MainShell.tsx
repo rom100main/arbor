@@ -15,6 +15,7 @@ import { initState, useSnapshot } from "./snapshot"
 import { NavButtons } from "./toolbar/NavButtons"
 import { OmniboxInput } from "./toolbar/OmniboxInput"
 import { PinnedActions } from "./toolbar/PinnedActions"
+import { UpdateButton } from "./toolbar/UpdateButton"
 
 import "./MainShell.css"
 
@@ -153,6 +154,7 @@ export const MainShell = () => {
                 <NavButtons tabId={activeTabId()} />
                 <OmniboxInput tabId={activeTabId()} url={activeTabUrl()} />
                 <PinnedActions />
+                <UpdateButton />
                 <div class="extensions">
                     <button
                         type="button"
