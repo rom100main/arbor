@@ -41,7 +41,7 @@
     "devEngines": {
         "packageManager": {
             "name": "npm",
-            "version": "11.19.1",
+            "version": "11.20.0",
             "onFail": "download"
         }
     },
@@ -49,7 +49,6 @@
         "@solidjs/web": "^2.0.0-rc.18",
         "@tabler/icons": "^3.47.0",
         "effect": "^4.0.6",
-        "electron-chrome-context-menu": "^1.1.0",
         "electron-chrome-extensions": "^4.9.0",
         "electron-chrome-web-store": "^0.13.0",
         "electron-updater": "^6.8.11",

@@ -10,7 +10,6 @@ import {
     session,
     type Session,
 } from "electron"
-import { buildChromeContextMenu } from "electron-chrome-context-menu"
 
 import { containerPartition } from "../../shared/constants"
 import type { ContainerId } from "../../shared/protocol"
@@ -19,6 +18,7 @@ import { Downloads } from "../downloads/downloads"
 import { Extensions } from "../extension/extensions"
 import { IpcPush, makePusher } from "../ipc/router"
 import { SettingsStore } from "../settings"
+import { buildContextMenu } from "./context-menu"
 import {
     LoadFailed,
     type SessionKey,
@@ -194,7 +194,16 @@ export const makeWindowHost: Effect.Effect<
                     return { action: "deny" }
                 })
                 webContents.on("context-menu", (_event, params) => {
-                    buildChromeContextMenu({ params, webContents, openLink: openChild }).popup()
+                    buildContextMenu(params, webContents, {
+                        openLink: openChild,
+                        download: (url) => {
+                            if (url.startsWith("blob:")) {
+                                run(Effect.logDebug("Skipping a blob: download", url))
+                                return
+                            }
+                            if (url.length > 0) webContents.downloadURL(url)
+                        },
+                    }).popup()
                 })
                 webContents.on("page-title-updated", (_event, title) =>
                     offer({ kind: "title", tabId, title }),

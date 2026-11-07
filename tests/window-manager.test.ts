@@ -23,7 +23,6 @@ import { currentHost, type HostCall, type MemoryHost } from "./support/window-ho
 // These libraries only load inside Electron. Nothing here reaches extensions.
 vi.mock("electron-chrome-extensions", () => ({ ElectronChromeExtensions: {} }))
 vi.mock("electron-chrome-web-store", () => ({}))
-vi.mock("electron-chrome-context-menu", () => ({ buildChromeContextMenu: () => undefined }))
 // No Electron, IPC or disk: the in-memory stand-ins from `tests/support`.
 vi.mock("../src/main/windows/electron-host", () => import("./support/window-host"))
 vi.mock("../src/main/ipc/transport", () => import("./support/ipc"))
