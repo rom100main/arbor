@@ -50,6 +50,10 @@ const EXTENSIONS_POPUP_WIDTH = 320
 const EXTENSIONS_POPUP_DEFAULT_HEIGHT = 72
 const EXTENSIONS_POPUP_MAX_HEIGHT = 480
 
+const DOWNLOADS_POPUP_WIDTH = 380
+const DOWNLOADS_POPUP_DEFAULT_HEIGHT = 220
+const DOWNLOADS_POPUP_MAX_HEIGHT = 520
+
 const ACTION_POPUP_MIN_WIDTH = 360
 const ACTION_POPUP_MIN_HEIGHT = 480
 const ACTION_POPUP_GAP = 5
@@ -81,6 +85,10 @@ export interface Overlays {
     readonly toggleExtensions: (anchor: Anchor) => void
     readonly closeExtensions: () => void
     readonly setExtensionsHeight: (height: number) => void
+
+    readonly toggleDownloads: (anchor: Anchor) => void
+    readonly closeDownloads: () => void
+    readonly setDownloadsHeight: (height: number) => void
 
     /** Open (or, clicked again, close) a pinned extension's action popup above its toolbar button. */
     readonly toggleActionPopup: (options: {
@@ -203,6 +211,58 @@ export const createOverlays = (win: BrowserWindow, ipc: Pusher): Overlays => {
         ipc.attach(created.webContents)
         void loadRenderer(created, "extensions")
         placeExtensions()
+        created.show()
+    }
+
+    // --- downloads popup
+
+    let downloads: BrowserWindow | null = null
+    let downloadsAnchor: Anchor | null = null
+    let downloadsHeight = DOWNLOADS_POPUP_DEFAULT_HEIGHT
+
+    const closeDownloads = (markDismissed = false): void => {
+        if (alive(downloads)) {
+            if (markDismissed) dismissed.mark("downloads")
+            downloads.destroy()
+        }
+        downloads = null
+    }
+
+    const placeDownloads = (): void => {
+        if (!alive(downloads) || !downloadsAnchor) return
+        const bounds = win.getContentBounds()
+        downloads.setBounds({
+            x: Math.round(
+                bounds.x + downloadsAnchor.x + downloadsAnchor.width - DOWNLOADS_POPUP_WIDTH,
+            ),
+            y: Math.round(bounds.y + downloadsAnchor.y - downloadsHeight - POPUP_GAP),
+            width: DOWNLOADS_POPUP_WIDTH,
+            height: Math.round(downloadsHeight),
+        })
+    }
+
+    const toggleDownloads = (anchor: Anchor): void => {
+        if (alive(downloads)) {
+            closeDownloads()
+            return
+        }
+        // Clicking the button to close an open popup races with its blur-close.
+        if (dismissed.suppressed("downloads")) return
+        downloadsAnchor = anchor
+        downloadsHeight = DOWNLOADS_POPUP_DEFAULT_HEIGHT
+        const created = overlayWindow(win, {
+            width: DOWNLOADS_POPUP_WIDTH,
+            height: downloadsHeight,
+            webPreferences: { preload: preloadPath },
+        })
+        downloads = created
+        created.on("closed", () => {
+            if (downloads === created) downloads = null
+        })
+        created.on("blur", () => closeDownloads(true))
+        ipc.attach(created.webContents)
+        void loadRenderer(created, "downloads")
+        placeDownloads()
         created.show()
     }
 
@@ -360,6 +420,14 @@ export const createOverlays = (win: BrowserWindow, ipc: Pusher): Overlays => {
             extensionsHeight = next
             placeExtensions()
         },
+        toggleDownloads,
+        closeDownloads: () => closeDownloads(),
+        setDownloadsHeight: (height) => {
+            const next = clampHeight(height, DOWNLOADS_POPUP_MAX_HEIGHT)
+            if (next === null) return
+            downloadsHeight = next
+            placeDownloads()
+        },
         toggleActionPopup,
         positionLibraryPopup,
         openRename,
@@ -367,6 +435,7 @@ export const createOverlays = (win: BrowserWindow, ipc: Pusher): Overlays => {
         closeAll: () => {
             if (alive(omnibox)) omnibox.destroy()
             closeExtensions()
+            closeDownloads()
             closeActionPopup()
             closeRename()
         },
