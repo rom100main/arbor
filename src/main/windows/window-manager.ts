@@ -18,6 +18,7 @@ import { SettingsStore } from "../settings"
 import { snapshot, type DomainState } from "../state/state"
 import { BrowserStore } from "../state/store"
 import type { TabMeta } from "../state/tabs"
+import { Updater } from "../update/updater"
 import { CurrentWindow } from "./current-window"
 import { makeWindowHost } from "./electron-host"
 import {
@@ -58,6 +59,7 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
             const prompts = yield* PermissionPrompts
             const extensions = yield* Extensions
             const currentWindow = yield* CurrentWindow
+            const updater = yield* Updater
 
             const logged = (label: string) => (effect: Effect.Effect<unknown, unknown>) =>
                 effect.pipe(
@@ -244,6 +246,7 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                     pushes,
                     prompts,
                     extensions,
+                    updater,
                     handle,
                     overlays,
                     viewOf: (tabId) => views.get(tabId),

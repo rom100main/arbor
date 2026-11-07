@@ -8,6 +8,7 @@ import { ExtensionStorage } from "./extension/storage"
 import { IpcPush } from "./ipc/router"
 import { browserStoreFromFile } from "./persistence/state-file"
 import { SettingsStore } from "./settings"
+import { ElectronUpdater } from "./update/electron-updater"
 import { CurrentWindow } from "./windows/current-window"
 import { WindowManager } from "./windows/window-manager"
 
@@ -20,9 +21,10 @@ const PersistedServices = (userData: string) =>
 
 export const AppServices = (userData: string) => {
     const base = Layer.mergeAll(PersistedServices(userData), IpcPush.layer, CurrentWindow.layer)
+    const updater = ElectronUpdater.pipe(Layer.provideMerge(base))
     const extensions = Extensions.layer.pipe(
         Layer.provideMerge(PermissionPrompts.modal),
-        Layer.provideMerge(base),
+        Layer.provideMerge(updater),
     )
     return WindowManager.layer.pipe(Layer.provideMerge(extensions))
 }
