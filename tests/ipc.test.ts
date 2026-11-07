@@ -46,6 +46,7 @@ const handlersFor = (store: StoreService): RequestHandlers<never> => ({
     downloadsList: () => Effect.succeed({ items: [], folder: "/Downloads" }),
     downloadCancel: () => Effect.void,
     downloadRemove: () => Effect.void,
+    downloadClear: () => Effect.void,
     downloadReveal: () => Effect.void,
     downloadOpen: () => Effect.void,
     downloadsOpenFolder: () => Effect.void,

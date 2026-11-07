@@ -6,6 +6,7 @@ import type { DownloadId, DownloadInfo, DownloadsSnapshot } from "../../src/shar
 export type DownloadsCall =
     | { readonly op: "cancel"; readonly id: DownloadId }
     | { readonly op: "remove"; readonly id: DownloadId }
+    | { readonly op: "clearSettled" }
     | { readonly op: "reveal"; readonly id: DownloadId }
     | { readonly op: "open"; readonly id: DownloadId }
     | { readonly op: "openFolder" }
@@ -49,6 +50,7 @@ export const fakeDownloads = (initial: ReadonlyArray<DownloadInfo> = []): FakeDo
         attach: () => Effect.void,
         cancel: (id) => Effect.sync(() => void calls.push({ op: "cancel", id })),
         remove: (id) => Effect.sync(() => void calls.push({ op: "remove", id })),
+        clearSettled: Effect.sync(() => void calls.push({ op: "clearSettled" })),
         reveal: (id) => Effect.sync(() => void calls.push({ op: "reveal", id })),
         open: (id) => Effect.sync(() => void calls.push({ op: "open", id })),
         openFolder: Effect.sync(() => void calls.push({ op: "openFolder" })),
