@@ -6,6 +6,7 @@ import { IpcPush } from "../src/main/ipc/router"
 import { SettingsStore } from "../src/main/settings"
 import { initialState } from "../src/main/state/state"
 import { BrowserStore, type StoreService } from "../src/main/state/store"
+import { Updater } from "../src/main/update/updater"
 import { CurrentWindow } from "../src/main/windows/current-window"
 import { WindowManager } from "../src/main/windows/window-manager"
 import { EVENTS, PUSHES, REQUESTS } from "../src/shared/ipc/channels"
@@ -46,6 +47,7 @@ const startAppWith = (configure: (host: MemoryHost, ipc: MemoryIpc) => void) =>
             CurrentWindow.layer,
             Layer.succeed(PermissionPrompts, scriptedPrompts([]).service),
             noExtensions,
+            Updater.none,
         )
         const context = yield* Layer.buildWithScope(
             WindowManager.layer.pipe(Layer.provideMerge(base)),

@@ -43,6 +43,8 @@ const handlersFor = (store: StoreService): RequestHandlers<never> => ({
     goBack: () => Effect.void,
     goForward: () => Effect.void,
     reload: () => Effect.void,
+    getUpdateStatus: () => Effect.succeed({ kind: "idle" }),
+    installUpdate: () => Effect.void,
 })
 
 // Type-level guard (checked by `vp check`): a handler is required for every request.
