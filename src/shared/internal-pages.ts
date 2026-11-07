@@ -6,10 +6,11 @@ import { INTERNAL_SCHEME, SETTINGS_PATH } from "./settings"
  * Pages Arbor serves itself over `arbor://`.
  * Pure URL shapes only, the session and protocol wiring lives in `main/windows/internal-pages.ts`.
  */
-export type SettingsRoute = "search" | "appearance"
+export type SettingsRoute = "search" | "downloads" | "appearance"
 
 const SETTINGS_ROUTES: Record<string, SettingsRoute> = {
     "/search": "search",
+    "/downloads": "downloads",
     "/appearance": "appearance",
 }
 

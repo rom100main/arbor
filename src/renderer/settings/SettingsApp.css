@@ -85,6 +85,45 @@
     }
 }
 
+.settings-folder {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    max-width: 520px;
+    padding: 7px 9px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+}
+
+.settings-folder-path {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: var(--font-size-md);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+.settings-button {
+    display: inline-flex;
+    flex-shrink: 0;
+    gap: 6px;
+    align-items: center;
+    padding: 4px 9px;
+    font: inherit;
+    font-size: var(--font-size-md);
+    color: var(--color-text);
+    cursor: pointer;
+    background: var(--color-hover);
+    border: none;
+    border-radius: var(--radius-md);
+
+    &:hover {
+        background: var(--color-active);
+    }
+}
+
 .settings-error {
     margin: 0;
     font-size: var(--font-size-sm);

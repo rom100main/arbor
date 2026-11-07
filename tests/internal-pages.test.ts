@@ -54,6 +54,7 @@ describe("isSettingsUrl", () => {
 describe("settingsRoute", () => {
     it("maps known paths to their section", () => {
         expect(settingsRoute("arbor://settings/search")).toBe("search")
+        expect(settingsRoute("arbor://settings/downloads")).toBe("downloads")
         expect(settingsRoute("arbor://settings/appearance")).toBe("appearance")
     })
 
@@ -76,6 +77,7 @@ describe("isAssetRequest", () => {
     it("treats a known route as a document", () => {
         expect(isAssetRequest("/")).toBe(false)
         expect(isAssetRequest("/search")).toBe(false)
+        expect(isAssetRequest("/downloads")).toBe(false)
         expect(isAssetRequest("/appearance")).toBe(false)
     })
 

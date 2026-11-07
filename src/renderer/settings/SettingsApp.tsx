@@ -18,6 +18,7 @@ import "./SettingsApp.css"
 
 const NAV: { route: SettingsRoute; label: string; icon: IconName }[] = [
     { route: "search", label: "Search", icon: "search" },
+    { route: "downloads", label: "Downloads", icon: "download" },
     { route: "appearance", label: "Appearance", icon: "settings" },
 ]
 
@@ -54,6 +55,21 @@ const URL_BAR_LABELS: Record<UrlBarVisibility, string> = {
 const URL_BAR_ICONS: Record<UrlBarVisibility, IconName> = {
     displayed: "layout-bottombar",
     hidden: "layout-bottombar-inactive",
+}
+
+/** The UI's view of `downloadAskWhereToSave`, not a second stored field. */
+type SaveMode = "ask" | "automatic"
+
+const SAVE_MODES = ["ask", "automatic"] as const
+
+const SAVE_MODE_LABELS: Record<SaveMode, string> = {
+    ask: "Ask where to save",
+    automatic: "Save to Downloads",
+}
+
+const SAVE_MODE_ICONS: Record<SaveMode, IconName> = {
+    ask: "folder",
+    automatic: "download",
 }
 
 const routeUrl = (route: SettingsRoute): string => `${SETTINGS_URL}/${route}`
@@ -95,6 +111,9 @@ export const SettingsApp = () => {
                 <Switch>
                     <Match when={route() === "search"}>
                         <SearchSection />
+                    </Match>
+                    <Match when={route() === "downloads"}>
+                        <DownloadsSection />
                     </Match>
                     <Match when={route() === "appearance"}>
                         <AppearanceSection />
@@ -234,6 +253,57 @@ const OptionCards = <T extends string>(props: {
         </For>
     </div>
 )
+
+const DownloadsSection = () => {
+    const settings = useSettings()
+    const [folder, setFolder] = createSignal("")
+
+    // The folder comes with the list; it is the OS Downloads folder the service writes to.
+    void (async () => {
+        const reply = await window.arbor.downloadsList()
+        setFolder(reply.value.folder)
+    })()
+
+    const mode = (): SaveMode => (settings().downloadAskWhereToSave ? "ask" : "automatic")
+
+    const choose = (next: SaveMode): void => {
+        void window.arbor.setSettings({ downloadAskWhereToSave: next === "ask" })
+    }
+
+    return (
+        <section>
+            <h1>Downloads</h1>
+            <div class="settings-group">
+                <h2>When a download starts</h2>
+                <OptionCards
+                    name="download-save-mode"
+                    label="When a download starts"
+                    options={SAVE_MODES}
+                    labels={SAVE_MODE_LABELS}
+                    icons={SAVE_MODE_ICONS}
+                    value={mode()}
+                    onChange={choose}
+                />
+            </div>
+            <div class="settings-group">
+                <h2>Folder</h2>
+                <div class="settings-folder">
+                    <span class="settings-folder-path" title={folder()}>
+                        {folder()}
+                    </span>
+                    <button
+                        type="button"
+                        class="settings-button"
+                        onClick={() => void window.arbor.downloadsOpenFolder()}
+                    >
+                        <Icon name="folder" size={14} />
+                        Open folder
+                    </button>
+                </div>
+            </div>
+        </section>
+    )
+}
 
 const AppearanceSection = () => {
     const settings = useSettings()
