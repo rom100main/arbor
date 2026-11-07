@@ -73,6 +73,9 @@ const quietEvents: EventHandlers<never> = {
     extensionsClose: () => Effect.void,
     extensionsSetPopupHeight: () => Effect.void,
     extensionsMenu: () => Effect.void,
+    downloadsToggle: () => Effect.void,
+    downloadsClose: () => Effect.void,
+    downloadsSetPopupHeight: () => Effect.void,
     permissionRespond: () => Effect.void,
     shellRaise: (raised) => Effect.sync(() => eventsSeen.push(raised)),
 }
