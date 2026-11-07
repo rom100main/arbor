@@ -1,0 +1,198 @@
+.downloads-popup-root {
+    box-sizing: border-box;
+    height: 100vh;
+    padding: 6px;
+    overflow: hidden;
+    background: transparent;
+}
+
+.downloads-card {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 12px);
+    overflow: hidden;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-popup-strong);
+}
+
+.downloads-header {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    font-size: var(--font-size-md);
+    font-weight: 600;
+    border-bottom: 1px solid var(--color-border-soft);
+
+    button {
+        display: inline-flex;
+        gap: 4px;
+        align-items: center;
+        padding: 2px 4px;
+        font: inherit;
+        font-size: var(--font-size-sm);
+        font-weight: 400;
+        color: var(--color-text-muted);
+        cursor: pointer;
+        background: transparent;
+        border: none;
+        border-radius: var(--radius-sm);
+
+        &:hover {
+            color: var(--color-text);
+            background: var(--color-hover);
+        }
+    }
+}
+
+.downloads-list {
+    max-height: 460px;
+    padding: 0;
+    margin: 0;
+    overflow-y: auto;
+    list-style: none;
+}
+
+.download-row {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 10px;
+
+    &:hover {
+        background: var(--color-hover);
+    }
+
+    &[data-state="completed"] {
+        cursor: pointer;
+    }
+
+    &[data-state="interrupted"] .download-row-icon {
+        color: var(--color-text-faint);
+    }
+
+    /* Unknown size: a segment sweeps instead of filling. */
+    &[data-indeterminate="true"] .download-row-value {
+        width: 34%;
+        transform: none;
+        animation: download-row-sweep 1.4s ease-in-out infinite;
+    }
+}
+
+.download-row-icon {
+    display: inline-flex;
+    justify-content: center;
+    color: var(--color-text-muted);
+}
+
+.download-row-body {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.download-row-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: var(--font-size-body);
+    color: var(--color-text);
+    white-space: nowrap;
+}
+
+.download-row-status {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    min-width: 0;
+}
+
+.download-row-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+.download-row-track {
+    flex: 1;
+    min-width: 40px;
+    height: 3px;
+    overflow: hidden;
+    background: var(--color-border-soft);
+    border-radius: 2px;
+}
+
+.download-row-value {
+    display: block;
+    height: 100%;
+    background: var(--color-accent);
+    transform-origin: left;
+    transition: transform 140ms linear;
+}
+
+.download-row-actions {
+    display: inline-flex;
+    gap: 2px;
+    align-items: center;
+}
+
+.download-row-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+
+    &:hover {
+        color: var(--color-text);
+        background: var(--color-active);
+    }
+}
+
+/* Cancel and Remove appear on hover, like the browser's own list. */
+.download-row-remove {
+    opacity: 0;
+    transition: opacity 120ms ease;
+}
+
+.download-row:hover .download-row-remove,
+.download-row:focus-within .download-row-remove {
+    opacity: 1;
+}
+
+.downloads-empty {
+    padding: 24px;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    text-align: center;
+}
+
+@keyframes download-row-sweep {
+    from {
+        transform: translateX(-110%);
+    }
+
+    to {
+        transform: translateX(400%);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .download-row[data-indeterminate="true"] .download-row-value {
+        width: 100%;
+        opacity: 0.4;
+        animation: none;
+    }
+}
