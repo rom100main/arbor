@@ -10,6 +10,8 @@ import { Updater } from "../src/main/update/updater"
 import { CurrentWindow } from "../src/main/windows/current-window"
 import { WindowManager } from "../src/main/windows/window-manager"
 import { EVENTS, PUSHES, REQUESTS } from "../src/shared/ipc/channels"
+import type { DownloadInfo } from "../src/shared/protocol"
+import { fakeDownloads } from "./support/downloads"
 import { runTest, settle } from "./support/effect"
 import { noExtensions } from "./support/extensions"
 import * as fakeIpc from "./support/ipc"
@@ -40,6 +42,7 @@ type MemoryIpc = typeof fakeIpc
 const startAppWith = (configure: (host: MemoryHost, ipc: MemoryIpc) => void) =>
     Effect.gen(function* () {
         const scope = yield* Scope.make()
+        const downloads = fakeDownloads()
         const base = Layer.mergeAll(
             BrowserStore.layer(initialState()),
             SettingsStore.layer("/data/settings.json"),
@@ -48,6 +51,7 @@ const startAppWith = (configure: (host: MemoryHost, ipc: MemoryIpc) => void) =>
             Layer.succeed(PermissionPrompts, scriptedPrompts([]).service),
             noExtensions,
             Updater.none,
+            downloads.layer,
         )
         const context = yield* Layer.buildWithScope(
             WindowManager.layer.pipe(Layer.provideMerge(base)),
@@ -62,7 +66,7 @@ const startAppWith = (configure: (host: MemoryHost, ipc: MemoryIpc) => void) =>
         yield* Context.get(context, IpcPush).attach(shell.renderer)
         const running = yield* Effect.forkIn(Context.get(context, WindowManager).start, scope)
         yield* settleLong
-        return { host, ipc: fakeIpc, store, currentWindow, running, shell }
+        return { host, ipc: fakeIpc, store, currentWindow, running, shell, downloads }
     })
 
 const startApp = startAppWith(() => undefined)
@@ -74,6 +78,18 @@ const ops = (calls: ReadonlyArray<HostCall>, op: HostCall["op"]) => calls.filter
 
 const activeTab = (store: StoreService) =>
     Effect.map(store.snapshot, (snapshot) => snapshot.activeTabId)
+
+const download = (name: string): DownloadInfo => ({
+    id: `download-${name}`,
+    filename: `${name}.txt`,
+    savePath: `/Downloads/${name}.txt`,
+    url: `https://files.test/${name}.txt`,
+    state: "completed",
+    receivedBytes: 10,
+    totalBytes: 10,
+    startedAt: 0,
+    finishedAt: 1,
+})
 
 describe("WindowManager start", () => {
     it("seeds a fresh profile with one Container and opens one window", () =>
@@ -141,6 +157,24 @@ describe("WindowManager start", () => {
                 yield* settleLong
                 expect(host.windows).toHaveLength(1)
                 expect(ops(host.windows[0].calls, "focus")).toHaveLength(1)
+            }),
+        ))
+})
+
+describe("downloads", () => {
+    it("pushes the list at startup, then on every change", () =>
+        runTest(
+            Effect.gen(function* () {
+                const { shell, downloads } = yield* startApp
+                const pushed = () =>
+                    shell.received.filter((message) => message.channel === PUSHES.downloads)
+                expect(pushed()).toHaveLength(1)
+                expect(pushed()[0].value).toEqual({ items: [], folder: "/Downloads" })
+
+                downloads.emit([download("a")])
+                yield* settleLong
+                expect(pushed()).toHaveLength(2)
+                expect(pushed()[1].value).toMatchObject({ items: [{ id: "download-a" }] })
             }),
         ))
 })

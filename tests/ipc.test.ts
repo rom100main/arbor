@@ -43,6 +43,12 @@ const handlersFor = (store: StoreService): RequestHandlers<never> => ({
     goBack: () => Effect.void,
     goForward: () => Effect.void,
     reload: () => Effect.void,
+    downloadsList: () => Effect.succeed({ items: [], folder: "/Downloads" }),
+    downloadCancel: () => Effect.void,
+    downloadRemove: () => Effect.void,
+    downloadReveal: () => Effect.void,
+    downloadOpen: () => Effect.void,
+    downloadsOpenFolder: () => Effect.void,
     getUpdateStatus: () => Effect.succeed({ kind: "idle" }),
     installUpdate: () => Effect.void,
 })
