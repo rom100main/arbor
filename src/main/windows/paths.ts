@@ -11,6 +11,9 @@ export const extensionStorageShimPath = path.join(here, "../preload/extension-st
 
 export const rendererPath = path.join(here, "../../client/index.html")
 
+/** Packaged with the app (see `files` in electron-builder.yml). */
+export const appIconPath = path.join(here, "../../../build/icon.png")
+
 /** Dev server vs. packaged file loader shared by all windows and the shell view. */
 export const loadRenderer = (win: BrowserWindow | WebContents, query?: string): Promise<void> => {
     if (process.env.VITE_DEV_SERVER_URL) {

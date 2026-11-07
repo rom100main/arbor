@@ -29,7 +29,7 @@ import {
 import { internalSession, registerInternalPages } from "./internal-pages"
 import { menuTemplate } from "./menu"
 import { createOverlays } from "./overlays"
-import { loadRenderer } from "./paths"
+import { appIconPath, loadRenderer } from "./paths"
 import { createShell } from "./shell-view"
 
 /** The window background behind the renderer, so a dark theme does not flash white before first paint. */
@@ -101,6 +101,8 @@ export const makeWindowHost: Effect.Effect<
                     minHeight: 480,
                     show: false,
                     title: "Arbor",
+                    // macOS and Windows take the icon from the app bundle and the .exe.
+                    icon: process.platform === "linux" ? appIconPath : undefined,
                     backgroundColor: windowBackground(settings),
                 })
                 created.on("closed", () => Deferred.doneUnsafe(closed, Effect.void))
