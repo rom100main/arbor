@@ -76,6 +76,11 @@
             font-weight: 600;
         }
     }
+
+    &:focus {
+        outline: 2px solid var(--color-accent);
+        outline-offset: -2px;
+    }
 }
 
 .sidebar.collapsed .tab-row {

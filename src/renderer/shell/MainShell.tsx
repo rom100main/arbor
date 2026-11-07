@@ -8,6 +8,7 @@ import {
     TOOLBAR_HEIGHT,
 } from "../../shared/settings"
 import { Icon } from "../ui/Icon"
+import { requestTabTreeFocus } from "./focus"
 import { createReveal, REVEAL_MS, revealZones } from "./reveal"
 import { useSettings } from "./settings"
 import { Sidebar } from "./sidebar/Sidebar"
@@ -58,6 +59,14 @@ export const MainShell = () => {
         window.removeEventListener("resize", onResize)
     })
     onCleanup(window.arbor.onShellEdge((edge) => (edge === "left" ? sidebar : toolbar).reveal()))
+    onCleanup(
+        window.arbor.onFocusTabTree(() => {
+            sidebar.reveal()
+            requestTabTreeFocus()
+        }),
+    )
+    // A toolbar popup hangs over the page: keep the bar it belongs to out until it closes.
+    onCleanup(window.arbor.onToolbarPopup((open) => toolbar.setPinned(open)))
 
     createEffect(
         () => [settings().sidebarVisibility, settings().urlBarVisibility] as const,
@@ -141,7 +150,12 @@ export const MainShell = () => {
             }}
             onMouseDown={onShellMouseDown}
         >
-            <Sidebar visibility={settings().sidebarVisibility} open={sidebar.open()} />
+            <Sidebar
+                visibility={settings().sidebarVisibility}
+                open={sidebar.open()}
+                onFocusChange={sidebar.setFocused}
+                onDismiss={sidebar.dismiss}
+            />
             <section
                 aria-label="URL bar"
                 class={{

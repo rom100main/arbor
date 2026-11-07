@@ -23,6 +23,9 @@ export const TabRow = (props: {
     tab: DisplayTab
     hasChildren: boolean
     collapsed: boolean
+    tabbable: boolean
+    registerRow: (el: HTMLDivElement | undefined) => void
+    onFocus: () => void
     onRename: () => void
 }) => {
     const snapshot = useSnapshot()
@@ -31,6 +34,10 @@ export const TabRow = (props: {
     const closeProtected = () => {
         const snap = snapshot()
         return snap !== null && snap.containers.length === 1 && snap.tabs.length === 1
+    }
+    const close = (): void => {
+        if (closeProtected()) return
+        void window.arbor.closeTab({ tabId: props.tab.id })
     }
     const drop = () => tabDropTarget()
     const dropClass = (position: DropPosition): boolean =>
@@ -46,8 +53,18 @@ export const TabRow = (props: {
                 "drop-child": dropClass("child"),
             }}
             style={{ "--depth": props.tab.depth }}
+            tabindex={props.tabbable ? 0 : -1}
+            ref={(el) => props.registerRow(el)}
             draggable="true"
             onClick={() => void window.arbor.selectTab({ tabId: props.tab.id })}
+            onAuxClick={(event) => {
+                // Middle click ("wheel click") closes the tab.
+                if (event.button !== 1) return
+                event.preventDefault()
+                event.stopPropagation()
+                close()
+            }}
+            onFocus={props.onFocus}
             onContextMenu={(event) => {
                 event.preventDefault()
                 props.onRename()
@@ -120,7 +137,7 @@ export const TabRow = (props: {
                     aria-label="Close tab"
                     onClick={(event) => {
                         event.stopPropagation()
-                        void window.arbor.closeTab({ tabId: props.tab.id })
+                        close()
                     }}
                 >
                     <Icon name="x" size={12} />
