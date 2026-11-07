@@ -16,18 +16,29 @@ export const DownloadButton = () => {
     const [snapshot, setSnapshot] = createSignal<DownloadsSnapshot | null>(null)
     // In memory only: the dot means "finished while you were using Arbor".
     const [seen, setSeen] = createSignal<ReadonlySet<DownloadId>>(new Set())
+    // Restored downloads finished while Arbor was closed: they are not news.
+    let seeded = false
+
+    const apply = (next: DownloadsSnapshot): void => {
+        setSnapshot(next)
+        if (seeded) return
+        seeded = true
+        setSeen(
+            new Set(next.items.filter((item) => item.state === "completed").map((item) => item.id)),
+        )
+    }
 
     // Subscribe before reading, so a push during the read is not lost.
     let pushed = false
     onCleanup(
         window.arbor.onDownloads((next) => {
             pushed = true
-            setSnapshot(next)
+            apply(next)
         }),
     )
     const load = async (): Promise<void> => {
         const reply = await window.arbor.downloadsList()
-        if (!pushed) setSnapshot(reply.value)
+        if (!pushed) apply(reply.value)
     }
     void load()
 
