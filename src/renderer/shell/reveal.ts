@@ -80,6 +80,8 @@ export interface Reveal {
     readonly reveal: () => void
     /** Keep the bar out while focus is inside it, e.g. typing in the URL bar. */
     readonly setFocused: (focused: boolean) => void
+    /** Keep the bar out while something anchored to it is open, e.g. a toolbar popup. */
+    readonly setPinned: (pinned: boolean) => void
     /** Close now, skipping the grace delay. */
     readonly dismiss: () => void
     /** Re-evaluate after the zones changed (settings, window size). */
@@ -100,6 +102,7 @@ export const createReveal = (zone: () => RevealZone | null): Reveal => {
     let isOpen = false
     let hovering = false
     let focused = false
+    let pinned = false
     let pending: boolean | null = null
     let timer: ReturnType<typeof setTimeout> | undefined
 
@@ -118,7 +121,7 @@ export const createReveal = (zone: () => RevealZone | null): Reveal => {
 
     const settle = (immediate = false): void => {
         const current = zone()
-        const want = current !== null && (hovering || focused)
+        const want = current !== null && (hovering || focused || pinned)
         if (want === isOpen) {
             cancel()
             return
@@ -156,9 +159,13 @@ export const createReveal = (zone: () => RevealZone | null): Reveal => {
             focused = next
             settle(next)
         },
+        setPinned: (next) => {
+            pinned = next
+            settle(next)
+        },
         dismiss: () => {
             hovering = false
-            if (!focused) apply(false)
+            if (!focused && !pinned) apply(false)
         },
         sync: () => {
             if (zone() === null) {
