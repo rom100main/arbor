@@ -1,0 +1,40 @@
+name: Release
+
+# Push a `vX.Y.Z` tag matching package.json.
+# Each OS uploads to a draft release, publish it on github.com to roll the update out.
+on:
+    push:
+        tags: ["v*"]
+
+permissions:
+    contents: write
+
+jobs:
+    build:
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [macos-latest, windows-latest, ubuntu-latest]
+        runs-on: ${{ matrix.os }}
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  persist-credentials: false
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 26
+
+            # package.json pins npm (devEngines): install that version outside the repo, where the pin is not checked.
+            - name: Install pinned npm
+              working-directory: ${{ runner.temp }}
+              run: npm install -g npm@11.19.1
+
+            - run: npm ci
+            - run: npm run build
+
+            - name: Package and upload
+              run: npx electron-builder --publish always
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
