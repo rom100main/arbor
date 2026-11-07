@@ -31,6 +31,13 @@ export const REQUESTS = {
     goForward: "arbor:tab:forward",
     reload: "arbor:tab:reload",
 
+    downloadsList: "arbor:downloads:list",
+    downloadCancel: "arbor:downloads:cancel",
+    downloadRemove: "arbor:downloads:remove",
+    downloadReveal: "arbor:downloads:reveal",
+    downloadOpen: "arbor:downloads:open",
+    downloadsOpenFolder: "arbor:downloads:open-folder",
+
     getUpdateStatus: "arbor:update:get-status",
     installUpdate: "arbor:update:install",
 } as const
@@ -65,4 +72,5 @@ export const PUSHES = {
     permissionRequest: "arbor:permission:request",
     shellEdge: "arbor:shell:edge",
     updateStatus: "arbor:update:status",
+    downloads: "arbor:downloads:changed",
 } as const

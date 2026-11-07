@@ -20,6 +20,8 @@ import {
     BrowserSnapshot,
     ContainerIcon,
     ContainerId,
+    DownloadId,
+    DownloadsSnapshot,
     ExtensionMenuRequest,
     OmniboxActivation,
     PermissionPromptRequest,
@@ -182,6 +184,14 @@ export const Requests = {
     goForward: request({ payload: Schema.Struct({ tabId: TabId }) }),
     reload: request({ payload: Schema.Struct({ tabId: TabId }) }),
 
+    // No error schema: an unknown or already-settled id is a no-op, not an IPC failure.
+    downloadsList: request({ success: DownloadsSnapshot }),
+    downloadCancel: request({ payload: Schema.Struct({ id: DownloadId }) }),
+    downloadRemove: request({ payload: Schema.Struct({ id: DownloadId }) }),
+    downloadReveal: request({ payload: Schema.Struct({ id: DownloadId }) }),
+    downloadOpen: request({ payload: Schema.Struct({ id: DownloadId }) }),
+    downloadsOpenFolder: request({}),
+
     getUpdateStatus: request({ success: UpdateStatus }),
     installUpdate: request({}),
 } satisfies { readonly [K in keyof typeof REQUESTS]: RequestDef }
@@ -221,6 +231,7 @@ export const Pushes = {
     permissionRequest: push(PermissionPromptRequest),
     shellEdge: push(RevealEdge),
     updateStatus: push(UpdateStatus),
+    downloads: push(DownloadsSnapshot),
 } satisfies { readonly [K in keyof typeof PUSHES]: PushDef }
 
 export type RequestKey = keyof typeof Requests

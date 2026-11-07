@@ -10,6 +10,7 @@ import { NoActionPopup } from "../../shared/errors"
 import type { OmniboxActivation, RenameTarget, TabId } from "../../shared/protocol"
 import { DEFAULT_SEARCH_TEMPLATE } from "../../shared/settings"
 import { omniboxTarget } from "../../shared/url"
+import type { DownloadsService } from "../downloads/downloads"
 import type { ExtensionsService } from "../extension/extensions"
 import type { PermissionPromptsService } from "../extension/prompts"
 import type { SettingsService } from "../settings"
@@ -28,6 +29,7 @@ export interface WindowContext {
     readonly prompts: PermissionPromptsService
     readonly extensions: ExtensionsService
     readonly updater: UpdaterService
+    readonly downloads: DownloadsService
     readonly handle: WindowHandle
     readonly overlays: Overlays
     readonly viewOf: (tabId: TabId) => ViewHandle | undefined
@@ -43,7 +45,7 @@ const history = (ctx: WindowContext, tabId: TabId, step: HistoryStep): Effect.Ef
 }
 
 export const windowRequests = (ctx: WindowContext): RequestHandlers<never> => {
-    const { store, settings, overlays, extensions } = ctx
+    const { store, settings, overlays, extensions, downloads } = ctx
     return {
         getSnapshot: () => store.snapshot,
         getSettings: () => settings.get,
@@ -90,6 +92,13 @@ export const windowRequests = (ctx: WindowContext): RequestHandlers<never> => {
         goBack: ({ tabId }) => history(ctx, tabId, "back"),
         goForward: ({ tabId }) => history(ctx, tabId, "forward"),
         reload: ({ tabId }) => history(ctx, tabId, "reload"),
+
+        downloadsList: () => downloads.snapshot,
+        downloadCancel: ({ id }) => downloads.cancel(id),
+        downloadRemove: ({ id }) => downloads.remove(id),
+        downloadReveal: ({ id }) => downloads.reveal(id),
+        downloadOpen: ({ id }) => downloads.open(id),
+        downloadsOpenFolder: () => downloads.openFolder,
 
         getUpdateStatus: () => ctx.updater.status,
         installUpdate: () => ctx.updater.install,
