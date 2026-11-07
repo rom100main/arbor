@@ -26,6 +26,7 @@ export const AppServices = (userData: string) => {
     const updater = ElectronUpdater.pipe(Layer.provideMerge(base))
     const downloads = Downloads.layer({
         folder: app.getPath("downloads"),
+        historyPath: path.join(userData, "downloads.json"),
         opener: {
             reveal: (file) => shell.showItemInFolder(file),
             open: (target) => void shell.openPath(target),

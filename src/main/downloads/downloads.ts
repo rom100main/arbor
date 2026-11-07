@@ -8,11 +8,15 @@
 import { existsSync } from "node:fs"
 import path from "node:path"
 
-import { Context, Effect, FiberSet, Layer, Stream, SubscriptionRef } from "effect"
+import { Context, Effect, FiberSet, Layer, Option, Stream, SubscriptionRef } from "effect"
 import type { DownloadItem, Session } from "electron"
 
+import { isActive } from "../../shared/downloads"
 import type { DownloadId, DownloadInfo, DownloadsSnapshot } from "../../shared/protocol"
+import { readJson } from "../persistence/json-file"
+import * as PersistedRef from "../persistence/persisted-ref"
 import { SettingsStore } from "../settings"
+import { decodeHistory, MAX_HISTORY } from "./history"
 import { sanitizeFilename, uniqueSavePath } from "./save-path"
 
 export interface DownloadsService {
@@ -26,6 +30,8 @@ export interface DownloadsService {
     readonly cancel: (id: DownloadId) => Effect.Effect<void>
     /** Forget an entry. A live entry is cancelled first. The file stays on disk. */
     readonly remove: (id: DownloadId) => Effect.Effect<void>
+    /** Forget every settled entry. Active downloads keep running. */
+    readonly clearSettled: Effect.Effect<void>
     /** `shell.showItemInFolder(savePath)`. No-op when no path is known. */
     readonly reveal: (id: DownloadId) => Effect.Effect<void>
     /** `shell.openPath(savePath)`. No-op when no path is known. */
@@ -36,6 +42,8 @@ export interface DownloadsService {
 
 export interface DownloadsOptions {
     readonly folder: string
+    /** Where settled downloads are remembered across restarts. */
+    readonly historyPath: string
     /** Injected so tests never touch Electron or the disk. */
     readonly opener: {
         readonly reveal: (file: string) => void
@@ -49,7 +57,16 @@ type SettledState = "completed" | "cancelled" | "interrupted"
 const make = (options: DownloadsOptions) =>
     Effect.gen(function* () {
         const settings = yield* SettingsStore
-        const items = yield* SubscriptionRef.make<ReadonlyArray<DownloadInfo>>([])
+        const history = yield* PersistedRef.make({
+            path: options.historyPath,
+            read: readJson(options.historyPath, decodeHistory),
+            encode: (entries: ReadonlyArray<DownloadInfo>) => entries,
+            empty: () => [],
+        })
+        // History is written newest-first.
+        // The list keeps append order so the popup's reverse still puts the newest download at the top after a restart.
+        const stored = (yield* history.get).slice(0, MAX_HISTORY).reverse()
+        const items = yield* SubscriptionRef.make<ReadonlyArray<DownloadInfo>>(stored)
         const run = yield* FiberSet.makeRuntime()
         const live = new Map<DownloadId, DownloadItem>()
         const idOf = new WeakMap<DownloadItem, DownloadId>()
@@ -72,7 +89,7 @@ const make = (options: DownloadsOptions) =>
          * The list as the synchronous Electron callbacks see it.
          * `items` is the published copy: a fiber applies each `set` in order, so subscribers never miss a state.
          */
-        let records: ReadonlyArray<DownloadInfo> = []
+        let records: ReadonlyArray<DownloadInfo> = stored
         const publish = (next: ReadonlyArray<DownloadInfo>): void => {
             records = next
             run(SubscriptionRef.set(items, next))
@@ -107,18 +124,33 @@ const make = (options: DownloadsOptions) =>
             idOf.delete(item)
             // Removed while live: the entry is already gone and must not come back.
             if (!find(id)) return
-            publish(
-                records.map((entry) =>
-                    entry.id === id
-                        ? {
-                              ...entry,
-                              state,
-                              savePath: item.getSavePath() || entry.savePath,
-                              receivedBytes: item.getReceivedBytes(),
-                              totalBytes: item.getTotalBytes(),
-                              finishedAt: Date.now(),
-                          }
-                        : entry,
+            const next = records.map((entry) =>
+                entry.id === id
+                    ? {
+                          ...entry,
+                          state,
+                          savePath: item.getSavePath() || entry.savePath,
+                          receivedBytes: item.getReceivedBytes(),
+                          totalBytes: item.getTotalBytes(),
+                          finishedAt: Date.now(),
+                      }
+                    : entry,
+            )
+            const record = next.find((entry) => entry.id === id)
+            if (!record) return
+            records = next
+            run(
+                Effect.andThen(
+                    SubscriptionRef.set(items, next),
+                    history.modifySome((entries) => [
+                        undefined,
+                        Option.some(
+                            [record, ...entries.filter((entry) => entry.id !== record.id)].slice(
+                                0,
+                                MAX_HISTORY,
+                            ),
+                        ),
+                    ]),
                 ),
             )
         }
@@ -179,13 +211,34 @@ const make = (options: DownloadsOptions) =>
             })
 
         const remove = (id: DownloadId) =>
-            Effect.sync(() => {
-                const item = live.get(id)
-                item?.cancel()
-                if (item) idOf.delete(item)
-                live.delete(id)
-                publish(records.filter((entry) => entry.id !== id))
+            Effect.gen(function* () {
+                yield* Effect.sync(() => {
+                    const item = live.get(id)
+                    item?.cancel()
+                    if (item) idOf.delete(item)
+                    live.delete(id)
+                    publish(records.filter((entry) => entry.id !== id))
+                })
+                yield* history.modifySome((entries) => {
+                    const next = entries.filter((entry) => entry.id !== id)
+                    return [
+                        undefined,
+                        next.length === entries.length ? Option.none() : Option.some(next),
+                    ]
+                })
             })
+
+        const clearSettled = Effect.gen(function* () {
+            const next = records.filter(isActive)
+            if (next.length !== records.length) {
+                records = next
+                yield* SubscriptionRef.set(items, next)
+            }
+            yield* history.modifySome((entries) => [
+                undefined,
+                entries.length === 0 ? Option.none() : Option.some([]),
+            ])
+        })
 
         const reveal = (id: DownloadId) =>
             Effect.sync(() => {
@@ -207,6 +260,7 @@ const make = (options: DownloadsOptions) =>
             attach,
             cancel,
             remove,
+            clearSettled,
             reveal,
             open,
             openFolder: Effect.sync(() => options.opener.open(options.folder)),
