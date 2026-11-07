@@ -10,7 +10,7 @@ import {
     session,
     type Session,
 } from "electron"
-import buildChromeContextMenu from "electron-chrome-context-menu"
+import { buildChromeContextMenu } from "electron-chrome-context-menu"
 
 import { containerPartition } from "../../shared/constants"
 import type { ContainerId } from "../../shared/protocol"
