@@ -72,7 +72,10 @@ describe("fromPersistedSettings", () => {
             sidebarVisibility: "compact",
             urlBarVisibility: "hidden",
         }
-        expect(fromPersistedSettings(payload)).toEqual(payload)
+        expect(fromPersistedSettings(payload)).toEqual({
+            ...payload,
+            downloadAskWhereToSave: true,
+        })
     })
 })
 
@@ -100,6 +103,7 @@ describe("settings store", () => {
                     pinnedExtensionIds: [],
                     sidebarVisibility: DEFAULT_SETTINGS.sidebarVisibility,
                     urlBarVisibility: DEFAULT_SETTINGS.urlBarVisibility,
+                    downloadAskWhereToSave: DEFAULT_SETTINGS.downloadAskWhereToSave,
                 })
 
                 const reloaded = yield* (yield* open()).store.get
