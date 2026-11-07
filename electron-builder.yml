@@ -1,0 +1,34 @@
+appId: dev.arbor.app
+productName: Arbor
+directories:
+    output: release
+files:
+    - dist/**
+    - build/icon.png
+    - package.json
+mac:
+    category: public.app-category.productivity
+    # Ad-hoc signature: no Apple account needed, but downloads open via "Open Anyway" instead of "damaged".
+    # Replace with a Developer ID (and notarize) to get in-place updates on macOS.
+    identity: "-"
+    # Only needed for notarization, with an ad-hoc signature it blocks loading Electron's frameworks.
+    hardenedRuntime: false
+    target:
+        - target: dmg
+          arch: arm64
+        # The updater installs from the zip.
+        - target: zip
+          arch: arm64
+win:
+    target:
+        - target: nsis
+          arch: [x64, arm64]
+nsis:
+    oneClick: true
+    perMachine: false
+linux:
+    category: Network
+    target: AppImage
+publish:
+    provider: github
+    releaseType: draft
