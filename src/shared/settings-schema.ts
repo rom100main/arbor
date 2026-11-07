@@ -35,6 +35,7 @@ export const Settings = Schema.Struct({
     pinnedExtensionIds: Schema.Array(Schema.NonEmptyString),
     sidebarVisibility: SidebarVisibility,
     urlBarVisibility: UrlBarVisibility,
+    downloadAskWhereToSave: Schema.Boolean,
 })
 export type Settings = typeof Settings.Type
 

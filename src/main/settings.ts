@@ -20,6 +20,10 @@ const PersistedSettings = Schema.Struct({
         Settings.fields.urlBarVisibility,
         () => DEFAULT_SETTINGS.urlBarVisibility,
     ),
+    downloadAskWhereToSave: orDefault(
+        Settings.fields.downloadAskWhereToSave,
+        () => DEFAULT_SETTINGS.downloadAskWhereToSave,
+    ),
 })
 
 const parseSettings = decodeOr(PersistedSettings)
@@ -45,6 +49,7 @@ export const fromPersistedSettings = (data: unknown): Settings | null => {
         pinnedExtensionIds: cleanPinned(parsed.pinnedExtensionIds),
         sidebarVisibility: parsed.sidebarVisibility,
         urlBarVisibility: parsed.urlBarVisibility,
+        downloadAskWhereToSave: parsed.downloadAskWhereToSave,
     }
 }
 

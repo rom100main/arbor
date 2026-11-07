@@ -71,6 +71,7 @@ export const DEFAULT_SETTINGS: Settings = {
     pinnedExtensionIds: [],
     sidebarVisibility: "compact",
     urlBarVisibility: "displayed",
+    downloadAskWhereToSave: true,
 }
 
 const SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*:/i
