@@ -55,6 +55,9 @@ export const EVENTS = {
     extensionsClose: "arbor:extensions:close",
     extensionsSetPopupHeight: "arbor:extensions:popup-height",
     extensionsMenu: "arbor:extensions:menu",
+    downloadsToggle: "arbor:downloads:toggle",
+    downloadsClose: "arbor:downloads:close",
+    downloadsSetPopupHeight: "arbor:downloads:popup-height",
     permissionRespond: "arbor:permission:respond",
     shellRaise: "arbor:shell:raise",
 } as const

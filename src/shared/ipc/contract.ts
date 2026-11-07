@@ -214,6 +214,9 @@ export const Events = {
     extensionsClose: event(),
     extensionsSetPopupHeight: event(Schema.Finite),
     extensionsMenu: event(ExtensionMenuRequest),
+    downloadsToggle: event(Anchor),
+    downloadsClose: event(),
+    downloadsSetPopupHeight: event(Schema.Finite),
     permissionRespond: event(Schema.Boolean),
     // A revealed bar floats over the page, so the shell rises above it for as long as one is out.
     shellRaise: event(Schema.Boolean),

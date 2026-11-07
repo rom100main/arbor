@@ -174,6 +174,9 @@ export const windowEvents = (ctx: WindowContext): EventHandlers<never> => {
         extensionsClose: () => Effect.sync(() => overlays.closeExtensions()),
         extensionsSetPopupHeight: (height) =>
             Effect.sync(() => overlays.setExtensionsHeight(height)),
+        downloadsToggle: (anchor) => Effect.sync(() => overlays.toggleDownloads(anchor)),
+        downloadsClose: () => Effect.sync(() => overlays.closeDownloads()),
+        downloadsSetPopupHeight: (height) => Effect.sync(() => overlays.setDownloadsHeight(height)),
         extensionsMenu: (request) => ctx.extensions.openMenu(request),
         permissionRespond: (allowed) => ctx.prompts.respond(allowed),
         shellRaise: (raised) => ctx.handle.raiseShell(raised),
