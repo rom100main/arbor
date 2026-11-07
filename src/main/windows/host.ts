@@ -3,8 +3,8 @@
 import { Schema, type Effect, type Scope, type Stream } from "effect"
 import type { BrowserWindow, WebContents } from "electron"
 
-import { isInternalUrl } from "../../shared/internal-pages"
 import type { ContainerId, TabId } from "../../shared/protocol"
+import { isInternalUrl } from "./internal-page-urls"
 import type { Overlays } from "./overlays"
 
 /** Which session a tab loads in: Arbor's own for `arbor://`, its Container's otherwise. */

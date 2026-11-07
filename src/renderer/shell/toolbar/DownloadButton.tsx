@@ -1,7 +1,8 @@
 import { createMemo, createSignal, onCleanup } from "solid-js"
 
-import { isActive, overallProgress } from "../../../shared/downloads"
+import { isActive } from "../../../shared/downloads"
 import type { DownloadId, DownloadsSnapshot } from "../../../shared/protocol"
+import { overallProgress } from "../../downloads/format"
 import { Icon } from "../../ui/Icon"
 
 import "./DownloadButton.css"

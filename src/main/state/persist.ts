@@ -1,6 +1,5 @@
 import { Schema } from "effect"
 
-import { decodeOr, orDefault } from "../../shared/decode"
 import {
     ContainerId,
     ContainerMeta,
@@ -9,6 +8,7 @@ import {
     type ContainerIcon,
     type TabId,
 } from "../../shared/protocol"
+import { decodeOr, orDefault } from "../persistence/decode"
 import { reindex, type DomainState } from "./state"
 
 export const PERSIST_VERSION = 1

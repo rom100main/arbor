@@ -7,19 +7,19 @@ import {
     isAssetRequest,
     isInternalUrl,
     isSettingsUrl,
-    settingsRoute,
-} from "../src/shared/internal-pages"
-import { INTERNAL_HOST, SETTINGS_PATH, SETTINGS_URL } from "../src/shared/settings"
+} from "../src/main/windows/internal-page-urls"
+import { settingsRoute } from "../src/renderer/settings/routes"
+import { SETTINGS_URL } from "../src/shared/settings"
 
 describe("the settings URL", () => {
     // `arbor:/settings` parses as a scheme with an empty authority, so hostname is "" and
     // nothing recognises the page as internal. The host is load-bearing.
     it("carries a host, so it parses with a hostname", () => {
         expect(SETTINGS_URL).toBe("arbor://settings")
-        expect(new URL(SETTINGS_URL).hostname).toBe(INTERNAL_HOST)
-        // The bare URL has no path of its own; routes hang off SETTINGS_PATH.
+        expect(new URL(SETTINGS_URL).hostname).toBe("settings")
+        // The bare URL has no path of its own; routes hang off it.
         expect(new URL(SETTINGS_URL).pathname).toBe("")
-        expect(new URL(`${SETTINGS_URL}${SETTINGS_PATH}/search`).pathname).toBe("/settings/search")
+        expect(new URL(`${SETTINGS_URL}/search`).pathname).toBe("/search")
     })
 })
 

@@ -4,11 +4,10 @@ import {
     applyExtStorageOp,
     emptyExtStorageAreas,
     fromPersistedExtStorage,
-    purgeExtStorage,
     toPersistedExtStorage,
     type ExtStorageAreas,
-    type ExtStorageOp,
-} from "../../src/shared/extension-storage"
+} from "../../src/main/extension/storage-ops"
+import type { ExtStorageOp } from "../../src/shared/extension-storage"
 
 const run = (areas: ExtStorageAreas, ...ops: ExtStorageOp[]) => {
     let current = areas
@@ -136,29 +135,5 @@ describe("applyExtStorageOp set merges", () => {
             { op: "set", area: "local", items: { b: 3, c: 4 } },
         )
         expect(areas.local).toEqual({ a: 1, b: 3, c: 4 })
-    })
-})
-
-describe("purgeExtStorage", () => {
-    it("drops one extension's areas (local + session) and keeps the rest", () => {
-        const extensions: Record<string, ExtStorageAreas> = {
-            ext1: { local: { a: 1 }, session: { live: 1 } },
-            ext2: { local: { b: 2 }, session: {} },
-        }
-        const next = purgeExtStorage(extensions, "ext1")
-        expect(next).toEqual({ ext2: { local: { b: 2 }, session: {} } })
-        // Persisting afterwards must not bring the purged id back.
-        expect(toPersistedExtStorage(next)).toEqual({
-            version: 1,
-            extensions: { ext2: { b: 2 } },
-        })
-        expect(fromPersistedExtStorage(toPersistedExtStorage(next))).toEqual({
-            ext2: { local: { b: 2 }, session: {} },
-        })
-    })
-
-    it("is a no-op for an unknown id", () => {
-        const extensions: Record<string, ExtStorageAreas> = { ext1: emptyExtStorageAreas() }
-        expect(purgeExtStorage(extensions, "missing")).toBe(extensions)
     })
 })

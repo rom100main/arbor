@@ -40,27 +40,8 @@ export const chromeInsets = (
 
 export const DEFAULT_SEARCH_TEMPLATE = "https://duckduckgo.com/?q=%s"
 
-export interface SearchEngine {
-    readonly name: string
-    readonly template: string
-}
-
-export const SEARCH_ENGINES: readonly SearchEngine[] = [
-    { name: "DuckDuckGo", template: DEFAULT_SEARCH_TEMPLATE },
-    { name: "Google", template: "https://www.google.com/search?q=%s" },
-    { name: "Brave", template: "https://search.brave.com/search?q=%s" },
-    { name: "Kagi", template: "https://kagi.com/search?q=%s" },
-    { name: "Startpage", template: "https://www.startpage.com/sp/search?query=%s" },
-    { name: "Wikipedia", template: "https://en.wikipedia.org/w/index.php?search=%s" },
-    { name: "Bing", template: "https://www.bing.com/search?q=%s" },
-    { name: "Ecosia", template: "https://www.ecosia.org/search?q=%s" },
-]
-
-export const SUGGESTED_SEARCH_TEMPLATES = SEARCH_ENGINES.map((engine) => engine.template)
-
 export const INTERNAL_SCHEME = "arbor"
-export const INTERNAL_HOST = "settings"
-export const SETTINGS_PATH = `/${INTERNAL_HOST}`
+const INTERNAL_HOST = "settings"
 export const SETTINGS_URL = `${INTERNAL_SCHEME}://${INTERNAL_HOST}`
 
 export type { Settings } from "./settings-schema"
@@ -77,7 +58,7 @@ export const DEFAULT_SETTINGS: Settings = {
 const SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*:/i
 const HOST_PATTERN = /^([a-z0-9-]+\.)+[a-z]{2,}(:\d+)?(\/.*)?$/i
 
-export const SEARCH_TOKEN = "%s"
+const SEARCH_TOKEN = "%s"
 
 /**
  * Returns `null` when the input could not be used, which callers treat as "keep the value we already have".

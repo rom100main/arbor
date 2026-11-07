@@ -1,20 +1,10 @@
-// Should be Effect free
-
-import { INTERNAL_SCHEME, SETTINGS_PATH } from "./settings"
+import { INTERNAL_SCHEME } from "../../shared/settings"
 
 /**
- * Pages Arbor serves itself over `arbor://`.
- * Pure URL shapes only, the session and protocol wiring lives in `main/windows/internal-pages.ts`.
+ * URL helpers for the pages Arbor serves itself over `arbor://`.
+ * The route names match `renderer/settings/routes.ts`, which parses the same URLs.
  */
-export type SettingsRoute = "search" | "downloads" | "appearance"
-
-const SETTINGS_ROUTES: Record<string, SettingsRoute> = {
-    "/search": "search",
-    "/downloads": "downloads",
-    "/appearance": "appearance",
-}
-
-export const SETTINGS_ROUTE_NAMES = Object.values(SETTINGS_ROUTES)
+const SETTINGS_DOCUMENT_PATHS = new Set(["/", "/search", "/downloads", "/appearance"])
 
 export const isInternalUrl = (url: string): boolean => url.startsWith(`${INTERNAL_SCHEME}://`)
 
@@ -27,16 +17,7 @@ export const isSettingsUrl = (url: string): boolean => {
     }
 }
 
-export const settingsRoute = (url: string): SettingsRoute => {
-    try {
-        return SETTINGS_ROUTES[new URL(url).pathname] ?? "search"
-    } catch {
-        return "search"
-    }
-}
-
-export const isSettingsDocument = (pathname: string): boolean =>
-    pathname === "/" || pathname in SETTINGS_ROUTES
+const isSettingsDocument = (pathname: string): boolean => SETTINGS_DOCUMENT_PATHS.has(pathname)
 
 export const isAssetRequest = (pathname: string): boolean => !isSettingsDocument(pathname)
 
@@ -67,5 +48,3 @@ export const injectDocumentHead = (html: string, extras: string): string => {
  */
 export const devAssetUrl = (devServer: string, assetPath: string, search = ""): string =>
     `${devServer.replace(/\/+$/, "")}/${assetPath}${search}`
-
-export { SETTINGS_PATH }

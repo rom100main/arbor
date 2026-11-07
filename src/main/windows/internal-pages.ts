@@ -5,6 +5,8 @@ import settingsGlyph from "@tabler/icons/outline/settings.svg?raw"
 import { Effect } from "effect"
 import { net, protocol, session, type Session } from "electron"
 
+import { INTERNAL_SCHEME, SETTINGS_URL } from "../../shared/settings"
+import { AppRuntime } from "../runtime"
 import {
     assetRelativePath,
     injectDocumentHead,
@@ -12,9 +14,7 @@ import {
     isAssetRequest,
     isInternalUrl,
     isSettingsUrl,
-} from "../../shared/internal-pages"
-import { INTERNAL_SCHEME, SETTINGS_URL } from "../../shared/settings"
-import { AppRuntime } from "../runtime"
+} from "./internal-page-urls"
 import { preloadPath, rendererPath } from "./paths"
 
 const INTERNAL_PARTITION = "arbor:internal"

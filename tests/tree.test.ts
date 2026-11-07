@@ -4,9 +4,11 @@ import { closeTab, reopenTab } from "../src/main/state/close-reopen"
 import { createContainer, setContainerIcon, switchContainer } from "../src/main/state/containers"
 import { moveTab, moveToContainer } from "../src/main/state/moves"
 import { initialState } from "../src/main/state/state"
+import { stepVisibleTab } from "../src/main/state/tab-order"
 import { createChildTab, createTab, selectTab, setCollapsed } from "../src/main/state/tabs"
+import { childRow, neighborRow, parentRow } from "../src/renderer/shell/sidebar/navigation"
 import { InvalidMove, LastTab } from "../src/shared/errors"
-import { displayTabs, stepVisibleTab } from "../src/shared/tree-display"
+import { displayTabs } from "../src/shared/tree-display"
 import { err, newChild, newContainer, newTab, nextTabId, ok } from "./support/domain"
 
 const containerIdOf = (state: { containers: { id: string }[] }, index = 0): string =>
@@ -324,6 +326,49 @@ describe("display order", () => {
             b,
             c,
         ])
+    })
+})
+
+describe("keyboard tree navigation", () => {
+    const rows = () => {
+        let state = ok(createContainer(initialState(), newContainer()))
+        const a = state.containers[0].activeTabId!
+        const b = nextTabId()
+        state = ok(createChildTab(state, a, newChild({ id: b })))
+        const c = nextTabId()
+        state = ok(createChildTab(state, b, newChild({ id: c })))
+        const d = nextTabId()
+        state = ok(createChildTab(state, a, newChild({ id: d })))
+        state = ok(selectTab(state, a, 0))
+        return {
+            state,
+            a,
+            b,
+            c,
+            d,
+            visible: displayTabs([...state.tabs.values()], state.containers[0].id),
+        }
+    }
+
+    it("moves between visible rows without wrapping", () => {
+        const { a, b, c, d, visible } = rows()
+        // a, b, c, d
+        expect(neighborRow(visible, a, 1)).toBe(b)
+        expect(neighborRow(visible, b, 1)).toBe(c)
+        expect(neighborRow(visible, d, 1)).toBeNull()
+        expect(neighborRow(visible, a, -1)).toBeNull()
+        expect(neighborRow(visible, c, -1)).toBe(b)
+    })
+
+    it("finds the first child and the parent of a row", () => {
+        const { a, b, c, d, visible } = rows()
+        expect(childRow(visible, a)).toBe(b)
+        expect(childRow(visible, b)).toBe(c)
+        expect(childRow(visible, c)).toBeNull()
+        expect(parentRow(visible, c)).toBe(b)
+        expect(parentRow(visible, b)).toBe(a)
+        expect(parentRow(visible, a)).toBeNull()
+        expect(parentRow(visible, d)).toBe(a)
     })
 })
 

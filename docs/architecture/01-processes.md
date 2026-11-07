@@ -2,12 +2,12 @@
 
 Arbor is an Electron app. Its code lives in four parts.
 
-| Part | Runs in | Role |
-| --- | --- | --- |
-| Main | Node + Electron | Owns the state, the window, the tab pages and the extensions |
-| Preload | A small bridge | Exposes `window.arbor` to the UI |
-| Renderer | Chromium | Draws the UI with SolidJS |
-| Shared | Main and UI | Types and pure helpers used by both |
+| Part     | Runs in         | Role                                                         |
+| -------- | --------------- | ------------------------------------------------------------ |
+| Main     | Node + Electron | Owns the state, the window, the tab pages and the extensions |
+| Preload  | A small bridge  | Exposes `window.arbor` to the UI                             |
+| Renderer | Chromium        | Draws the UI with SolidJS                                    |
+| Shared   | Main and UI     | Types and pure helpers used by both                          |
 
 ```mermaid
 flowchart LR

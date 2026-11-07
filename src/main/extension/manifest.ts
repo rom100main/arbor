@@ -6,7 +6,7 @@
 
 import { Schema } from "effect"
 
-import { decodeOr, orDefault } from "../../shared/decode"
+import { decodeOr, orDefault } from "../persistence/decode"
 
 /** The slice of a manifest Arbor needs, already defaulted. */
 export interface ParsedManifest {

@@ -1,9 +1,9 @@
 import { Context, Effect, Layer, Option, Result, Schema, type Duration, type Stream } from "effect"
 
-import { decodeOr, orDefault } from "../shared/decode"
 import { SettingsRejected } from "../shared/errors"
 import { DEFAULT_SEARCH_TEMPLATE, DEFAULT_SETTINGS } from "../shared/settings"
 import { Settings, SettingsPatch } from "../shared/settings-schema"
+import { decodeOr, orDefault } from "./persistence/decode"
 import { readJson } from "./persistence/json-file"
 import * as PersistedRef from "./persistence/persisted-ref"
 

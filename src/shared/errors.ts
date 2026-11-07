@@ -63,8 +63,6 @@ export const DomainError = Schema.Union([
 ])
 export type DomainError = typeof DomainError.Type
 
-export const isDomainError = Schema.is(DomainError)
-
 /** A settings patch the store refused. `message` says why, and the settings page shows it. */
 export class SettingsRejected extends Schema.TaggedError<SettingsRejected>()("SettingsRejected", {
     message: Schema.String,

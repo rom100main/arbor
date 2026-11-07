@@ -2,11 +2,11 @@ import { For, Show, createEffect, createMemo, createSignal } from "solid-js"
 
 import type { ContainerId, TabId } from "../../../shared/protocol"
 import type { SidebarVisibility } from "../../../shared/settings"
-import { childRow, neighborRow, parentRow } from "../../../shared/tree-display"
 import { Icon } from "../../ui/Icon"
 import { requestOmniboxFocus, useTabTreeFocus } from "../focus"
 import { useContainerTabs, useSnapshot, useTreeMeta, type TreeMeta } from "../snapshot"
 import { ContainerChip } from "./ContainerChip"
+import { childRow, neighborRow, parentRow } from "./navigation"
 import { createSwipeTracker } from "./swipe"
 import { TabRow } from "./TabRow"
 

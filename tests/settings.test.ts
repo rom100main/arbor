@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test"
 
-import { normalizeSearchTemplate, SEARCH_ENGINES, searchUrl } from "../src/shared/settings"
+import { SEARCH_ENGINES } from "../src/renderer/settings/search-engines"
+import { normalizeSearchTemplate, searchUrl } from "../src/shared/settings"
 
 describe("the suggested engines", () => {
     it("gives every engine a distinct name and a valid template", () => {

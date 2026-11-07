@@ -216,6 +216,26 @@ describe("navigation", () => {
             }),
         ))
 
+    it("middle click Back opens the previous page in a background child tab", () =>
+        runTest(
+            Effect.gen(function* () {
+                const { host, ipc, store } = yield* startApp
+                const tabId = (yield* activeTab(store))!
+
+                yield* Effect.promise(() =>
+                    ipc.invoke(REQUESTS.goBack, { tabId, background: true }),
+                )
+                yield* settleLong
+
+                const state = yield* store.state
+                const child = [...state.tabs.values()].find((tab) => tab.parentId === tabId)
+                expect(child?.url).toBe("https://before.test/")
+                // The current tab and its page stay put.
+                expect(state.containers[0].activeTabId).toBe(tabId)
+                expect(ops(host.windows[0].calls, "history")).toHaveLength(0)
+            }),
+        ))
+
     it("finishes an omnibox activation even when the page never loads (B4)", () =>
         runTest(
             Effect.gen(function* () {
@@ -287,6 +307,18 @@ describe("menu", () => {
                 yield* store.renameContainer(containerId, "Renamed")
                 yield* settleLong
                 expect(host.menus.at(-1)?.containerNames).toEqual(["Renamed"])
+            }),
+        ))
+
+    it("Focus Tab Tree asks the shell to focus the active tab", () =>
+        runTest(
+            Effect.gen(function* () {
+                const { host, shell } = yield* startApp
+                host.pickMenu({ kind: "focusTabTree" })
+                yield* settleLong
+                expect(shell.received.map((message) => message.channel)).toContain(
+                    PUSHES.focusTabTree,
+                )
             }),
         ))
 

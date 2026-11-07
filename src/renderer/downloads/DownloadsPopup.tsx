@@ -1,8 +1,9 @@
 import { For, Show, createEffect, createSignal, onCleanup } from "solid-js"
 
-import { formatBytes, isActive, progressOf } from "../../shared/downloads"
+import { isActive } from "../../shared/downloads"
 import type { DownloadInfo, DownloadsSnapshot } from "../../shared/protocol"
 import { Icon } from "../ui/Icon"
+import { formatBytes, progressOf } from "./format"
 
 import "./DownloadsPopup.css"
 

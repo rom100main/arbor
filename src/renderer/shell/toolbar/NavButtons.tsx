@@ -5,20 +5,24 @@ import "./NavButtons.css"
 
 export const NavButtons = (props: { tabId: TabId | null }) => {
     // Middle click, and Cmd/Ctrl+click, open the destination in a background tab.
-    const step = (direction: "goBack" | "goForward") => (event: MouseEvent): void => {
-        if (props.tabId === null) return
-        if (event.metaKey || event.ctrlKey) {
+    const step =
+        (direction: "goBack" | "goForward") =>
+        (event: MouseEvent): void => {
+            if (props.tabId === null) return
+            if (event.metaKey || event.ctrlKey) {
+                event.preventDefault()
+                void window.arbor[direction]({ tabId: props.tabId, background: true })
+                return
+            }
+            void window.arbor[direction]({ tabId: props.tabId })
+        }
+    const openInBackground =
+        (direction: "goBack" | "goForward") =>
+        (event: MouseEvent): void => {
+            if (event.button !== 1 || props.tabId === null) return
             event.preventDefault()
             void window.arbor[direction]({ tabId: props.tabId, background: true })
-            return
         }
-        void window.arbor[direction]({ tabId: props.tabId })
-    }
-    const openInBackground = (direction: "goBack" | "goForward") => (event: MouseEvent): void => {
-        if (event.button !== 1 || props.tabId === null) return
-        event.preventDefault()
-        void window.arbor[direction]({ tabId: props.tabId, background: true })
-    }
 
     return (
         <div class="nav-buttons">

@@ -11,10 +11,28 @@ export const fakeRenderer = () => {
     const received: Array<{ readonly channel: string; readonly value: unknown }> = []
     const onDestroyed: Array<() => void> = []
     let destroyed = false
+    // Two entries with the second active, so Back has a destination.
+    const navigationHistory = {
+        entries: [{ url: "https://before.test/" }, { url: "https://current.test/" }],
+        activeIndex: 1,
+        canGoBack(): boolean {
+            return this.activeIndex > 0
+        },
+        canGoForward(): boolean {
+            return this.activeIndex < this.entries.length - 1
+        },
+        getActiveIndex(): number {
+            return this.activeIndex
+        },
+        getEntryAtIndex(index: number): { readonly url: string } | null {
+            return this.entries[index] ?? null
+        },
+    }
     const fake = {
         isDestroyed: () => destroyed,
         send: (channel: string, value?: unknown) => received.push({ channel, value }),
         once: (_event: "destroyed", listener: () => void) => onDestroyed.push(listener),
+        navigationHistory,
     }
     // Only the methods the IPC code calls: a real WebContents needs Electron.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
@@ -23,7 +41,7 @@ export const fakeRenderer = () => {
         destroyed = true
         for (const listener of onDestroyed) listener()
     }
-    return { renderer, received, destroy }
+    return { renderer, received, destroy, navigationHistory }
 }
 
 export const answers = new Map<string, Answer>()

@@ -1,8 +1,6 @@
 import { For, Match, Show, Switch, createEffect, createMemo, createSignal, untrack } from "solid-js"
 
-import { settingsRoute, type SettingsRoute } from "../../shared/internal-pages"
 import {
-    SEARCH_ENGINES,
     SETTINGS_URL,
     SIDEBAR_VISIBILITIES,
     THEMES,
@@ -13,6 +11,8 @@ import {
 } from "../../shared/settings"
 import { useSettings } from "../shell/settings"
 import { Icon, type IconName } from "../ui/Icon"
+import { settingsRoute, type SettingsRoute } from "./routes"
+import { SEARCH_ENGINES } from "./search-engines"
 
 import "./SettingsApp.css"
 

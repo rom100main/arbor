@@ -7,6 +7,9 @@ import {
     type Session,
 } from "electron"
 
+import type { ExtStorageOp, StorageItems } from "../../shared/extension-storage"
+import { readJson } from "../persistence/json-file"
+import * as PersistedRef from "../persistence/persisted-ref"
 import {
     applyExtStorageOp,
     emptyExtStorageAreas,
@@ -14,11 +17,7 @@ import {
     parseExtStorageOp,
     toPersistedExtStorage,
     type ExtStorageAreas,
-    type ExtStorageOp,
-    type StorageItems,
-} from "../../shared/extension-storage"
-import { readJson } from "../persistence/json-file"
-import * as PersistedRef from "../persistence/persisted-ref"
+} from "./storage-ops"
 
 /** Frame invoke (extension pages) and service-worker invoke carry different event shapes. */
 type StorageInvokeEvent = IpcMainInvokeEvent | IpcMainServiceWorkerInvokeEvent

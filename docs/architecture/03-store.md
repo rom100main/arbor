@@ -57,7 +57,7 @@ flowchart LR
     Signal --> Components["Components read it"]
 ```
 
-- Tab rows are reused when nothing visible changed. *For example to not make favicons blink.*
+- Tab rows are reused when nothing visible changed. _For example to not make favicons blink._
 
 # Adding a New Action
 

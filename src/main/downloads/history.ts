@@ -7,8 +7,8 @@
 
 import { Schema } from "effect"
 
-import { decodeOr } from "../../shared/decode"
 import { DownloadId, type DownloadInfo } from "../../shared/protocol"
+import { decodeOr } from "../persistence/decode"
 
 const SettledState = Schema.Literals(["completed", "cancelled", "interrupted"])
 

@@ -20,11 +20,11 @@ flowchart TB
 
 # Three Kinds of Messages
 
-| Kind | Direction | Waits for an answer | Used for |
-| --- | --- | --- | --- |
-| Request | UI to main | Yes | Changing the state, first read |
-| Event | UI to main | No | Fast input, like typing in the omnibox |
-| Push | Main to UI | No | New state, new settings |
+| Kind    | Direction  | Waits for an answer | Used for                               |
+| ------- | ---------- | ------------------- | -------------------------------------- |
+| Request | UI to main | Yes                 | Changing the state, first read         |
+| Event   | UI to main | No                  | Fast input, like typing in the omnibox |
+| Push    | Main to UI | No                  | New state, new settings                |
 
 ## Request
 
