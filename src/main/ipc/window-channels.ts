@@ -44,6 +44,24 @@ const history = (ctx: WindowContext, tabId: TabId, step: HistoryStep): Effect.Ef
     return view ? ctx.handle.history(view, step) : Effect.void
 }
 
+/**
+ * Middle click on Back/Forward:
+ * open the entry it would visit as a child tab, in the background, so the current page stays put.
+ */
+const historyInBackground = (
+    ctx: WindowContext,
+    tabId: TabId,
+    step: "back" | "forward",
+): Effect.Effect<void> => {
+    const view = ctx.viewOf(tabId)
+    if (!view) return Effect.void
+    const nav = view.webContents.navigationHistory
+    if (step === "back" ? !nav.canGoBack() : !nav.canGoForward()) return Effect.void
+    const entry = nav.getEntryAtIndex(nav.getActiveIndex() + (step === "back" ? -1 : 1))
+    if (!entry) return Effect.void
+    return Effect.ignore(ctx.store.createChildTab(tabId, entry.url, true))
+}
+
 export const windowRequests = (ctx: WindowContext): RequestHandlers<never> => {
     const { store, settings, overlays, extensions, downloads } = ctx
     return {
@@ -89,8 +107,12 @@ export const windowRequests = (ctx: WindowContext): RequestHandlers<never> => {
         moveToContainer: ({ tabId, containerId }) => store.moveToContainer(tabId, containerId),
 
         // Do nothing for a tab with no live view.
-        goBack: ({ tabId }) => history(ctx, tabId, "back"),
-        goForward: ({ tabId }) => history(ctx, tabId, "forward"),
+        goBack: ({ tabId, background }) =>
+            background ? historyInBackground(ctx, tabId, "back") : history(ctx, tabId, "back"),
+        goForward: ({ tabId, background }) =>
+            background
+                ? historyInBackground(ctx, tabId, "forward")
+                : history(ctx, tabId, "forward"),
         reload: ({ tabId }) => history(ctx, tabId, "reload"),
 
         downloadsList: () => downloads.snapshot,
