@@ -1,4 +1,5 @@
 import { INTERNAL_SCHEME } from "../shared/settings"
+import { DownloadsPopup } from "./downloads/DownloadsPopup"
 import { ExtensionsPopup } from "./extensions/ExtensionsPopup"
 import { OmniboxPopup } from "./omnibox/OmniboxPopup"
 import { PermissionApp } from "./permissions/PermissionApp"
@@ -16,12 +17,20 @@ export default function App() {
     if (appMode === "omnibox") return <OmniboxPopup />
     if (appMode === "rename") return <RenameApp />
     if (appMode === "extensions") return <ExtensionsPopup />
+    if (appMode === "downloads") return <DownloadsPopup />
     if (appMode === "permission") return <PermissionApp />
     if (appMode === "settings") return <SettingsApp />
     return <MainShell />
 }
 
-type AppMode = "main" | "omnibox" | "rename" | "extensions" | "permission" | "settings"
+type AppMode =
+    | "main"
+    | "omnibox"
+    | "rename"
+    | "extensions"
+    | "downloads"
+    | "permission"
+    | "settings"
 
 const getAppMode = (): AppMode => {
     // Internal pages carry their route in the path, not a query param: arbor://settings/search.
@@ -30,6 +39,7 @@ const getAppMode = (): AppMode => {
     if (searchParams.has("omnibox")) return "omnibox"
     if (searchParams.has("rename")) return "rename"
     if (searchParams.has("extensions")) return "extensions"
+    if (searchParams.has("downloads")) return "downloads"
     if (searchParams.has("permission")) return "permission"
     return "main"
 }
