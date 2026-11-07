@@ -188,6 +188,7 @@ export const Requests = {
     downloadsList: request({ success: DownloadsSnapshot }),
     downloadCancel: request({ payload: Schema.Struct({ id: DownloadId }) }),
     downloadRemove: request({ payload: Schema.Struct({ id: DownloadId }) }),
+    downloadClear: request({}),
     downloadReveal: request({ payload: Schema.Struct({ id: DownloadId }) }),
     downloadOpen: request({ payload: Schema.Struct({ id: DownloadId }) }),
     downloadsOpenFolder: request({}),

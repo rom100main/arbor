@@ -96,6 +96,7 @@ export const windowRequests = (ctx: WindowContext): RequestHandlers<never> => {
         downloadsList: () => downloads.snapshot,
         downloadCancel: ({ id }) => downloads.cancel(id),
         downloadRemove: ({ id }) => downloads.remove(id),
+        downloadClear: () => downloads.clearSettled,
         downloadReveal: ({ id }) => downloads.reveal(id),
         downloadOpen: ({ id }) => downloads.open(id),
         downloadsOpenFolder: () => downloads.openFolder,

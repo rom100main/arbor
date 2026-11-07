@@ -34,6 +34,7 @@ export const REQUESTS = {
     downloadsList: "arbor:downloads:list",
     downloadCancel: "arbor:downloads:cancel",
     downloadRemove: "arbor:downloads:remove",
+    downloadClear: "arbor:downloads:clear",
     downloadReveal: "arbor:downloads:reveal",
     downloadOpen: "arbor:downloads:open",
     downloadsOpenFolder: "arbor:downloads:open-folder",
