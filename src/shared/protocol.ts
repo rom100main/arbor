@@ -129,6 +129,42 @@ export const UpdateStatus = Schema.Union([
 ])
 export type UpdateStatus = typeof UpdateStatus.Type
 
+export const DownloadId = Schema.TemplateLiteral(["download-", Schema.String])
+export type DownloadId = typeof DownloadId.Type
+
+export const DownloadState = Schema.Literals([
+    "pending", // waiting for the user to pick a location
+    "progressing",
+    "completed",
+    "cancelled",
+    "interrupted",
+])
+export type DownloadState = typeof DownloadState.Type
+
+export const DownloadInfo = Schema.Struct({
+    id: DownloadId,
+    /** Suggested name from the server, also used before a path is known. */
+    filename: Schema.String,
+    /** Absolute path on disk, once chosen. Null while pending. */
+    savePath: Schema.NullOr(Schema.String),
+    url: Schema.String,
+    state: DownloadState,
+    receivedBytes: Schema.Finite,
+    /** 0 when the server sends no Content-Length. */
+    totalBytes: Schema.Finite,
+    /** Epoch ms. */
+    startedAt: Schema.Finite,
+    finishedAt: Schema.NullOr(Schema.Finite),
+})
+export type DownloadInfo = typeof DownloadInfo.Type
+
+export const DownloadsSnapshot = Schema.Struct({
+    items: Schema.Array(DownloadInfo),
+    /** The folder automatic mode writes to, so the UI can show and open it. */
+    folder: Schema.String,
+})
+export type DownloadsSnapshot = typeof DownloadsSnapshot.Type
+
 export const RenameTarget = Schema.Union([
     Schema.Struct({ kind: Schema.Literal("container"), container: ContainerMeta }),
     Schema.Struct({ kind: Schema.Literal("tab"), tab: TabNode }),
