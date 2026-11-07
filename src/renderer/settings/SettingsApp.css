@@ -164,6 +164,13 @@
     gap: 8px;
 }
 
+.settings-wide-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    max-width: 520px;
+}
+
 .settings-suggestions {
     display: flex;
     flex-wrap: wrap;
@@ -210,15 +217,9 @@
     color: var(--color-text-faint);
 }
 
-.settings-option {
+.settings-option,
+.settings-wide-option {
     position: relative;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    align-items: center;
-    justify-content: center;
-    width: 96px;
-    padding: 14px 8px;
     font-size: var(--font-size-md);
     color: var(--color-text-muted);
     cursor: pointer;
@@ -249,5 +250,29 @@
     /* Focus belongs on the radio, so draw the ring on the card. */
     &:has(input:focus-visible) {
         box-shadow: 0 0 0 3px var(--color-accent-wash);
+    }
+}
+
+.settings-option {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    width: 96px;
+    padding: 14px 8px;
+}
+
+/* Wider cards for labels that do not fit a 96px column. */
+.settings-wide-option {
+    display: flex;
+    flex: 1 1 180px;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 12px;
+
+    span {
+        white-space: nowrap;
     }
 }

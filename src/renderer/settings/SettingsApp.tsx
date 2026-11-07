@@ -221,6 +221,7 @@ const SearchSection = () => {
     )
 }
 
+/** `wide` keeps long labels on one line, the plain variant is the compact card row. */
 const OptionCards = <T extends string>(props: {
     name: string
     label: string
@@ -229,13 +230,19 @@ const OptionCards = <T extends string>(props: {
     icons: Record<T, IconName>
     value: T
     onChange: (value: T) => void
+    variant?: "card" | "wide"
 }) => (
-    <div class="settings-options" role="radiogroup" aria-label={props.label}>
+    <div
+        class={props.variant === "wide" ? "settings-wide-options" : "settings-options"}
+        role="radiogroup"
+        aria-label={props.label}
+    >
         <For each={props.options}>
             {(option) => (
                 <label
                     class={{
-                        "settings-option": true,
+                        "settings-option": props.variant !== "wide",
+                        "settings-wide-option": props.variant === "wide",
                         active: props.value === option,
                     }}
                 >
@@ -283,6 +290,7 @@ const DownloadsSection = () => {
                     icons={SAVE_MODE_ICONS}
                     value={mode()}
                     onChange={choose}
+                    variant="wide"
                 />
             </div>
             <div class="settings-group">
