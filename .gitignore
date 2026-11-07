@@ -28,3 +28,6 @@ src/renderer/ui/Icon.tsx
 
 # Dev unpacked extensions
 /extensions
+
+# Packaged apps
+/release
