@@ -207,7 +207,12 @@ const make = (options: DownloadsOptions) =>
 
         const cancel = (id: DownloadId) =>
             Effect.sync(() => {
-                live.get(id)?.cancel()
+                const item = live.get(id)
+                if (!item) return
+                // Leaving `live` makes a second cancel a no-op
+                // `idOf` still settles the entry when Electron reports `done`.
+                live.delete(id)
+                item.cancel()
             })
 
         const remove = (id: DownloadId) =>
