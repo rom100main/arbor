@@ -1,0 +1,89 @@
+.download-button {
+    position: relative;
+
+    .download-glyph {
+        display: inline-flex;
+    }
+
+    &[data-active="true"] .download-glyph {
+        animation: download-bob 1.2s ease-in-out infinite;
+    }
+
+    .download-progress {
+        position: absolute;
+        right: 5px;
+        bottom: 3px;
+        left: 5px;
+        height: 2px;
+        overflow: hidden;
+        background: var(--color-border-soft);
+        border-radius: 1px;
+        opacity: 0;
+        transition: opacity 160ms ease;
+    }
+
+    &[data-active="true"] .download-progress {
+        opacity: 1;
+    }
+
+    .download-progress-value {
+        display: block;
+        height: 100%;
+        background: var(--color-accent);
+        transform: scaleX(var(--download-progress, 0));
+        transform-origin: left;
+        transition: transform 140ms linear;
+    }
+
+    /* Unknown size: a segment sweeps instead of filling. */
+    &[data-indeterminate="true"] .download-progress-value {
+        width: 34%;
+        transform: none;
+        animation: download-sweep 1.4s ease-in-out infinite;
+    }
+
+    /* Finished while the list was closed. */
+    &[data-unseen="true"]::after {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 6px;
+        height: 6px;
+        content: "";
+        background: var(--color-accent);
+        border-radius: 50%;
+    }
+}
+
+@keyframes download-bob {
+    0%,
+    100% {
+        transform: translateY(-1px);
+    }
+
+    50% {
+        transform: translateY(1px);
+    }
+}
+
+@keyframes download-sweep {
+    from {
+        transform: translateX(-110%);
+    }
+
+    to {
+        transform: translateX(400%);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .download-button[data-active="true"] .download-glyph {
+        animation: none;
+    }
+
+    .download-button[data-indeterminate="true"] .download-progress-value {
+        width: 100%;
+        opacity: 0.4;
+        animation: none;
+    }
+}

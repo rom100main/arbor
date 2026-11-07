@@ -12,6 +12,7 @@ import { createReveal, REVEAL_MS, revealZones } from "./reveal"
 import { useSettings } from "./settings"
 import { Sidebar } from "./sidebar/Sidebar"
 import { initState, useSnapshot } from "./snapshot"
+import { DownloadButton } from "./toolbar/DownloadButton"
 import { NavButtons } from "./toolbar/NavButtons"
 import { OmniboxInput } from "./toolbar/OmniboxInput"
 import { PinnedActions } from "./toolbar/PinnedActions"
@@ -164,6 +165,7 @@ export const MainShell = () => {
                     >
                         <Icon name="puzzle" />
                     </button>
+                    <DownloadButton />
                     <button type="button" aria-label="Settings" onClick={openSettings}>
                         <Icon name="settings" />
                     </button>
