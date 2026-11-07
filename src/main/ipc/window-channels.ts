@@ -15,6 +15,7 @@ import type { PermissionPromptsService } from "../extension/prompts"
 import type { SettingsService } from "../settings"
 import { snapshot, type DomainState } from "../state/state"
 import type { StoreService } from "../state/store"
+import type { UpdaterService } from "../update/updater"
 import { sessionForContainer } from "../windows/electron-host"
 import type { HistoryStep, ViewHandle, WindowHandle } from "../windows/host"
 import type { Overlays } from "../windows/overlays"
@@ -26,6 +27,7 @@ export interface WindowContext {
     readonly pushes: IpcPushService
     readonly prompts: PermissionPromptsService
     readonly extensions: ExtensionsService
+    readonly updater: UpdaterService
     readonly handle: WindowHandle
     readonly overlays: Overlays
     readonly viewOf: (tabId: TabId) => ViewHandle | undefined
@@ -88,6 +90,9 @@ export const windowRequests = (ctx: WindowContext): RequestHandlers<never> => {
         goBack: ({ tabId }) => history(ctx, tabId, "back"),
         goForward: ({ tabId }) => history(ctx, tabId, "forward"),
         reload: ({ tabId }) => history(ctx, tabId, "reload"),
+
+        getUpdateStatus: () => ctx.updater.status,
+        installUpdate: () => ctx.updater.install,
     }
 }
 
