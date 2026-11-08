@@ -1,0 +1,11 @@
+{
+    "assets": [
+        {
+            "id": "arbor-app-icon",
+            "kind": "icon",
+            "name": "Arbor app icon",
+            "license": "MIT",
+            "license_file": "LICENSE"
+        }
+    ]
+}
