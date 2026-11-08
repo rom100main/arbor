@@ -343,7 +343,6 @@ export class Extensions extends Context.Service<Extensions, ExtensionsService>()
 
             const libraryFor = (ses: Session): ElectronChromeExtensions => {
                 const extensions: ElectronChromeExtensions = new ElectronChromeExtensions({
-                    license: "GPL-3.0",
                     session: ses,
                     // chrome.tabs.create: a new active tab, with its view made now.
                     createTab: (details) => {

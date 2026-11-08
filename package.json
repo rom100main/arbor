@@ -23,16 +23,16 @@
         "fmt": "vp fmt"
     },
     "devDependencies": {
-        "@solidjs/vite-plugin": "^3.0.0-next.51",
-        "@types/node": "^26.6.2",
-        "electron": "^44.4.3",
-        "electron-builder": "^26.18.0",
-        "stylelint": "^17.15.0",
-        "stylelint-config-recess-order": "^7.8.0",
+        "@solidjs/vite-plugin": "^3.0.0-next.57",
+        "@types/node": "^26.6.6",
+        "electron": "^45.2.3",
+        "electron-builder": "26.18.1",
+        "stylelint": "^17.16.0",
+        "stylelint-config-recess-order": "^7.10.0",
         "stylelint-config-standard": "^40.0.0",
-        "typescript": "~6.0.2",
+        "typescript": "^7.0.2",
         "vite": "npm:@voidzero-dev/vite-plus-core@1.5.0",
-        "vite-plugin-electron": "^1.1.2",
+        "vite-plugin-electron": "^1.2.0",
         "vite-plus": "1.5.0"
     },
     "overrides": {
@@ -49,16 +49,16 @@
         }
     },
     "dependencies": {
-        "@solidjs/web": "^2.0.0-rc.18",
-        "@tabler/icons": "^3.47.0",
-        "effect": "^4.0.6",
-        "electron-chrome-extensions": "^4.9.0",
+        "@solidjs/web": "^2.0.0-rc.21",
+        "@tabler/icons": "^3.50.0",
+        "effect": "^4.1.2",
+        "electron-chrome-extensions": "^4.10.0",
         "electron-chrome-web-store": "^0.13.0",
         "electron-updater": "^6.8.11",
-        "solid-js": "^2.0.0-rc.18"
+        "solid-js": "^2.0.0-rc.21"
     },
     "allowScripts": {
-        "electron@44.4.3": true,
+        "electron@45.2.3": true,
         "fsevents@2.3.3": true,
         "electron-winstaller@5.4.0": true
     }
