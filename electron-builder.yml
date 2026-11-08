@@ -6,6 +6,9 @@ files:
     - dist/**
     - build/icon.png
     - package.json
+extraResources:
+    - LICENSE
+    - THIRD-PARTY-NOTICES.md
 mac:
     category: public.app-category.productivity
     # Ad-hoc signature: no Apple account needed, but downloads open via "Open Anyway" instead of "damaged".
