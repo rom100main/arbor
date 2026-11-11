@@ -1,6 +1,7 @@
 .history-page {
     display: flex;
     flex-direction: column;
+    min-width: 0;
     height: 100%;
     padding: 16px 20px;
     user-select: text;
@@ -23,7 +24,7 @@
 .history-tools {
     display: flex;
     gap: 10px;
-    align-items: center;
+    align-items: stretch;
 }
 
 .history-search {
@@ -86,18 +87,19 @@
         border: 1px solid var(--color-border);
         border-radius: var(--radius-md);
     }
+
+    /* Match the search box height: stretch with the tools row. */
+    select {
+        box-sizing: border-box;
+        height: 100%;
+        padding-right: 28px;
+    }
 }
 
 .history-filter-label {
     font-size: var(--font-size-md);
     color: var(--color-text-muted);
     white-space: nowrap;
-}
-
-.history-count {
-    margin: 0;
-    font-size: var(--font-size-sm);
-    color: var(--color-text-faint);
 }
 
 .history-bar {
@@ -118,6 +120,10 @@
     align-items: center;
 }
 
+.history-bar-right {
+    margin-left: auto;
+}
+
 .history-button {
     display: inline-flex;
     gap: 6px;
@@ -136,8 +142,8 @@
     }
 
     &:disabled {
-        opacity: 0.5;
         cursor: default;
+        opacity: 0.5;
     }
 
     &.danger {
@@ -160,9 +166,25 @@
 }
 
 .history-table {
+    display: grid;
+    grid-template-columns: auto 1fr 2fr auto auto auto;
     width: 100%;
     margin-top: 10px;
-    border-collapse: collapse;
+
+    thead,
+    tbody,
+    tr {
+        display: contents;
+    }
+
+    th,
+    td {
+        display: grid;
+        align-content: center;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
 
     thead th {
         padding: 6px 8px;
@@ -173,63 +195,56 @@
         border-bottom: 1px solid var(--color-border);
     }
 
-    tbody tr {
-        border-bottom: 1px solid var(--color-border);
-
-        &:hover {
-            background: var(--color-hover);
-        }
+    tbody tr:hover td {
+        background: var(--color-hover);
     }
 
     td {
         padding: 6px 8px;
         font-size: var(--font-size-md);
         color: var(--color-text);
-        vertical-align: middle;
+        border-bottom: 1px solid var(--color-border);
     }
 }
 
 .history-col-select {
-    width: 32px;
     text-align: center;
 }
 
 .history-col-delete {
-    width: 56px;
     text-align: center;
 }
 
-.history-name {
-    display: flex;
+.history-name-inner {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
     gap: 8px;
     align-items: center;
-    min-width: 140px;
-    max-width: 300px;
-
-    .history-name-label {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
+    min-width: 0;
 }
 
-.history-visits {
-    flex-shrink: 0;
-    font-size: var(--font-size-sm);
-    color: var(--color-text-faint);
-}
-
-.history-url {
-    max-width: 420px;
+.history-name-label {
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
+.history-visits {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-faint);
+}
+
 .history-url-link {
+    display: block;
+    width: 100%;
     padding: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font: inherit;
     color: var(--color-accent);
+    text-align: left;
+    white-space: nowrap;
     cursor: pointer;
     background: transparent;
     border: none;
@@ -240,19 +255,26 @@
 }
 
 .history-date-cell {
-    white-space: nowrap;
     color: var(--color-text-muted);
+    white-space: nowrap;
 }
 
-.history-container {
-    display: flex;
+.history-container-inner {
+    display: grid;
+    grid-template-columns: auto 1fr;
     gap: 6px;
     align-items: center;
+    min-width: 0;
+}
+
+.history-container-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .history-dot {
-    flex-shrink: 0;
     width: 8px;
     height: 8px;
     border-radius: 50%;
@@ -260,6 +282,7 @@
 
 .history-row-delete {
     display: inline-flex;
+    justify-self: center;
     padding: 5px;
     color: var(--color-text-muted);
     cursor: pointer;
