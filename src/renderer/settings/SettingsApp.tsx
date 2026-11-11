@@ -77,7 +77,7 @@ const HISTORY_MODE_ICONS: Record<HistoryMode, IconName> = {
 }
 
 const HISTORY_RETENTION_LABELS: Record<HistoryRetention, string> = {
-    never: "Never auto-delete",
+    never: "Never",
     "30d": "After 30 days",
     "90d": "After 90 days",
     "1y": "After 1 year",
