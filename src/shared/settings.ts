@@ -11,6 +11,9 @@ export type SidebarVisibility = (typeof SIDEBAR_VISIBILITIES)[number]
 export const URL_BAR_VISIBILITIES = ["displayed", "hidden"] as const
 export type UrlBarVisibility = (typeof URL_BAR_VISIBILITIES)[number]
 
+export const HISTORY_RETENTIONS = ["never", "30d", "90d", "1y", "forever"] as const
+export type HistoryRetention = (typeof HISTORY_RETENTIONS)[number]
+
 export const SIDEBAR_WIDTH = 240
 export const SIDEBAR_COMPACT_WIDTH = 48
 export const TOOLBAR_HEIGHT = 44
@@ -43,6 +46,8 @@ export const DEFAULT_SEARCH_TEMPLATE = "https://duckduckgo.com/?q=%s"
 export const INTERNAL_SCHEME = "arbor"
 const INTERNAL_HOST = "settings"
 export const SETTINGS_URL = `${INTERNAL_SCHEME}://${INTERNAL_HOST}`
+const HISTORY_HOST = "history"
+export const HISTORY_URL = `${INTERNAL_SCHEME}://${HISTORY_HOST}`
 
 export type { Settings } from "./settings-schema"
 
@@ -53,6 +58,8 @@ export const DEFAULT_SETTINGS: Settings = {
     sidebarVisibility: "compact",
     urlBarVisibility: "displayed",
     downloadAskWhereToSave: true,
+    historyEnabled: true,
+    historyRetention: "forever",
 }
 
 const SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*:/i

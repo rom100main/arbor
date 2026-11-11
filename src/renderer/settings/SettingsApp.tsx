@@ -1,10 +1,13 @@
 import { For, Match, Show, Switch, createEffect, createMemo, createSignal, untrack } from "solid-js"
 
 import {
+    HISTORY_RETENTIONS,
+    HISTORY_URL,
     SETTINGS_URL,
     SIDEBAR_VISIBILITIES,
     THEMES,
     URL_BAR_VISIBILITIES,
+    type HistoryRetention,
     type SidebarVisibility,
     type Theme,
     type UrlBarVisibility,
@@ -19,6 +22,7 @@ import "./SettingsApp.css"
 const NAV: { route: SettingsRoute; label: string; icon: IconName }[] = [
     { route: "search", label: "Search", icon: "search" },
     { route: "downloads", label: "Downloads", icon: "download" },
+    { route: "history", label: "History", icon: "history" },
     { route: "appearance", label: "Appearance", icon: "settings" },
 ]
 
@@ -55,6 +59,37 @@ const URL_BAR_LABELS: Record<UrlBarVisibility, string> = {
 const URL_BAR_ICONS: Record<UrlBarVisibility, IconName> = {
     displayed: "layout-bottombar",
     hidden: "layout-bottombar-inactive",
+}
+
+/** The UI's view of `historyEnabled`, not a second stored field. */
+type HistoryMode = "save" | "off"
+
+const HISTORY_MODES = ["save", "off"] as const
+
+const HISTORY_MODE_LABELS: Record<HistoryMode, string> = {
+    save: "Save history",
+    off: "Don't save",
+}
+
+const HISTORY_MODE_ICONS: Record<HistoryMode, IconName> = {
+    save: "history",
+    off: "history-off",
+}
+
+const HISTORY_RETENTION_LABELS: Record<HistoryRetention, string> = {
+    never: "Never auto-delete",
+    "30d": "After 30 days",
+    "90d": "After 90 days",
+    "1y": "After 1 year",
+    forever: "Forever",
+}
+
+const HISTORY_RETENTION_ICONS: Record<HistoryRetention, IconName> = {
+    never: "clock",
+    "30d": "clock",
+    "90d": "clock",
+    "1y": "clock",
+    forever: "clock",
 }
 
 /** The UI's view of `downloadAskWhereToSave`, not a second stored field. */
@@ -114,6 +149,9 @@ export const SettingsApp = () => {
                     </Match>
                     <Match when={route() === "downloads"}>
                         <DownloadsSection />
+                    </Match>
+                    <Match when={route() === "history"}>
+                        <HistorySection />
                     </Match>
                     <Match when={route() === "appearance"}>
                         <AppearanceSection />
@@ -308,6 +346,64 @@ const DownloadsSection = () => {
                         Open folder
                     </button>
                 </div>
+            </div>
+        </section>
+    )
+}
+
+const HistorySection = () => {
+    const settings = useSettings()
+
+    const mode = (): HistoryMode => (settings().historyEnabled ? "save" : "off")
+
+    const chooseMode = (next: HistoryMode): void => {
+        void window.arbor.setSettings({ historyEnabled: next === "save" })
+    }
+
+    return (
+        <section>
+            <h1>History</h1>
+            <div class="settings-group">
+                <h2>Saving history</h2>
+                <OptionCards
+                    name="history-mode"
+                    label="Saving history"
+                    options={HISTORY_MODES}
+                    labels={HISTORY_MODE_LABELS}
+                    icons={HISTORY_MODE_ICONS}
+                    value={mode()}
+                    onChange={chooseMode}
+                    variant="wide"
+                />
+                <p class="settings-hint">
+                    When off, no new visits are recorded. Existing entries are kept until you delete
+                    them or the retention rule below removes them.
+                </p>
+            </div>
+            <div class="settings-group">
+                <h2>Delete automatically</h2>
+                <OptionCards
+                    name="history-retention"
+                    label="Delete automatically"
+                    options={HISTORY_RETENTIONS}
+                    labels={HISTORY_RETENTION_LABELS}
+                    icons={HISTORY_RETENTION_ICONS}
+                    value={settings().historyRetention}
+                    onChange={(historyRetention) =>
+                        void window.arbor.setSettings({ historyRetention })
+                    }
+                />
+            </div>
+            <div class="settings-group">
+                <h2>Manage</h2>
+                <button
+                    type="button"
+                    class="settings-button"
+                    onClick={() => void window.arbor.createTab({ url: HISTORY_URL })}
+                >
+                    <Icon name="history" size={14} />
+                    Open history
+                </button>
             </div>
         </section>
     )

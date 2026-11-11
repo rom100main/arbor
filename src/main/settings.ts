@@ -24,6 +24,14 @@ const PersistedSettings = Schema.Struct({
         Settings.fields.downloadAskWhereToSave,
         () => DEFAULT_SETTINGS.downloadAskWhereToSave,
     ),
+    historyEnabled: orDefault(
+        Settings.fields.historyEnabled,
+        () => DEFAULT_SETTINGS.historyEnabled,
+    ),
+    historyRetention: orDefault(
+        Settings.fields.historyRetention,
+        () => DEFAULT_SETTINGS.historyRetention,
+    ),
 })
 
 const parseSettings = decodeOr(PersistedSettings)
@@ -50,6 +58,8 @@ export const fromPersistedSettings = (data: unknown): Settings | null => {
         sidebarVisibility: parsed.sidebarVisibility,
         urlBarVisibility: parsed.urlBarVisibility,
         downloadAskWhereToSave: parsed.downloadAskWhereToSave,
+        historyEnabled: parsed.historyEnabled,
+        historyRetention: parsed.historyRetention,
     }
 }
 

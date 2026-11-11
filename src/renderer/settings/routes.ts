@@ -1,8 +1,9 @@
-export type SettingsRoute = "search" | "downloads" | "appearance"
+export type SettingsRoute = "search" | "downloads" | "history" | "appearance"
 
 const SETTINGS_ROUTES: Record<string, SettingsRoute> = {
     "/search": "search",
     "/downloads": "downloads",
+    "/history": "history",
     "/appearance": "appearance",
 }
 
