@@ -12,12 +12,7 @@ import {
     SubscriptionRef,
 } from "effect"
 
-import {
-    isRecordableUrl,
-    matchesHistoryQuery,
-    retentionCutoff,
-    stripFragment,
-} from "../../shared/history"
+import { matchesHistoryQuery } from "../../shared/history"
 import type {
     ContainerId,
     HistoryEntry,
@@ -30,6 +25,7 @@ import { readJson } from "../persistence/json-file"
 import * as PersistedRef from "../persistence/persisted-ref"
 import { SettingsStore } from "../settings"
 import { decodeHistory, MAX_HISTORY_ENTRIES } from "./history"
+import { isRecordableUrl, retentionCutoff, stripFragment } from "./record"
 
 export interface HistoryService {
     /** The list now, newest first. */

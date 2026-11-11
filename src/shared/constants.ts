@@ -26,7 +26,5 @@ export const CONTAINER_ICONS = [
     "star",
 ] as const
 
-export type ContainerIcon = (typeof CONTAINER_ICONS)[number]
-
 /** The session partition of a container: one per container, so containers share nothing. */
 export const containerPartition = (id: `container-${string}`): string => `persist:container-${id}`

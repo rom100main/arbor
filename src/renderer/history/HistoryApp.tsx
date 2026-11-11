@@ -2,6 +2,7 @@ import { For, Show, createMemo, createSignal } from "solid-js"
 
 import { matchesHistoryQuery } from "../../shared/history"
 import type { HistoryEntry, HistoryEntryId } from "../../shared/protocol"
+import { hostOf } from "../omnibox/scoring"
 import { initHistory, useHistory } from "../shell/history"
 import { initState, useSnapshot } from "../shell/snapshot"
 import { Favicon } from "../ui/Favicon"
@@ -332,12 +333,4 @@ const HistoryRow = (props: {
             </td>
         </tr>
     )
-}
-
-const hostOf = (url: string): string | null => {
-    try {
-        return new URL(url).hostname || null
-    } catch {
-        return null
-    }
 }

@@ -1,7 +1,7 @@
-import { scoreHistoryEntry } from "../../shared/history"
 import type { BrowserSnapshot, HistoryEntry, TabNode } from "../../shared/protocol"
 import { DEFAULT_SEARCH_TEMPLATE } from "../../shared/settings"
 import { omniboxTarget } from "../../shared/url"
+import { scoreHistoryEntry } from "./scoring"
 
 const MAX_TAB_SUGGESTIONS = 3
 const MAX_HISTORY_SUGGESTIONS = 5
