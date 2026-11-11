@@ -76,14 +76,8 @@ export interface ExtensionsService {
 const WEBSTORE_ORIGIN = "https://chromewebstore.google.com"
 const UNINSTALL_CHANNEL = "chrome.management.uninstall"
 
-/** Dev-only unpacked extensions: the folders of `./extensions` at the project root. */
-const unpackedManifestDirs = (): string[] => {
-    const candidates = [
-        path.join(app.getAppPath(), "extensions"),
-        path.join(process.cwd(), "extensions"),
-    ]
-    const dir = candidates.find((candidate) => existsSync(candidate))
-    if (!dir) return []
+export const unpackedManifestDirs = (dir: string): string[] => {
+    if (!existsSync(dir)) return []
     return readdirSync(dir, { withFileTypes: true })
         .filter((entry) => entry.isDirectory())
         .map((entry) => path.join(dir, entry.name))
@@ -264,7 +258,7 @@ export class Extensions extends Context.Service<Extensions, ExtensionsService>()
 
             const loadUnpacked = (ses: Session) =>
                 Effect.forEach(
-                    unpackedManifestDirs(),
+                    unpackedManifestDirs(path.join(app.getPath("userData"), "dev-extensions")),
                     (extensionPath) =>
                         // Consent before load: a denied extension never runs, not even its worker.
                         consent.unpackedConsent(extensionPath).pipe(
