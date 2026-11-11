@@ -37,6 +37,7 @@ Before submitting a pull request, please ensure that:
 - Git
 
 Recommeded:
+
 - Vite+
 
 ### Installation
