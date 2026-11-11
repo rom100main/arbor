@@ -62,6 +62,7 @@ const handlersFor = (store: StoreService): RequestHandlers<never> => ({
     historyList: () => Effect.succeed({ entries: [], totalCount: 0 }),
     historyRemove: () => Effect.void,
     historyClearBefore: () => Effect.void,
+    historyClearAfter: () => Effect.void,
     historyClearAll: () => Effect.void,
     getUpdateStatus: () => Effect.succeed({ kind: "idle" }),
     installUpdate: () => Effect.void,

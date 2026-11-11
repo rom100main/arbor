@@ -8,6 +8,7 @@ export type HistoryCall =
     | { readonly op: "inPage"; readonly url: string }
     | { readonly op: "remove"; readonly ids: ReadonlyArray<string> }
     | { readonly op: "clearBefore"; readonly cutoff: number }
+    | { readonly op: "clearAfter"; readonly cutoff: number }
     | { readonly op: "clearAll" }
 
 export interface FakeHistory {
@@ -63,6 +64,7 @@ export const fakeHistory = (initial: ReadonlyArray<HistoryEntry> = []): FakeHist
             }),
         remove: (ids) => Effect.sync(() => void calls.push({ op: "remove", ids: [...ids] })),
         clearBefore: (cutoff) => Effect.sync(() => void calls.push({ op: "clearBefore", cutoff })),
+        clearAfter: (cutoff) => Effect.sync(() => void calls.push({ op: "clearAfter", cutoff })),
         prune: () => Effect.void,
     }
 

@@ -161,6 +161,23 @@ describe("history service", () => {
             }),
         ))
 
+    it('clearAfter drops visits newer than the cutoff ("last X" / "after date")', () =>
+        runTest(
+            Effect.gen(function* () {
+                const { history } = yield* open()
+                yield* visit(history, "https://example.com/older")
+                yield* TestClock.adjust(1000)
+                yield* settle
+                yield* visit(history, "https://example.com/newer")
+                const [first, second] = (yield* history.snapshot).entries
+                // Cutoff at the newer visit: the newer one goes, the older stays.
+                yield* history.clearAfter(first.lastVisitedAt)
+                const snapshot = yield* history.snapshot
+                expect(snapshot.totalCount).toBe(1)
+                expect(snapshot.entries[0].url).toBe(second.url)
+            }),
+        ))
+
     it("prunes entries older than the retention window", () =>
         runTest(
             Effect.gen(function* () {
