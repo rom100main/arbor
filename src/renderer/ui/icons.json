@@ -6,12 +6,15 @@
     "briefcase",
     "chevron-down",
     "chevron-right",
+    "clock",
     "code",
     "copy",
     "device-desktop",
     "download",
     "file-download",
     "folder",
+    "history",
+    "history-off",
     "home",
     "layout-bottombar",
     "layout-bottombar-inactive",
@@ -33,6 +36,7 @@
     "shopping-cart",
     "star",
     "sun",
+    "trash",
     "world",
     "x"
 ]

@@ -1,19 +1,21 @@
 import path from "node:path"
 import { pathToFileURL } from "node:url"
 
+import historyGlyph from "@tabler/icons/outline/history.svg?raw"
 import settingsGlyph from "@tabler/icons/outline/settings.svg?raw"
 import { Effect } from "effect"
 import { net, protocol, session, type Session } from "electron"
 
-import { INTERNAL_SCHEME, SETTINGS_URL } from "../../shared/settings"
+import { HISTORY_URL, INTERNAL_SCHEME, SETTINGS_URL } from "../../shared/settings"
 import { AppRuntime } from "../runtime"
 import {
     assetRelativePath,
     injectDocumentHead,
     devAssetUrl,
     isAssetRequest,
+    isHistoryUrl,
+    isInternalPageUrl,
     isInternalUrl,
-    isSettingsUrl,
 } from "./internal-page-urls"
 import { preloadPath, rendererPath } from "./paths"
 
@@ -50,25 +52,29 @@ const clientDir = (): string => path.dirname(rendererPath)
  */
 const FAVICON_COLOR = "#8b8f96"
 
-const faviconGlyph = (): string =>
-    settingsGlyph
+const faviconGlyph = (raw: string): string =>
+    raw
         .replace('width="24"', 'width="16"')
         .replace('height="24"', 'height="16"')
         .replace("currentColor", FAVICON_COLOR)
 
-const HEAD_EXTRAS =
-    `<base href="${SETTINGS_URL}/">` +
-    `<title>Settings</title>` +
-    `<link rel="icon" href="data:image/svg+xml,${encodeURIComponent(faviconGlyph())}">`
+const headExtras = (url: string): string =>
+    isHistoryUrl(url)
+        ? `<base href="${HISTORY_URL}/">` +
+          `<title>History</title>` +
+          `<link rel="icon" href="data:image/svg+xml,${encodeURIComponent(faviconGlyph(historyGlyph))}">`
+        : `<base href="${SETTINGS_URL}/">` +
+          `<title>Settings</title>` +
+          `<link rel="icon" href="data:image/svg+xml,${encodeURIComponent(faviconGlyph(settingsGlyph))}">`
 
-const serveDocument = async (): Promise<Response> => {
+const serveDocument = async (requestUrl: string): Promise<Response> => {
     const devServer = devServerOrigin()
     try {
         const response = await net.fetch(devServer ?? pathToFileURL(rendererPath).href, {
             headers: { Accept: "text/html" },
         })
         if (!response.ok) return new Response("Not found", { status: 404 })
-        return new Response(injectDocumentHead(await response.text(), HEAD_EXTRAS), {
+        return new Response(injectDocumentHead(await response.text(), headExtras(requestUrl)), {
             headers: { "content-type": "text/html; charset=utf-8" },
         })
     } catch (error) {
@@ -103,7 +109,7 @@ const serveAsset = async (pathname: string, search: string): Promise<Response> =
 /**
  * Register the `arbor://` handler and the internal session's preload. Must run after `app.whenReady()`.
  *
- * Unknown paths below `/settings` fall through to the SPA so deep links resolve;
+ * Unknown paths below an internal host fall through to the SPA so deep links resolve;
  * anything outside is a 404 rather than a silent blank page.
  */
 export const registerInternalPages = (): void => {
@@ -125,7 +131,7 @@ export const registerInternalPages = (): void => {
     // so a partitioned view fails to load with ERR_FAILED.
     ses.protocol.handle(INTERNAL_SCHEME, async (request) => {
         const { pathname, search } = new URL(request.url)
-        if (!isSettingsUrl(request.url)) return new Response("Not found", { status: 404 })
-        return isAssetRequest(pathname) ? serveAsset(pathname, search) : serveDocument()
+        if (!isInternalPageUrl(request.url)) return new Response("Not found", { status: 404 })
+        return isAssetRequest(pathname) ? serveAsset(pathname, search) : serveDocument(request.url)
     })
 }

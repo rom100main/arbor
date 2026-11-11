@@ -2,6 +2,7 @@ import { createEffect, onCleanup } from "solid-js"
 
 import {
     chromeInsets,
+    HISTORY_URL,
     SETTINGS_URL,
     SIDEBAR_COMPACT_WIDTH,
     SIDEBAR_WIDTH,
@@ -127,7 +128,6 @@ export const MainShell = () => {
         window.arbor.extensionsToggle({ x: rect.x, y: rect.y, width: rect.width })
     }
 
-    // There is one settings page, so opening it again selects the tab already showing it.
     const openSettings = (): void => {
         const snap = snapshot()
         const existing = snap?.tabs.find((tab) => tab.url.startsWith(SETTINGS_URL))
@@ -136,6 +136,16 @@ export const MainShell = () => {
             return
         }
         void window.arbor.createTab({ url: SETTINGS_URL })
+    }
+
+    const openHistory = (): void => {
+        const snap = snapshot()
+        const existing = snap?.tabs.find((tab) => tab.url.startsWith(HISTORY_URL))
+        if (existing) {
+            void window.arbor.selectTab({ tabId: existing.id })
+            return
+        }
+        void window.arbor.createTab({ url: HISTORY_URL })
     }
 
     return (
@@ -180,6 +190,9 @@ export const MainShell = () => {
                         <Icon name="puzzle" />
                     </button>
                     <DownloadButton />
+                    <button type="button" aria-label="History" onClick={openHistory}>
+                        <Icon name="history" />
+                    </button>
                     <button type="button" aria-label="Settings" onClick={openSettings}>
                         <Icon name="settings" />
                     </button>

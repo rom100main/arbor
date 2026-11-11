@@ -1,6 +1,7 @@
-import { INTERNAL_SCHEME } from "../shared/settings"
+import { HISTORY_URL, INTERNAL_SCHEME } from "../shared/settings"
 import { DownloadsPopup } from "./downloads/DownloadsPopup"
 import { ExtensionsPopup } from "./extensions/ExtensionsPopup"
+import { HistoryApp } from "./history/HistoryApp"
 import { OmniboxPopup } from "./omnibox/OmniboxPopup"
 import { PermissionApp } from "./permissions/PermissionApp"
 import { RenameApp } from "./rename/RenameApp"
@@ -19,6 +20,7 @@ export default function App() {
     if (appMode === "extensions") return <ExtensionsPopup />
     if (appMode === "downloads") return <DownloadsPopup />
     if (appMode === "permission") return <PermissionApp />
+    if (appMode === "history") return <HistoryApp />
     if (appMode === "settings") return <SettingsApp />
     return <MainShell />
 }
@@ -31,9 +33,11 @@ type AppMode =
     | "downloads"
     | "permission"
     | "settings"
+    | "history"
 
 const getAppMode = (): AppMode => {
     // Internal pages carry their route in the path, not a query param: arbor://settings/search.
+    if (window.location.href.startsWith(HISTORY_URL)) return "history"
     if (window.location.protocol === `${INTERNAL_SCHEME}:`) return "settings"
     const searchParams = new URLSearchParams(window.location.search)
     if (searchParams.has("omnibox")) return "omnibox"
