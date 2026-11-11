@@ -47,6 +47,19 @@ export const SuggestionRow: Component<{
                         </>
                     )
                 }
+                if (props.suggestion.kind === "history") {
+                    const entry = props.suggestion.entry
+                    const color =
+                        snapshot()?.containers.find((c) => c.id === entry.containerId)?.color ??
+                        "#999999"
+                    return (
+                        <>
+                            <Favicon url={entry.favicon} />
+                            <span class="suggestion-title">{entry.title || entry.url}</span>
+                            <span class="suggestion-dot" style={{ "background-color": color }} />
+                        </>
+                    )
+                }
                 const tab = props.suggestion.tab
                 const color =
                     snapshot()?.containers.find((c) => c.id === tab.containerId)?.color ?? "#999999"

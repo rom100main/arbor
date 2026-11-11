@@ -1,5 +1,6 @@
 import { For, createEffect, createMemo, createSignal } from "solid-js"
 
+import { initHistory, useHistory } from "../shell/history"
 import { useSettings } from "../shell/settings"
 import { initState, useSnapshot } from "../shell/snapshot"
 import { SuggestionRow } from "./SuggestionRow"
@@ -10,15 +11,17 @@ import "./OmniboxPopup.css"
 /** Rendered inside the frameless omnibox popup window (?omnibox query param). */
 export const OmniboxPopup = () => {
     void initState()
+    void initHistory()
     const snapshot = useSnapshot()
     const settings = useSettings()
+    const history = useHistory()
     const [query, setQuery] = createSignal("")
     const [selected, setSelected] = createSignal(0)
 
     window.arbor.onOmniboxQuery(setQuery)
 
     const suggestions = createMemo(() =>
-        computeSuggestions(snapshot(), query(), settings().searchTemplate),
+        computeSuggestions(snapshot(), query(), settings().searchTemplate, history().entries),
     )
     const suggestionCount = createMemo(() => suggestions().length)
 
@@ -28,7 +31,9 @@ export const OmniboxPopup = () => {
         window.arbor.omniboxActivate(
             suggestion.kind === "go"
                 ? { kind: "go", query: suggestion.query }
-                : { kind: "tab", tabId: suggestion.tab.id },
+                : suggestion.kind === "history"
+                  ? { kind: "history", entryId: suggestion.entry.id }
+                  : { kind: "tab", tabId: suggestion.tab.id },
         )
     }
 
@@ -69,7 +74,9 @@ export const OmniboxPopup = () => {
                                 window.arbor.omniboxActivate(
                                     suggestion.kind === "go"
                                         ? { kind: "go", query: suggestion.query }
-                                        : { kind: "tab", tabId: suggestion.tab.id },
+                                        : suggestion.kind === "history"
+                                          ? { kind: "history", entryId: suggestion.entry.id }
+                                          : { kind: "tab", tabId: suggestion.tab.id },
                                 )
                             }
                         />
