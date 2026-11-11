@@ -10,7 +10,7 @@
     "main": "dist/electron/main/index.js",
     "scripts": {
         "dev": "vp dev",
-        "build": "tsc && vp build && node scripts/check-preload.ts",
+        "build": "npm run build:icons && tsc && vp build && node scripts/check-preload.ts",
         "dist": "npm run build && electron-builder",
         "dist:dir": "npm run build && electron-builder --dir",
         "check:preload": "node scripts/check-preload.ts",
@@ -19,7 +19,7 @@
         "licenses:check": "node scripts/licenses/check.ts",
         "preview": "vp preview",
         "test": "vp test",
-        "check": "vp check",
+        "check": "npm run build:icons && vp check",
         "lint": "vp lint",
         "lint:css": "stylelint \"src/**/*.css\"",
         "fmt": "vp fmt"
