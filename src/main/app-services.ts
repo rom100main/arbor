@@ -7,6 +7,7 @@ import { Downloads } from "./downloads/downloads"
 import { Extensions } from "./extension/extensions"
 import { PermissionPrompts } from "./extension/prompts"
 import { ExtensionStorage } from "./extension/storage"
+import { History } from "./history/service"
 import { IpcPush } from "./ipc/router"
 import { browserStoreFromFile } from "./persistence/state-file"
 import { SettingsStore } from "./settings"
@@ -36,5 +37,12 @@ export const AppServices = (userData: string) => {
         Layer.provideMerge(PermissionPrompts.modal),
         Layer.provideMerge(updater),
     )
-    return WindowManager.layer.pipe(Layer.provideMerge(extensions), Layer.provideMerge(downloads))
+    const history = History.layer({ historyPath: path.join(userData, "history.json") }).pipe(
+        Layer.provideMerge(base),
+    )
+    return WindowManager.layer.pipe(
+        Layer.provideMerge(extensions),
+        Layer.provideMerge(downloads),
+        Layer.provideMerge(history),
+    )
 }
