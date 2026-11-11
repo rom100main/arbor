@@ -12,6 +12,7 @@ import type { TabId, TabNode } from "../../shared/protocol"
 import { Downloads } from "../downloads/downloads"
 import { Extensions } from "../extension/extensions"
 import { PermissionPrompts } from "../extension/prompts"
+import { History } from "../history/service"
 import { IpcPush, serveEvents, serveRequests } from "../ipc/router"
 import { windowEvents, windowRequests, type WindowContext } from "../ipc/window-channels"
 import { SettingsStore } from "../settings"
@@ -62,6 +63,7 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
             const currentWindow = yield* CurrentWindow
             const updater = yield* Updater
             const downloads = yield* Downloads
+            const history = yield* History
 
             const logged = (label: string) => (effect: Effect.Effect<unknown, unknown>) =>
                 effect.pipe(
@@ -155,13 +157,39 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                         if (sameView && view) yield* loadInBackground(view, url)
                     })
 
+                /** The tab's current URL for late meta events (title / favicon). */
+                const recordHistory = (event: ViewEvent): Effect.Effect<void> =>
+                    Effect.gen(function* () {
+                        const tab = (yield* store.state).tabs.get(event.tabId)
+                        if (!tab) return
+                        if (event.kind === "navigated") {
+                            yield* history.visit({ url: event.url, containerId: tab.containerId })
+                            yield* history.meta(event.url, { title: "", favicon: null })
+                        } else if (event.kind === "navigatedInPage") {
+                            yield* history.inPage(event.url)
+                        } else if (event.kind === "title") {
+                            yield* history.meta(tab.url, { title: event.title })
+                        } else if (event.kind === "favicon") {
+                            yield* history.meta(tab.url, { favicon: event.favicon })
+                        }
+                        // A navigation that resets title/favicon must also clear the entry's stale title/favicon
+                        // (already done, via the meta call above, for "navigated").
+                    })
+
                 const applyViewEvent = (event: ViewEvent) => {
                     if (event.kind === "openChild") {
                         return logged("Child tab failed")(
                             store.createChildTab(event.tabId, event.url, event.background),
                         )
                     }
-                    return store.updateTabMeta(event.tabId, metaFrom(event))
+                    return Effect.gen(function* () {
+                        yield* store.updateTabMeta(event.tabId, metaFrom(event))
+                        yield* recordHistory(event).pipe(
+                            Effect.catchCause((cause) =>
+                                Effect.logError("History record failed", cause),
+                            ),
+                        )
+                    })
                 }
 
                 // --- menu
@@ -250,6 +278,11 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                     Stream.runForEach((next) => pushes.push("downloads", next)),
                 )
 
+                /** The history list, to every renderer (history page + omnibox). */
+                const broadcastHistory = history.changes.pipe(
+                    Stream.runForEach((next) => pushes.push("history", next)),
+                )
+
                 // --- start
 
                 const ctx: WindowContext = {
@@ -260,6 +293,7 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                     extensions,
                     updater,
                     downloads,
+                    history,
                     handle,
                     overlays,
                     viewOf: (tabId) => views.get(tabId),
@@ -290,6 +324,7 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                 yield* Effect.forkScoped(menu)
                 yield* Effect.forkScoped(broadcastSettings)
                 yield* Effect.forkScoped(broadcastDownloads)
+                yield* Effect.forkScoped(broadcastHistory)
                 // A second launch of Arbor quits at once and brings this window forward.
                 yield* host.relaunches.pipe(
                     Stream.runForEach(() => handle.focus),
