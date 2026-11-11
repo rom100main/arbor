@@ -14,6 +14,7 @@ import type { DownloadInfo } from "../src/shared/protocol"
 import { fakeDownloads } from "./support/downloads"
 import { runTest, settle } from "./support/effect"
 import { noExtensions } from "./support/extensions"
+import { fakeHistory } from "./support/history"
 import * as fakeIpc from "./support/ipc"
 import { fakeRenderer } from "./support/ipc"
 import { files } from "./support/memory-fs"
@@ -42,6 +43,7 @@ const startAppWith = (configure: (host: MemoryHost, ipc: MemoryIpc) => void) =>
     Effect.gen(function* () {
         const scope = yield* Scope.make()
         const downloads = fakeDownloads()
+        const history = fakeHistory()
         const base = Layer.mergeAll(
             BrowserStore.layer(initialState()),
             SettingsStore.layer("/data/settings.json"),
@@ -51,6 +53,7 @@ const startAppWith = (configure: (host: MemoryHost, ipc: MemoryIpc) => void) =>
             noExtensions,
             Updater.none,
             downloads.layer,
+            history.layer,
         )
         const context = yield* Layer.buildWithScope(
             WindowManager.layer.pipe(Layer.provideMerge(base)),
@@ -65,7 +68,7 @@ const startAppWith = (configure: (host: MemoryHost, ipc: MemoryIpc) => void) =>
         yield* Context.get(context, IpcPush).attach(shell.renderer)
         const running = yield* Effect.forkIn(Context.get(context, WindowManager).start, scope)
         yield* settleLong
-        return { host, ipc: fakeIpc, store, currentWindow, running, shell, downloads }
+        return { host, ipc: fakeIpc, store, currentWindow, running, shell, downloads, history }
     })
 
 const startApp = startAppWith(() => undefined)

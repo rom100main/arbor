@@ -85,6 +85,8 @@ describe("fromPersistedSettings", () => {
         expect(fromPersistedSettings(payload)).toEqual({
             ...payload,
             downloadAskWhereToSave: true,
+            historyEnabled: DEFAULT_SETTINGS.historyEnabled,
+            historyRetention: DEFAULT_SETTINGS.historyRetention,
         })
     })
 })
@@ -114,6 +116,8 @@ describe("settings store", () => {
                     sidebarVisibility: DEFAULT_SETTINGS.sidebarVisibility,
                     urlBarVisibility: DEFAULT_SETTINGS.urlBarVisibility,
                     downloadAskWhereToSave: DEFAULT_SETTINGS.downloadAskWhereToSave,
+                    historyEnabled: DEFAULT_SETTINGS.historyEnabled,
+                    historyRetention: DEFAULT_SETTINGS.historyRetention,
                 })
 
                 const reloaded = yield* (yield* open()).store.get

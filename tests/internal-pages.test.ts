@@ -5,11 +5,13 @@ import {
     devAssetUrl,
     injectDocumentHead,
     isAssetRequest,
+    isHistoryUrl,
+    isInternalPageUrl,
     isInternalUrl,
     isSettingsUrl,
 } from "../src/main/windows/internal-page-urls"
 import { settingsRoute } from "../src/renderer/settings/routes"
-import { SETTINGS_URL } from "../src/shared/settings"
+import { HISTORY_URL, SETTINGS_URL } from "../src/shared/settings"
 
 describe("the settings URL", () => {
     // `arbor:/settings` parses as a scheme with an empty authority, so hostname is "" and
@@ -51,10 +53,25 @@ describe("isSettingsUrl", () => {
     })
 })
 
+describe("the history URL", () => {
+    it("carries its own host, like settings", () => {
+        expect(HISTORY_URL).toBe("arbor://history")
+        expect(new URL(HISTORY_URL).hostname).toBe("history")
+        expect(isHistoryUrl("arbor://history")).toBe(true)
+        expect(isHistoryUrl("arbor://history/")).toBe(true)
+        expect(isHistoryUrl("arbor://settings")).toBe(false)
+        expect(isHistoryUrl("https://example.com")).toBe(false)
+        expect(isInternalPageUrl("arbor://history")).toBe(true)
+        expect(isInternalPageUrl("arbor://settings")).toBe(true)
+        expect(isInternalPageUrl("arbor://other")).toBe(false)
+    })
+})
+
 describe("settingsRoute", () => {
     it("maps known paths to their section", () => {
         expect(settingsRoute("arbor://settings/search")).toBe("search")
         expect(settingsRoute("arbor://settings/downloads")).toBe("downloads")
+        expect(settingsRoute("arbor://settings/history")).toBe("history")
         expect(settingsRoute("arbor://settings/appearance")).toBe("appearance")
     })
 
