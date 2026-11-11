@@ -42,6 +42,7 @@ export const REQUESTS = {
     historyList: "arbor:history:list",
     historyRemove: "arbor:history:remove",
     historyClearBefore: "arbor:history:clear-before",
+    historyClearAfter: "arbor:history:clear-after",
     historyClearAll: "arbor:history:clear-all",
 
     getUpdateStatus: "arbor:update:get-status",

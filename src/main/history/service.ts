@@ -51,6 +51,8 @@ export interface HistoryService {
     readonly remove: (ids: ReadonlyArray<HistoryEntryId>) => Effect.Effect<void>
     /** Forget entries last visited before `cutoff` (epoch ms). */
     readonly clearBefore: (cutoff: number) => Effect.Effect<void>
+    /** Forget entries last visited after `cutoff` (epoch ms). */
+    readonly clearAfter: (cutoff: number) => Effect.Effect<void>
     /** Apply the retention setting against `now`. */
     readonly prune: (now: number) => Effect.Effect<void>
 }
@@ -219,6 +221,13 @@ const make = (options: HistoryOptions) =>
                 yield* update(next)
             })
 
+        const clearAfter = (cutoff: number): Effect.Effect<void> =>
+            Effect.gen(function* () {
+                const next = records.filter((entry) => entry.lastVisitedAt < cutoff)
+                if (next.length === records.length) return
+                yield* update(next)
+            })
+
         const prune = (now: number): Effect.Effect<void> =>
             Effect.gen(function* () {
                 const cutoff = retentionCutoff(retention, now)
@@ -243,6 +252,7 @@ const make = (options: HistoryOptions) =>
             list,
             remove,
             clearBefore,
+            clearAfter,
             prune,
         })
     })

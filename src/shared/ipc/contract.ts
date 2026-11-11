@@ -206,6 +206,7 @@ export const Requests = {
         payload: Schema.Struct({ ids: Schema.Array(HistoryEntryId) }),
     }),
     historyClearBefore: request({ payload: Schema.Struct({ cutoff: Schema.Finite }) }),
+    historyClearAfter: request({ payload: Schema.Struct({ cutoff: Schema.Finite }) }),
     historyClearAll: request({}),
 
     getUpdateStatus: request({ success: UpdateStatus }),

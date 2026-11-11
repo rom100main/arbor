@@ -128,6 +128,7 @@ export const windowRequests = (ctx: WindowContext): RequestHandlers<never> => {
         historyList: (query) => history.list(query),
         historyRemove: ({ ids }) => history.remove(ids),
         historyClearBefore: ({ cutoff }) => history.clearBefore(cutoff),
+        historyClearAfter: ({ cutoff }) => history.clearAfter(cutoff),
         historyClearAll: () => history.clearBefore(Number.MAX_SAFE_INTEGER),
 
         getUpdateStatus: () => ctx.updater.status,
