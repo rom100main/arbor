@@ -39,6 +39,11 @@ export const REQUESTS = {
     downloadOpen: "arbor:downloads:open",
     downloadsOpenFolder: "arbor:downloads:open-folder",
 
+    historyList: "arbor:history:list",
+    historyRemove: "arbor:history:remove",
+    historyClearBefore: "arbor:history:clear-before",
+    historyClearAll: "arbor:history:clear-all",
+
     getUpdateStatus: "arbor:update:get-status",
     installUpdate: "arbor:update:install",
 } as const
@@ -79,4 +84,5 @@ export const PUSHES = {
     shellEdge: "arbor:shell:edge",
     updateStatus: "arbor:update:status",
     downloads: "arbor:downloads:changed",
+    history: "arbor:history:changed",
 } as const

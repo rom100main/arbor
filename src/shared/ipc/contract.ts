@@ -23,6 +23,9 @@ import {
     DownloadId,
     DownloadsSnapshot,
     ExtensionMenuRequest,
+    HistoryEntryId,
+    HistoryQuery,
+    HistorySnapshot,
     OmniboxActivation,
     PermissionPromptRequest,
     PinnedActionInfo,
@@ -198,6 +201,13 @@ export const Requests = {
     downloadOpen: request({ payload: Schema.Struct({ id: DownloadId }) }),
     downloadsOpenFolder: request({}),
 
+    historyList: request({ payload: HistoryQuery, success: HistorySnapshot }),
+    historyRemove: request({
+        payload: Schema.Struct({ ids: Schema.Array(HistoryEntryId) }),
+    }),
+    historyClearBefore: request({ payload: Schema.Struct({ cutoff: Schema.Finite }) }),
+    historyClearAll: request({}),
+
     getUpdateStatus: request({ success: UpdateStatus }),
     installUpdate: request({}),
 } satisfies { readonly [K in keyof typeof REQUESTS]: RequestDef }
@@ -243,6 +253,7 @@ export const Pushes = {
     shellEdge: push(RevealEdge),
     updateStatus: push(UpdateStatus),
     downloads: push(DownloadsSnapshot),
+    history: push(HistorySnapshot),
 } satisfies { readonly [K in keyof typeof PUSHES]: PushDef }
 
 export type RequestKey = keyof typeof Requests

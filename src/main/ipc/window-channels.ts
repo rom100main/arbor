@@ -13,6 +13,7 @@ import { omniboxTarget } from "../../shared/url"
 import type { DownloadsService } from "../downloads/downloads"
 import type { ExtensionsService } from "../extension/extensions"
 import type { PermissionPromptsService } from "../extension/prompts"
+import type { HistoryService } from "../history/service"
 import type { SettingsService } from "../settings"
 import { snapshot, type DomainState } from "../state/state"
 import type { StoreService } from "../state/store"
@@ -30,6 +31,7 @@ export interface WindowContext {
     readonly extensions: ExtensionsService
     readonly updater: UpdaterService
     readonly downloads: DownloadsService
+    readonly history: HistoryService
     readonly handle: WindowHandle
     readonly overlays: Overlays
     readonly viewOf: (tabId: TabId) => ViewHandle | undefined
@@ -39,7 +41,7 @@ export interface WindowContext {
     readonly background: (effect: Effect.Effect<unknown, unknown>) => void
 }
 
-const history = (ctx: WindowContext, tabId: TabId, step: HistoryStep): Effect.Effect<void> => {
+const navHistory = (ctx: WindowContext, tabId: TabId, step: HistoryStep): Effect.Effect<void> => {
     const view = ctx.viewOf(tabId)
     return view ? ctx.handle.history(view, step) : Effect.void
 }
@@ -63,7 +65,7 @@ const historyInBackground = (
 }
 
 export const windowRequests = (ctx: WindowContext): RequestHandlers<never> => {
-    const { store, settings, overlays, extensions, downloads } = ctx
+    const { store, settings, overlays, extensions, downloads, history } = ctx
     return {
         getSnapshot: () => store.snapshot,
         getSettings: () => settings.get,
@@ -108,12 +110,12 @@ export const windowRequests = (ctx: WindowContext): RequestHandlers<never> => {
 
         // Do nothing for a tab with no live view.
         goBack: ({ tabId, background }) =>
-            background ? historyInBackground(ctx, tabId, "back") : history(ctx, tabId, "back"),
+            background ? historyInBackground(ctx, tabId, "back") : navHistory(ctx, tabId, "back"),
         goForward: ({ tabId, background }) =>
             background
                 ? historyInBackground(ctx, tabId, "forward")
-                : history(ctx, tabId, "forward"),
-        reload: ({ tabId }) => history(ctx, tabId, "reload"),
+                : navHistory(ctx, tabId, "forward"),
+        reload: ({ tabId }) => navHistory(ctx, tabId, "reload"),
 
         downloadsList: () => downloads.snapshot,
         downloadCancel: ({ id }) => downloads.cancel(id),
@@ -122,6 +124,11 @@ export const windowRequests = (ctx: WindowContext): RequestHandlers<never> => {
         downloadReveal: ({ id }) => downloads.reveal(id),
         downloadOpen: ({ id }) => downloads.open(id),
         downloadsOpenFolder: () => downloads.openFolder,
+
+        historyList: (query) => history.list(query),
+        historyRemove: ({ ids }) => history.remove(ids),
+        historyClearBefore: ({ cutoff }) => history.clearBefore(cutoff),
+        historyClearAll: () => history.clearBefore(Number.MAX_SAFE_INTEGER),
 
         getUpdateStatus: () => ctx.updater.status,
         installUpdate: () => ctx.updater.install,
@@ -150,6 +157,15 @@ export const windowEvents = (ctx: WindowContext): EventHandlers<never> => {
         Effect.gen(function* () {
             if (payload.kind === "tab") {
                 yield* store.selectTab(payload.tabId).pipe(Effect.ignore)
+            } else if (payload.kind === "history") {
+                const entry = (yield* ctx.history.list({})).entries.find(
+                    (e) => e.id === payload.entryId,
+                )
+                if (entry) {
+                    const { activeTabId } = snapshot(yield* store.state)
+                    if (activeTabId !== null) yield* ctx.navigate(activeTabId, entry.url)
+                    else yield* store.createTab(entry.url).pipe(Effect.ignore)
+                }
             } else if (payload.query.trim().length > 0) {
                 const { activeTabId } = snapshot(yield* store.state)
                 if (activeTabId !== null) {
