@@ -109,9 +109,44 @@ export interface DisplayTab extends TabNode {
     readonly depth: number
 }
 
+export const HistoryEntryId = Schema.TemplateLiteral(["history-", Schema.String])
+export type HistoryEntryId = typeof HistoryEntryId.Type
+
+/** One deduplicated visited page, across containers.
+ * `containerId` is display metadata only:
+ * it may dangle after the container is deleted, and the entry stays valid. */
+export const HistoryEntry = Schema.Struct({
+    id: HistoryEntryId,
+    url: Schema.String,
+    title: Schema.String,
+    favicon: Schema.NullOr(Schema.String),
+    containerId: ContainerId,
+    /** Epoch ms. */
+    firstVisitedAt: Schema.Finite,
+    /** Epoch ms. */
+    lastVisitedAt: Schema.Finite,
+    visitCount: Schema.Finite,
+})
+export type HistoryEntry = typeof HistoryEntry.Type
+
+export const HistorySnapshot = Schema.Struct({
+    /** Newest `lastVisitedAt` first. */
+    entries: Schema.Array(HistoryEntry),
+    /** Count before any query filter, for empty states. */
+    totalCount: Schema.Finite,
+})
+export type HistorySnapshot = typeof HistorySnapshot.Type
+
+export const HistoryQuery = Schema.Struct({
+    query: Schema.optionalKey(Schema.String),
+    containerId: Schema.optionalKey(ContainerId),
+})
+export type HistoryQuery = typeof HistoryQuery.Type
+
 export const OmniboxActivation = Schema.Union([
     Schema.Struct({ kind: Schema.Literal("go"), query: Schema.String }),
     Schema.Struct({ kind: Schema.Literal("tab"), tabId: TabId }),
+    Schema.Struct({ kind: Schema.Literal("history"), entryId: HistoryEntryId }),
 ])
 export type OmniboxActivation = typeof OmniboxActivation.Type
 
