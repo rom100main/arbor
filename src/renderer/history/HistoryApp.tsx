@@ -15,7 +15,14 @@ const SPANS = [
     { key: "week", label: "Last 7 days", ms: 7 * 24 * 60 * 60 * 1000 },
 ] as const
 
-type SpanKey = (typeof SPANS)[number]["key"] | "all"
+/** Deletes everything older than X (i.e. last visited before now - X). */
+const AFTER_SPANS = [
+    { key: "after7", label: "After 7 days", ms: 7 * 24 * 60 * 60 * 1000 },
+    { key: "after30", label: "After 30 days", ms: 30 * 24 * 60 * 60 * 1000 },
+    { key: "after90", label: "After 90 days", ms: 90 * 24 * 60 * 60 * 1000 },
+] as const
+
+type SpanKey = (typeof SPANS)[number]["key"] | (typeof AFTER_SPANS)[number]["key"] | "all"
 
 const relative = (at: number, now: number): string => {
     const diff = Math.max(0, now - at)
@@ -41,7 +48,6 @@ export const HistoryApp = () => {
     const [containerId, setContainerId] = createSignal<string>("all")
     const [selected, setSelected] = createSignal<ReadonlySet<HistoryEntryId>>(new Set())
     const [armed, setArmed] = createSignal<SpanKey | null>(null)
-    const [cutoff, setCutoff] = createSignal("")
 
     const now = createMemo(() => Date.now())
 
@@ -82,15 +88,16 @@ export const HistoryApp = () => {
         setArmed(null)
         if (key === "all") void window.arbor.historyClearAll()
         else {
-            const span = SPANS.find((s) => s.key === key)
-            if (span) void window.arbor.historyClearBefore({ cutoff: Date.now() - span.ms })
+            // "Last X" deletes visits within the last X (last visited after now - X);
+            // "After X" deletes visits older than X (last visited before now - X).
+            const last = SPANS.find((s) => s.key === key)
+            if (last) {
+                void window.arbor.historyClearAfter({ cutoff: Date.now() - last.ms })
+                return
+            }
+            const after = AFTER_SPANS.find((s) => s.key === key)
+            if (after) void window.arbor.historyClearBefore({ cutoff: Date.now() - after.ms })
         }
-    }
-
-    const clearBeforeDate = (): void => {
-        const time = new Date(cutoff()).getTime()
-        if (!Number.isFinite(time)) return
-        void window.arbor.historyClearBefore({ cutoff: time })
     }
 
     const removeOne = (id: HistoryEntryId): void => {
@@ -133,7 +140,6 @@ export const HistoryApp = () => {
                         </Show>
                     </label>
                     <label class="history-container-filter">
-                        <span class="history-filter-label">Container</span>
                         <select
                             value={containerId()}
                             onChange={(event) => setContainerId(event.currentTarget.value)}
@@ -147,9 +153,6 @@ export const HistoryApp = () => {
                         </select>
                     </label>
                 </div>
-                <p class="history-count">
-                    {shown().length} of {history().totalCount} visits
-                </p>
             </header>
 
             <div class="history-bar">
@@ -177,24 +180,21 @@ export const HistoryApp = () => {
                     </button>
                 </div>
                 <div class="history-bar-group">
-                    <label class="history-date">
-                        <span class="history-filter-label">Before</span>
-                        <input
-                            type="datetime-local"
-                            value={cutoff()}
-                            onInput={(event) => setCutoff(event.currentTarget.value)}
-                        />
-                    </label>
-                    <button
-                        type="button"
-                        class="history-button"
-                        disabled={cutoff().length === 0}
-                        onClick={clearBeforeDate}
-                    >
-                        Delete before date
-                    </button>
+                    <For each={AFTER_SPANS}>
+                        {(span) => (
+                            <button
+                                type="button"
+                                class={{ "history-button": true, armed: armed() === span.key }}
+                                onClick={() => clearSpan(span.key)}
+                            >
+                                {armed() === span.key
+                                    ? `Confirm ${span.label.toLowerCase()}?`
+                                    : span.label}
+                            </button>
+                        )}
+                    </For>
                 </div>
-                <div class="history-bar-group">
+                <div class="history-bar-group history-bar-right">
                     <button
                         type="button"
                         class="history-button danger"
@@ -291,13 +291,15 @@ const HistoryRow = (props: {
                 />
             </td>
             <td class="history-name">
-                <Favicon url={entry().favicon} />
-                <span class="history-name-label" title={name()}>
-                    {name()}
-                </span>
-                <Show when={entry().visitCount > 1}>
-                    <span class="history-visits">×{entry().visitCount}</span>
-                </Show>
+                <div class="history-name-inner">
+                    <Favicon url={entry().favicon} />
+                    <span class="history-name-label" title={name()}>
+                        {name()}
+                    </span>
+                    <Show when={entry().visitCount > 1}>
+                        <span class="history-visits">×{entry().visitCount}</span>
+                    </Show>
+                </div>
             </td>
             <td class="history-url" title={entry().url}>
                 <button type="button" class="history-url-link" onClick={props.onOpen}>
@@ -308,8 +310,15 @@ const HistoryRow = (props: {
                 {relative(entry().lastVisitedAt, props.now)}
             </td>
             <td class="history-container">
-                <span class="history-dot" style={{ "background-color": props.containerColor }} />
-                <span>{props.containerName}</span>
+                <div class="history-container-inner">
+                    <span
+                        class="history-dot"
+                        style={{ "background-color": props.containerColor }}
+                    />
+                    <span class="history-container-label" title={props.containerName}>
+                        {props.containerName}
+                    </span>
+                </div>
             </td>
             <td class="history-col-delete">
                 <button
