@@ -31,6 +31,7 @@ import {
     type ViewEvent,
     type ViewHandle,
 } from "./host"
+import { internalFavicon, isInternalPageUrl } from "./internal-page-urls"
 import { menuModel, sameMenuModel } from "./menu"
 
 export interface WindowManagerService {
@@ -43,7 +44,9 @@ const metaFrom = (event: Exclude<ViewEvent, { kind: "openChild" }>): TabMeta =>
     event.kind === "title"
         ? { title: event.title }
         : event.kind === "navigated"
-          ? { url: event.url, title: "", favicon: null }
+          ? // Internal pages carry their own favicon: Chromium's `page-favicon-updated`
+            // is not guaranteed to fire on reload, so assign it here, not from that event.
+            { url: event.url, title: "", favicon: internalFavicon(event.url) }
           : event.kind === "navigatedInPage"
             ? { url: event.url }
             : { favicon: event.favicon }
@@ -183,7 +186,17 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                         )
                     }
                     return Effect.gen(function* () {
-                        yield* store.updateTabMeta(event.tabId, metaFrom(event))
+                        let meta = metaFrom(event)
+                        // A `null` favicon (Chromium's "no favicon" marker) must not
+                        // clear the icon of an internal page, whose favicon comes
+                        // from `internalFavicon` above.
+                        if (meta.favicon === null && event.kind === "favicon") {
+                            const tab = (yield* store.state).tabs.get(event.tabId)
+                            if (tab && isInternalPageUrl(tab.url)) {
+                                meta = { ...meta, favicon: internalFavicon(tab.url) }
+                            }
+                        }
+                        yield* store.updateTabMeta(event.tabId, meta)
                         yield* recordHistory(event).pipe(
                             Effect.catchCause((cause) =>
                                 Effect.logError("History record failed", cause),

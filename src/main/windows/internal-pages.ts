@@ -1,8 +1,6 @@
 import path from "node:path"
 import { pathToFileURL } from "node:url"
 
-import historyGlyph from "@tabler/icons/outline/history.svg?raw"
-import settingsGlyph from "@tabler/icons/outline/settings.svg?raw"
 import { Effect } from "effect"
 import { net, protocol, session, type Session } from "electron"
 
@@ -12,6 +10,7 @@ import {
     assetRelativePath,
     injectDocumentHead,
     devAssetUrl,
+    internalFavicon,
     isAssetRequest,
     isHistoryUrl,
     isInternalPageUrl,
@@ -50,22 +49,16 @@ const clientDir = (): string => path.dirname(rendererPath)
  * The `<title>` is what `trackPageMeta` reads to label the tab,
  * and the icon keeps the sidebar row from falling back to the grey globe placeholder.
  */
-const FAVICON_COLOR = "#8b8f96"
-
-const faviconGlyph = (raw: string): string =>
-    raw
-        .replace('width="24"', 'width="16"')
-        .replace('height="24"', 'height="16"')
-        .replace("currentColor", FAVICON_COLOR)
-
-const headExtras = (url: string): string =>
-    isHistoryUrl(url)
+const headExtras = (url: string): string => {
+    const favicon = internalFavicon(url) ?? ""
+    return isHistoryUrl(url)
         ? `<base href="${HISTORY_URL}/">` +
-          `<title>History</title>` +
-          `<link rel="icon" href="data:image/svg+xml,${encodeURIComponent(faviconGlyph(historyGlyph))}">`
+              `<title>History</title>` +
+              `<link rel="icon" href="${favicon}">`
         : `<base href="${SETTINGS_URL}/">` +
-          `<title>Settings</title>` +
-          `<link rel="icon" href="data:image/svg+xml,${encodeURIComponent(faviconGlyph(settingsGlyph))}">`
+              `<title>Settings</title>` +
+              `<link rel="icon" href="${favicon}">`
+}
 
 const serveDocument = async (requestUrl: string): Promise<Response> => {
     const devServer = devServerOrigin()

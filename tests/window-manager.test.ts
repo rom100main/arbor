@@ -253,6 +253,46 @@ describe("navigation", () => {
                 )
             }),
         ))
+
+    it("sets the settings and history icons from navigation, so a reload cannot lose them", () =>
+        runTest(
+            Effect.gen(function* () {
+                const { host, store } = yield* startApp
+                const tabId = (yield* activeTab(store))!
+                const window = host.windows[0]
+
+                window.emit({ kind: "navigated", tabId, url: "arbor://settings" })
+                yield* settleLong
+                const first = (yield* store.state).tabs.get(tabId)
+                expect(first?.favicon?.startsWith("data:image/svg+xml,")).toBe(true)
+
+                // A favicon-less report (Chromium's "no favicon" marker) after it.
+                window.emit({ kind: "favicon", tabId, favicon: null })
+                yield* settleLong
+                expect((yield* store.state).tabs.get(tabId)?.favicon).toBe(first?.favicon)
+
+                // A reload reports the same URL again, with no favicon event after.
+                window.emit({ kind: "navigated", tabId, url: "arbor://settings" })
+                yield* settleLong
+                expect((yield* store.state).tabs.get(tabId)?.favicon).toBe(first?.favicon)
+
+                window.emit({ kind: "navigated", tabId, url: "arbor://history" })
+                yield* settleLong
+                const historyFavicon = (yield* store.state).tabs.get(tabId)?.favicon
+                expect(historyFavicon?.startsWith("data:image/svg+xml,")).toBe(true)
+                expect(historyFavicon).not.toBe(first?.favicon)
+
+                // Ordinary pages stay with Chromium: navigation clears, then the page reports.
+                window.emit({ kind: "navigated", tabId, url: "https://example.com/" })
+                yield* settleLong
+                expect((yield* store.state).tabs.get(tabId)?.favicon).toBeNull()
+                window.emit({ kind: "favicon", tabId, favicon: "https://example.com/icon.png" })
+                yield* settleLong
+                expect((yield* store.state).tabs.get(tabId)?.favicon).toBe(
+                    "https://example.com/icon.png",
+                )
+            }),
+        ))
 })
 
 describe("reconciliation", () => {

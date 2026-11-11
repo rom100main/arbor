@@ -4,6 +4,7 @@ import {
     assetRelativePath,
     devAssetUrl,
     injectDocumentHead,
+    internalFavicon,
     isAssetRequest,
     isHistoryUrl,
     isInternalPageUrl,
@@ -64,6 +65,22 @@ describe("the history URL", () => {
         expect(isInternalPageUrl("arbor://history")).toBe(true)
         expect(isInternalPageUrl("arbor://settings")).toBe(true)
         expect(isInternalPageUrl("arbor://other")).toBe(false)
+    })
+})
+
+describe("internalFavicon", () => {
+    it("is a data URL for settings and history, distinct per page", () => {
+        const settings = internalFavicon("arbor://settings/search")
+        const history = internalFavicon("arbor://history")
+        expect(settings?.startsWith("data:image/svg+xml,")).toBe(true)
+        expect(history?.startsWith("data:image/svg+xml,")).toBe(true)
+        expect(settings).not.toBe(history)
+    })
+
+    it("is null for ordinary pages, which keep Chromium's favicon", () => {
+        expect(internalFavicon("https://example.com/")).toBeNull()
+        expect(internalFavicon("arbor://other")).toBeNull()
+        expect(internalFavicon("about:blank")).toBeNull()
     })
 })
 

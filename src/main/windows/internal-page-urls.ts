@@ -1,3 +1,6 @@
+import historyGlyph from "@tabler/icons/outline/history.svg?raw"
+import settingsGlyph from "@tabler/icons/outline/settings.svg?raw"
+
 import { INTERNAL_SCHEME } from "../../shared/settings"
 
 /**
@@ -28,6 +31,26 @@ export const isHistoryUrl = (url: string): boolean => {
 
 /** Any `arbor://` page Arbor serves itself (settings or history). */
 export const isInternalPageUrl = (url: string): boolean => isSettingsUrl(url) || isHistoryUrl(url)
+
+/**
+ * The `data:` favicon the served document declares for an internal page.
+ *
+ * The main process assigns this value on navigation instead of waiting for
+ * Chromium's `page-favicon-updated`, which is not guaranteed to fire on
+ * reload for these pages: tab icons must survive a reload and an app restart.
+ */
+const FAVICON_COLOR = "#8b8f96"
+
+const faviconGlyph = (raw: string): string =>
+    raw
+        .replace('width="24"', 'width="16"')
+        .replace('height="24"', 'height="16"')
+        .replace("currentColor", FAVICON_COLOR)
+
+export const internalFavicon = (url: string): string | null => {
+    const raw = isHistoryUrl(url) ? historyGlyph : isSettingsUrl(url) ? settingsGlyph : null
+    return raw === null ? null : `data:image/svg+xml,${encodeURIComponent(faviconGlyph(raw))}`
+}
 
 const isSettingsDocument = (pathname: string): boolean => SETTINGS_DOCUMENT_PATHS.has(pathname)
 
