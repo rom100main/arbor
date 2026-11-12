@@ -72,6 +72,8 @@ export interface WindowHandle {
     readonly viewEvents: Stream.Stream<ViewEvent>
     /** A revealed bar floats over the page, so the shell rises above it while one is out. */
     readonly raiseShell: (raised: boolean) => Effect.Effect<void>
+    /** Show the native window buttons (traffic lights / window controls) while the title bar is out. */
+    readonly setWindowButtons: (shown: boolean) => Effect.Effect<void>
     /** Give the shell keyboard focus (before focusing the address bar). */
     readonly focusShell: Effect.Effect<void>
 }

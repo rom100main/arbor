@@ -17,6 +17,7 @@ export type HistoryRetention = (typeof HISTORY_RETENTIONS)[number]
 export const SIDEBAR_WIDTH = 240
 export const SIDEBAR_COMPACT_WIDTH = 48
 export const TOOLBAR_HEIGHT = 44
+export const TITLEBAR_HEIGHT = 32
 
 export const REVEAL_EDGE = 16
 

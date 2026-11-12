@@ -220,5 +220,6 @@ export const windowEvents = (ctx: WindowContext): EventHandlers<never> => {
         extensionsMenu: (request) => ctx.extensions.openMenu(request),
         permissionRespond: (allowed) => ctx.prompts.respond(allowed),
         shellRaise: (raised) => ctx.handle.raiseShell(raised),
+        titlebarReveal: (open) => ctx.handle.setWindowButtons(open),
     }
 }

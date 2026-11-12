@@ -114,6 +114,7 @@ const makeMemoryWindowHost = Effect.gen(function* () {
                 history: (view, step) => record({ op: "history", tabId: view.tabId, step }),
                 viewEvents: Stream.fromQueue(events),
                 raiseShell: () => Effect.void,
+                setWindowButtons: () => Effect.void,
                 focusShell: Effect.void,
             }
         }),

@@ -150,7 +150,7 @@ export const OmniboxActivation = Schema.Union([
 ])
 export type OmniboxActivation = typeof OmniboxActivation.Type
 
-export const RevealEdge = Schema.Literals(["left", "bottom"])
+export const RevealEdge = Schema.Literals(["left", "bottom", "top"])
 export type RevealEdge = typeof RevealEdge.Type
 
 /** Where the app update stands. The toolbar shows a button for `ready` and `manual`. */

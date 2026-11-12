@@ -67,6 +67,7 @@ export const EVENTS = {
     downloadsSetPopupHeight: "arbor:downloads:popup-height",
     permissionRespond: "arbor:permission:respond",
     shellRaise: "arbor:shell:raise",
+    titlebarReveal: "arbor:titlebar:reveal",
 } as const
 
 /** Main tells renderers. The preload exposes each as `on<Key>`. */

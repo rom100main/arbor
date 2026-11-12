@@ -237,6 +237,8 @@ export const Events = {
     permissionRespond: event(Schema.Boolean),
     // A revealed bar floats over the page, so the shell rises above it for as long as one is out.
     shellRaise: event(Schema.Boolean),
+    // The native window buttons (traffic lights / window controls) follow the title bar.
+    titlebarReveal: event(Schema.Boolean),
 } satisfies { readonly [K in keyof typeof EVENTS]: EventDef }
 
 export const Pushes = {

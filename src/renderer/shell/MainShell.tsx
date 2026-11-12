@@ -6,6 +6,7 @@ import {
     SETTINGS_URL,
     SIDEBAR_COMPACT_WIDTH,
     SIDEBAR_WIDTH,
+    TITLEBAR_HEIGHT,
     TOOLBAR_HEIGHT,
 } from "../../shared/settings"
 import { Icon } from "../ui/Icon"
@@ -38,18 +39,25 @@ export const MainShell = () => {
         revealZones(settings(), { width: window.innerWidth, height: window.innerHeight })
     const sidebar = createReveal(() => zones().sidebar)
     const toolbar = createReveal(() => zones().toolbar)
+    const titlebar = createReveal(() => zones().titlebar)
 
     const onPointer = (event: MouseEvent): void => {
-        sidebar.pointer(event.clientX, event.clientY)
-        toolbar.pointer(event.clientX, event.clientY)
+        const { clientX, clientY } = event
+        sidebar.pointer(clientX, clientY)
+        toolbar.pointer(clientX, clientY)
+        titlebar.pointer(clientX, clientY)
     }
     const onLeave = (): void => {
         sidebar.leave()
         toolbar.leave()
+        // No leave() for the title bar:
+        // its keep zone overlaps the native window buttons,
+        // so moving onto them fires mouseleave without actually leaving the title bar.
     }
     const onResize = (): void => {
         sidebar.sync()
         toolbar.sync()
+        titlebar.sync()
     }
     document.addEventListener("mousemove", onPointer)
     document.documentElement.addEventListener("mouseleave", onLeave)
@@ -59,7 +67,16 @@ export const MainShell = () => {
         document.documentElement.removeEventListener("mouseleave", onLeave)
         window.removeEventListener("resize", onResize)
     })
-    onCleanup(window.arbor.onShellEdge((edge) => (edge === "left" ? sidebar : toolbar).reveal()))
+    onCleanup(
+        window.arbor.onShellEdge((edge) =>
+            (edge === "left" ? sidebar : edge === "bottom" ? toolbar : titlebar).reveal(),
+        ),
+    )
+    // The native window buttons (traffic lights / window controls) only follow the title bar.
+    createEffect(
+        () => titlebar.open(),
+        (open) => window.arbor.titlebarReveal(open),
+    )
     onCleanup(
         window.arbor.onFocusTabTree(() => {
             sidebar.reveal()
@@ -88,7 +105,7 @@ export const MainShell = () => {
     }
     onCleanup(() => clearTimeout(lowerTimer))
     createEffect(
-        () => sidebar.open() || toolbar.open(),
+        () => sidebar.open() || toolbar.open() || titlebar.open(),
         (anyOpen) => {
             if (anyOpen) {
                 setRaised(true)
@@ -105,7 +122,8 @@ export const MainShell = () => {
         if (event.target !== event.currentTarget) return
         sidebar.dismiss()
         toolbar.dismiss()
-        if (!sidebar.isOpen() && !toolbar.isOpen()) setRaised(false)
+        titlebar.dismiss()
+        if (!sidebar.isOpen() && !toolbar.isOpen() && !titlebar.isOpen()) setRaised(false)
     }
 
     // Typing in the URL bar keeps it out even once the pointer has left it.
@@ -155,11 +173,22 @@ export const MainShell = () => {
                 "--sidebar-width": `${SIDEBAR_WIDTH}px`,
                 "--sidebar-compact-width": `${SIDEBAR_COMPACT_WIDTH}px`,
                 "--toolbar-height": `${TOOLBAR_HEIGHT}px`,
+                "--titlebar-height": `${TITLEBAR_HEIGHT}px`,
                 "--toolbar-inset": `${chromeInsets(settings()).bottom}px`,
                 "--reveal-duration": `${REVEAL_MS}ms`,
             }}
             onMouseDown={onShellMouseDown}
         >
+            <section
+                aria-label="Title bar"
+                class={{
+                    titlebar: true,
+                    stowed: !titlebar.open(),
+                    floating: titlebar.open(),
+                }}
+            >
+                Arbor
+            </section>
             <Sidebar
                 visibility={settings().sidebarVisibility}
                 open={sidebar.open()}

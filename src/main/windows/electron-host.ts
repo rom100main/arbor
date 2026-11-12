@@ -13,7 +13,7 @@ import {
 
 import { containerPartition } from "../../shared/constants"
 import type { ContainerId } from "../../shared/protocol"
-import type { Settings } from "../../shared/settings"
+import { TITLEBAR_HEIGHT, type Settings } from "../../shared/settings"
 import { Downloads } from "../downloads/downloads"
 import { Extensions } from "../extension/extensions"
 import { IpcPush, makePusher } from "../ipc/router"
@@ -106,10 +106,17 @@ export const makeWindowHost: Effect.Effect<
                     minHeight: 480,
                     show: false,
                     title: "Arbor",
+                    // No native title bar:
+                    // the shell draws its own and reveals it on top-edge hover, like the toolbar at the bottom.
+                    // Window buttons stay hidden until the title bar is out.
+                    titleBarStyle: "hidden",
+                    titleBarOverlay: true,
                     // macOS and Windows take the icon from the app bundle and the .exe.
                     icon: process.platform === "linux" ? appIconPath : undefined,
                     backgroundColor: windowBackground(settings),
                 })
+                if (process.platform === "darwin") created.setWindowButtonVisibility(false)
+                else created.setTitleBarOverlay({ height: 0 })
                 created.on("closed", () => Deferred.doneUnsafe(closed, Effect.void))
                 return created
             }),
@@ -292,6 +299,12 @@ export const makeWindowHost: Effect.Effect<
                 }),
             viewEvents: Stream.fromQueue(events),
             raiseShell: (raised) => Effect.sync(() => shell.setRaised(raised)),
+            setWindowButtons: (shown) =>
+                Effect.sync(() => {
+                    if (win.isDestroyed()) return
+                    if (process.platform === "darwin") win.setWindowButtonVisibility(shown)
+                    else win.setTitleBarOverlay({ height: shown ? TITLEBAR_HEIGHT : 0 })
+                }),
             focusShell: Effect.sync(() => shell.focus()),
         }
 

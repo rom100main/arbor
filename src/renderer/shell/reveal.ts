@@ -5,6 +5,7 @@ import {
     REVEAL_EDGE,
     SIDEBAR_COMPACT_WIDTH,
     SIDEBAR_WIDTH,
+    TITLEBAR_HEIGHT,
     TOOLBAR_HEIGHT,
     type Settings,
 } from "../../shared/settings"
@@ -33,6 +34,7 @@ export interface RevealZone {
 export interface RevealZones {
     readonly sidebar: RevealZone | null
     readonly toolbar: RevealZone | null
+    readonly titlebar: RevealZone // no null because title bar is never displayed
 }
 
 export const revealZones = (
@@ -65,7 +67,12 @@ export const revealZones = (
                   keep: { left: 0, top: height - TOOLBAR_HEIGHT, right: width, bottom: height },
                   openDelayMs: 0,
               }
-    return { sidebar, toolbar }
+    const titlebar: RevealZone = {
+        trigger: { left: 0, top: 0, right: width, bottom: REVEAL_EDGE },
+        keep: { left: 0, top: 0, right: width, bottom: TITLEBAR_HEIGHT },
+        openDelayMs: 0,
+    }
+    return { sidebar, toolbar, titlebar }
 }
 
 export interface Reveal {

@@ -33,6 +33,7 @@ const edgeAt = (
     point: { x: number; y: number },
 ): RevealEdge | null => {
     if (settings.sidebarVisibility === "hidden" && point.x <= REVEAL_EDGE) return "left"
+    if (point.y <= REVEAL_EDGE) return "top"
     if (settings.urlBarVisibility === "hidden" && point.y >= size.height - REVEAL_EDGE) {
         return "bottom"
     }

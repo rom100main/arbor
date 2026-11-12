@@ -93,6 +93,7 @@ const quietEvents: EventHandlers<never> = {
     downloadsSetPopupHeight: () => Effect.void,
     permissionRespond: () => Effect.void,
     shellRaise: (raised) => Effect.sync(() => eventsSeen.push(raised)),
+    titlebarReveal: () => Effect.void,
 }
 
 /** Every Arbor channel served over an in-memory transport, with a real store behind it. */
