@@ -1,10 +1,10 @@
 /**
  * The Extensions module: the extension stack of every session
- * (Web Store installs and updates, dev-only unpacked extensions, MV3 workers),
+ * (Web Store installs and updates, unpacked extensions, MV3 workers),
  * the `chrome.tabs` / `chrome.windows` callbacks, the extension menu and the uninstall teardown.
  */
 
-import { existsSync, readdirSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync } from "node:fs"
 import path from "node:path"
 
 import { Context, Effect, FiberSet, Latch, Layer, Option, Schedule, Schema } from "effect"
@@ -14,6 +14,7 @@ import {
     Menu,
     MenuItem,
     session,
+    shell,
     type BrowserWindow,
     type IpcMainInvokeEvent,
     type Session,
@@ -71,10 +72,15 @@ export interface ExtensionsService {
      * The unpacked source folder is the user's code and is never deleted.
      */
     readonly uninstall: (extensionId: string) => Effect.Effect<void>
+    /** Reveal the unpacked-extensions folder in the OS file manager, creating it first. */
+    readonly openDevExtensionsFolder: Effect.Effect<void>
 }
 
 const WEBSTORE_ORIGIN = "https://chromewebstore.google.com"
 const UNINSTALL_CHANNEL = "chrome.management.uninstall"
+
+/** Unpacked extensions are the user's own code, outside the app: `<userData>/dev-extensions`. */
+const devExtensionsDir = (): string => path.join(app.getPath("userData"), "dev-extensions")
 
 export const unpackedManifestDirs = (dir: string): string[] => {
     if (!existsSync(dir)) return []
@@ -258,7 +264,7 @@ export class Extensions extends Context.Service<Extensions, ExtensionsService>()
 
             const loadUnpacked = (ses: Session) =>
                 Effect.forEach(
-                    unpackedManifestDirs(path.join(app.getPath("userData"), "dev-extensions")),
+                    unpackedManifestDirs(devExtensionsDir()),
                     (extensionPath) =>
                         // Consent before load: a denied extension never runs, not even its worker.
                         consent.unpackedConsent(extensionPath).pipe(
@@ -274,6 +280,11 @@ export class Extensions extends Context.Service<Extensions, ExtensionsService>()
                         ),
                     { concurrency: "unbounded", discard: true },
                 )
+
+            const openDevExtensionsFolder: Effect.Effect<void> = Effect.sync(() => {
+                mkdirSync(devExtensionsDir(), { recursive: true })
+                void shell.openPath(devExtensionsDir())
+            })
 
             const startWorkers = (ses: Session) =>
                 Effect.forEach(
@@ -326,7 +337,7 @@ export class Extensions extends Context.Service<Extensions, ExtensionsService>()
                     ),
                     // The library registers its uninstall handler before it can fail: replace it either way.
                     Effect.andThen(routeWebStoreUninstall),
-                    Effect.andThen(app.isPackaged ? Effect.void : loadUnpacked(ses)),
+                    Effect.andThen(loadUnpacked(ses)),
                     // NOTE: Give Electron a beat to finish registering MV3 backgrounds after loadExtension.
                     Effect.andThen(Effect.sleep("500 millis")),
                     Effect.andThen(startWorkers(ses)),
@@ -529,6 +540,7 @@ export class Extensions extends Context.Service<Extensions, ExtensionsService>()
                     }),
                 actionInfo: actions.info,
                 openMenu,
+                openDevExtensionsFolder,
                 uninstall,
             }
         }),

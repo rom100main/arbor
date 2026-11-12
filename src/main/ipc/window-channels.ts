@@ -124,6 +124,7 @@ export const windowRequests = (ctx: WindowContext): RequestHandlers<never> => {
         downloadReveal: ({ id }) => downloads.reveal(id),
         downloadOpen: ({ id }) => downloads.open(id),
         downloadsOpenFolder: () => downloads.openFolder,
+        extensionsOpenDevFolder: () => ctx.extensions.openDevExtensionsFolder,
 
         historyList: (query) => history.list(query),
         historyRemove: ({ ids }) => history.remove(ids),

@@ -12,4 +12,5 @@ export const noExtensions = Layer.succeed(Extensions, {
         Effect.succeed({ extensionId, title: extensionId, iconDataUrl: null, popupUrl: null }),
     openMenu: () => Effect.void,
     uninstall: () => Effect.void,
+    openDevExtensionsFolder: Effect.void,
 })

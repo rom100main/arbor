@@ -38,6 +38,7 @@ export const REQUESTS = {
     downloadReveal: "arbor:downloads:reveal",
     downloadOpen: "arbor:downloads:open",
     downloadsOpenFolder: "arbor:downloads:open-folder",
+    extensionsOpenDevFolder: "arbor:extensions:open-dev-folder",
 
     historyList: "arbor:history:list",
     historyRemove: "arbor:history:remove",

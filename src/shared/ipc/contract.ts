@@ -200,6 +200,7 @@ export const Requests = {
     downloadReveal: request({ payload: Schema.Struct({ id: DownloadId }) }),
     downloadOpen: request({ payload: Schema.Struct({ id: DownloadId }) }),
     downloadsOpenFolder: request({}),
+    extensionsOpenDevFolder: request({}),
 
     historyList: request({ payload: HistoryQuery, success: HistorySnapshot }),
     historyRemove: request({

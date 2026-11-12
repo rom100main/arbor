@@ -7,7 +7,14 @@ import { INTERNAL_SCHEME } from "../../shared/settings"
  * URL helpers for the pages Arbor serves itself over `arbor://`.
  * The route names match `renderer/settings/routes.ts`, which parses the same URLs.
  */
-const SETTINGS_DOCUMENT_PATHS = new Set(["/", "/search", "/downloads", "/history", "/appearance"])
+const SETTINGS_DOCUMENT_PATHS = new Set([
+    "/",
+    "/search",
+    "/downloads",
+    "/history",
+    "/extensions",
+    "/appearance",
+])
 
 export const isInternalUrl = (url: string): boolean => url.startsWith(`${INTERNAL_SCHEME}://`)
 

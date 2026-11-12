@@ -23,8 +23,12 @@ const NAV: { route: SettingsRoute; label: string; icon: IconName }[] = [
     { route: "search", label: "Search", icon: "search" },
     { route: "downloads", label: "Downloads", icon: "download" },
     { route: "history", label: "History", icon: "history" },
+    { route: "extensions", label: "Extensions", icon: "puzzle" },
     { route: "appearance", label: "Appearance", icon: "settings" },
 ]
+
+/** The store Arbor's extensions install from (kept in sync with the main process's WEBSTORE_ORIGIN). */
+const WEB_STORE_URL = "https://chromewebstore.google.com/"
 
 const THEME_LABELS: Record<Theme, string> = {
     light: "Light",
@@ -152,6 +156,9 @@ export const SettingsApp = () => {
                     </Match>
                     <Match when={route() === "history"}>
                         <HistorySection />
+                    </Match>
+                    <Match when={route() === "extensions"}>
+                        <ExtensionsSection />
                     </Match>
                     <Match when={route() === "appearance"}>
                         <AppearanceSection />
@@ -408,6 +415,40 @@ const HistorySection = () => {
         </section>
     )
 }
+
+const ExtensionsSection = () => (
+    <section>
+        <h1>Extensions</h1>
+        <div class="settings-group">
+            <h2>Install</h2>
+            <button
+                type="button"
+                class="settings-button"
+                onClick={() => void window.arbor.createTab({ url: WEB_STORE_URL })}
+            >
+                <Icon name="puzzle" size={14} />
+                Open Chrome Web Store
+            </button>
+            <p class="settings-hint">
+                You can install extensions from the Chrome Web Store.
+            </p>
+        </div>
+        <div class="settings-group">
+            <h2>Unpacked extensions</h2>
+            <button
+                type="button"
+                class="settings-button"
+                onClick={() => void window.arbor.extensionsOpenDevFolder()}
+            >
+                <Icon name="folder" size={14} />
+                Open dev-extensions folder
+            </button>
+            <p class="settings-hint">
+                Drop unpacked extensions in this folder for development. They will load on startup after you approve them.
+            </p>
+        </div>
+    </section>
+)
 
 const AppearanceSection = () => {
     const settings = useSettings()
