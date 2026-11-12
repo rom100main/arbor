@@ -36,8 +36,8 @@
 
 .titlebar {
     position: absolute;
-    right: 0;
     top: 0;
+    right: 0;
     left: 0;
     z-index: 2;
     display: flex;
@@ -48,11 +48,12 @@
     color: var(--color-text-faint);
     background: var(--color-toolbar-bg);
     border-bottom: 1px solid var(--color-border);
-    /* The native title bar is hidden: this bar is the window's drag region. */
-    -webkit-app-region: drag;
     transition:
         transform var(--reveal-duration) var(--reveal-easing),
         box-shadow var(--reveal-duration) var(--reveal-easing);
+
+    /* The native title bar is hidden: this bar is the window's drag region. */
+    -webkit-app-region: drag;
 
     &.stowed {
         transform: translateY(-100%);

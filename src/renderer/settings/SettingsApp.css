@@ -108,9 +108,9 @@
 .settings-button {
     display: inline-flex;
     flex-shrink: 0;
-    align-self: flex-start;
     gap: 6px;
     align-items: center;
+    align-self: flex-start;
     padding: 8px 12px;
     font: inherit;
     font-size: var(--font-size-md);
