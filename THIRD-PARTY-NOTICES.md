@@ -785,7 +785,7 @@ SOFTWARE.
 
 Used by:
 
-- `@tabler/icons` 3.50.0
+- `@tabler/icons` 3.51.0
 
 ```
 MIT License
@@ -845,7 +845,7 @@ SOFTWARE.
 
 Used by:
 
-- `effect` 4.1.2
+- `effect` 4.1.4
 
 ```
 MIT License
