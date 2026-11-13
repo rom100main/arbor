@@ -11,9 +11,9 @@
 .rename-popup {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    width: 224px;
-    padding: 12px;
+    gap: 12px;
+    width: 280px;
+    padding: 14px;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-xl);
@@ -21,14 +21,14 @@
 }
 
 .rename-label {
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-lg);
     color: var(--color-text-faint);
 }
 
 .rename-input {
-    height: 28px;
-    padding: 0 8px;
-    font-size: var(--font-size-body);
+    height: 36px;
+    padding: 0 12px;
+    font-size: var(--font-size-lg);
     user-select: text;
     outline: none;
     border: 1px solid var(--color-border);
@@ -41,12 +41,14 @@
 
 .rename-colors {
     display: flex;
-    gap: 6px;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 14px;
 }
 
 .rename-color {
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
     padding: 0;
     cursor: pointer;
     border: 2px solid transparent;
@@ -60,14 +62,15 @@
 .rename-icons {
     display: grid;
     grid-template-columns: repeat(6, 1fr);
-    gap: 4px;
+    gap: 6px;
+    margin-top: 14px;
 }
 
 .rename-icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    height: 26px;
+    height: 32px;
     padding: 0;
     color: var(--color-text-muted);
     cursor: pointer;
@@ -89,12 +92,12 @@
 
 .rename-actions {
     display: flex;
-    gap: 6px;
+    gap: 8px;
     justify-content: flex-end;
 
     button {
-        padding: 4px 10px;
-        font-size: var(--font-size-md);
+        padding: 6px 12px;
+        font-size: var(--font-size-lg);
         cursor: pointer;
         background: var(--color-surface);
         border: 1px solid var(--color-border);

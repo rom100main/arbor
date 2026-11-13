@@ -24,6 +24,12 @@ export const CONTAINER_ICONS = [
     "mail",
     "puzzle",
     "star",
+    "photo",
+    "folder",
+    "link",
+    "device-desktop",
+    "clock",
+    "sun",
 ] as const
 
 /** The session partition of a container: one per container, so containers share nothing. */

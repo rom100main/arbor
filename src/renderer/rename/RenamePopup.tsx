@@ -118,7 +118,7 @@ export const RenamePopup = (props: { target: RenameTarget }) => {
                                         title={option}
                                         onClick={() => setIcon(option)}
                                     >
-                                        <Icon name={option} size={15} />
+                                        <Icon name={option} size={18} />
                                     </button>
                                 )}
                             </For>

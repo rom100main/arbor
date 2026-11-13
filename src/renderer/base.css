@@ -5,6 +5,7 @@
     --font-size-sm: 11px;
     --font-size-md: 12px;
     --font-size-body: 13px;
+    --font-size-lg: 14px;
     --color-bg: oklch(100% 0 0deg);
     --color-sidebar-bg: oklch(97.2% 0.002 250deg);
     --color-toolbar-bg: oklch(97.2% 0.002 250deg);
