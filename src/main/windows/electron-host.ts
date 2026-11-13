@@ -243,6 +243,7 @@ export const makeWindowHost: Effect.Effect<
                 Effect.andThen(
                     Effect.sync(() => {
                         if (win.isDestroyed()) return
+                        win.maximize()
                         win.show()
                         if (process.env.VITE_DEV_SERVER_URL) {
                             shell.view.webContents.openDevTools({ mode: "detach" })
