@@ -2,8 +2,78 @@
 
 import { DEFAULT_SEARCH_TEMPLATE, searchUrl } from "./settings"
 
+export type UrlDisplayParts = {
+    /** Everything before the host: scheme, userinfo. Greyed. */
+    prefix: string
+    /** The host itself, kept full-strength. Empty when `value` has no host. */
+    host: string
+    /** Everything after the host: port, path, query, fragment. Greyed. */
+    suffix: string
+}
+
 const URL_PATTERN = /^[a-z][a-z0-9+.-]*:/i
 const LIKE_URL_PATTERN = /^([a-z0-9-]+\.)+[a-z]{2,}(:\d+)?(\/.*)?$/i
+
+/**
+ * Split a displayed URL into the part to keep full-strength (its host)
+ * and the parts to grey out (scheme, port, path, query, fragment).
+ */
+export const urlDisplayParts = (value: string): UrlDisplayParts => {
+    const plain = { prefix: value, host: "", suffix: "" }
+    if (value.length === 0 || /\s/.test(value)) return plain
+
+    let authorityStart = 0
+    let hasAuthority = false
+    if (value.startsWith("//")) {
+        authorityStart = 2
+        hasAuthority = true
+    } else {
+        const schemeEnd = value.indexOf("://")
+        if (schemeEnd !== -1) {
+            authorityStart = schemeEnd + 3
+            hasAuthority = true
+        } else if (/^[a-z][a-z0-9+.-]*:/i.test(value)) {
+            // Opaque scheme without an authority (about:, mailto:, data:),
+            // unless the colon introduces a numeric port (example.com:8080).
+            const afterColon = value.slice(value.indexOf(":") + 1)
+            if (!/^\d+([/?#]|$)/.test(afterColon)) return plain
+        }
+    }
+
+    let authorityEnd = value.length
+    for (const delimiter of ["/", "?", "#"]) {
+        const at = value.indexOf(delimiter, authorityStart)
+        if (at !== -1 && at < authorityEnd) authorityEnd = at
+    }
+
+    const authority = value.slice(authorityStart, authorityEnd)
+    if (authority.length === 0) return plain
+
+    // Strip userinfo, then the port, leaving just the host.
+    const hostPort = authority.slice(authority.lastIndexOf("@") + 1)
+    let hostEnd: number
+    if (hostPort.startsWith("[")) {
+        const closing = hostPort.indexOf("]")
+        if (closing === -1) return plain
+        hostEnd = closing + 1
+    } else {
+        const colon = hostPort.indexOf(":")
+        hostEnd = colon === -1 ? hostPort.length : colon
+    }
+    const hostStart = authorityStart + (authority.length - hostPort.length)
+    const host = hostPort.slice(0, hostEnd)
+    if (host.length === 0) return plain
+
+    if (!hasAuthority && !host.includes(".") && host !== "localhost" && !host.startsWith("[")) {
+        return plain
+    }
+
+    return {
+        prefix: value.slice(0, hostStart),
+        host,
+        suffix: value.slice(hostStart + host.length),
+    }
+}
 
 /**
  * Resolve omnibox input to a navigable URL:

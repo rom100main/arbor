@@ -1,6 +1,7 @@
 import { createEffect, createSignal } from "solid-js"
 
 import type { TabId } from "../../../shared/protocol"
+import { urlDisplayParts } from "../../../shared/url"
 import { requestOmniboxFocus, useOmniboxFocus } from "../focus"
 
 import "./OmniboxInput.css"
@@ -25,6 +26,18 @@ export const OmniboxInput = (props: { tabId: TabId | null; url: string }) => {
     )
 
     let input: HTMLInputElement | undefined
+    let overlay: HTMLDivElement | undefined
+
+    const syncScroll = (): void => {
+        if (input && overlay) overlay.scrollLeft = input.scrollLeft
+    }
+    createEffect(
+        () => value(),
+        () => {
+            requestAnimationFrame(syncScroll)
+        },
+    )
+
     const focusInput = (): void => {
         input?.focus({ preventScroll: true })
         input?.select()
@@ -75,12 +88,20 @@ export const OmniboxInput = (props: { tabId: TabId | null; url: string }) => {
         }
     }
 
+    const parts = () => urlDisplayParts(value())
+
     return (
         <div class="omnibox-wrap">
+            <div class="omnibox-overlay" ref={(el) => (overlay = el)} aria-hidden="true">
+                <span class={parts().host ? "omnibox-muted" : ""}>{parts().prefix}</span>
+                <span>{parts().host}</span>
+                <span class={parts().host ? "omnibox-muted" : ""}>{parts().suffix}</span>
+            </div>
             <input
                 ref={(el) => (input = el)}
                 class={{ omnibox: true }}
                 type="text"
+                spellcheck={false}
                 placeholder="Search or type a URL"
                 value={value()}
                 onInput={(event) => {
@@ -94,6 +115,7 @@ export const OmniboxInput = (props: { tabId: TabId | null; url: string }) => {
                 }}
                 onBlur={hidePopup}
                 onKeyDown={onKeyDown}
+                onScroll={syncScroll}
             />
         </div>
     )
