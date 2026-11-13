@@ -213,10 +213,11 @@ const SearchSection = () => {
     return (
         <section>
             <h1>Search</h1>
-            <label class="settings-field">
-                <span class="settings-label">Search engine URL</span>
+            <div class="settings-group">
+                <h2>Search engine URL</h2>
                 <input
                     class={{ "settings-input": true, invalid: error() !== null }}
+                    aria-label="Search engine URL"
                     type="text"
                     spellcheck={false}
                     autocomplete="off"
@@ -240,7 +241,7 @@ const SearchSection = () => {
                 <p class="settings-hint">
                     <code>%s</code> is replaced with what your search query.
                 </p>
-            </label>
+            </div>
             <div class="settings-suggestions">
                 <For each={shown()}>
                     {(engine) => (
@@ -429,12 +430,10 @@ const ExtensionsSection = () => (
                 <Icon name="puzzle" size={14} />
                 Open Chrome Web Store
             </button>
-            <p class="settings-hint">
-                You can install extensions from the Chrome Web Store.
-            </p>
+            <p class="settings-hint">You can install extensions from the Chrome Web Store.</p>
         </div>
         <div class="settings-group">
-            <h2>Unpacked extensions</h2>
+            <h2>Dev extensions</h2>
             <button
                 type="button"
                 class="settings-button"
@@ -444,7 +443,8 @@ const ExtensionsSection = () => (
                 Open dev-extensions folder
             </button>
             <p class="settings-hint">
-                Drop unpacked extensions in this folder for development. They will load on startup after you approve them.
+                Drop unpacked extensions in this folder for development. They will load on startup
+                after you approve them.
             </p>
         </div>
     </section>

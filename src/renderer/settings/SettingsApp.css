@@ -20,7 +20,7 @@
     gap: 8px;
     align-items: center;
     padding: 6px 10px;
-    font-size: var(--font-size-body);
+    font-size: var(--font-size-lg);
     color: var(--color-text-muted);
     text-align: left;
     cursor: pointer;
@@ -47,28 +47,17 @@
 
     h1 {
         margin: 0 0 20px;
-        font-size: 17px;
+        font-size: 20px;
         font-weight: 600;
         color: var(--color-text);
     }
 }
 
-.settings-field {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    max-width: 520px;
-}
-
-.settings-label {
-    font-size: var(--font-size-md);
-    color: var(--color-text-muted);
-}
-
 .settings-input {
+    max-width: 512px;
     padding: 7px 9px;
     font-family: var(--font-family);
-    font-size: var(--font-size-body);
+    font-size: var(--font-size-lg);
     color: var(--color-text);
     outline: none;
     background: var(--color-surface);
@@ -89,7 +78,7 @@
     display: flex;
     gap: 10px;
     align-items: center;
-    max-width: 520px;
+    max-width: 512px;
     padding: 7px 9px;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
@@ -100,7 +89,7 @@
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: var(--font-size-md);
+    font-size: var(--font-size-body);
     color: var(--color-text-muted);
     white-space: nowrap;
 }
@@ -113,7 +102,7 @@
     align-self: flex-start;
     padding: 8px 12px;
     font: inherit;
-    font-size: var(--font-size-md);
+    font-size: var(--font-size-body);
     color: var(--color-text);
     cursor: pointer;
     background: var(--color-surface);
@@ -133,13 +122,13 @@
 
 .settings-error {
     margin: 0;
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-md);
     color: var(--color-accent-strong);
 }
 
 .settings-hint {
     margin: 0;
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-md);
     line-height: 1.5;
     color: var(--color-text-faint);
 
@@ -160,7 +149,7 @@
 
     h2 {
         margin: 0;
-        font-size: var(--font-size-body);
+        font-size: var(--font-size-lg);
         font-weight: 600;
         color: var(--color-text);
     }
@@ -169,27 +158,28 @@
 .settings-options {
     display: flex;
     gap: 8px;
+    max-width: 512px;
 }
 
 .settings-wide-options {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    max-width: 520px;
+    max-width: 512px;
 }
 
 .settings-suggestions {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    max-width: 520px;
+    max-width: 512px;
     margin-top: 18px;
 }
 
 .settings-suggestion {
     padding: 5px 11px;
     font-family: var(--font-family);
-    font-size: var(--font-size-md);
+    font-size: var(--font-size-body);
     color: var(--color-text-muted);
     cursor: pointer;
     background: var(--color-surface);
@@ -220,14 +210,14 @@
 }
 
 .settings-suggestions-empty {
-    font-size: var(--font-size-sm);
+    font-size: var(--font-size-md);
     color: var(--color-text-faint);
 }
 
 .settings-option,
 .settings-wide-option {
     position: relative;
-    font-size: var(--font-size-md);
+    font-size: var(--font-size-body);
     color: var(--color-text-muted);
     cursor: pointer;
     background: var(--color-surface);
@@ -267,7 +257,7 @@
     align-items: center;
     justify-content: center;
     width: 96px;
-    padding: 14px 8px;
+    padding: 14px 0;
 }
 
 /* Wider cards for labels that do not fit a 96px column. */
