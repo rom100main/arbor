@@ -22,6 +22,23 @@ mac:
         # The updater installs from the zip.
         - target: zip
           arch: arm64
+# Green DMG background matching the app icon (#1f4d2b):
+# the Arbor.app square blends into it so only the white tree shows.
+# Regenerate the background with `sh scripts/build-dmg-background.sh`.
+# Note: do not also set backgroundColor
+# (dmg-builder rejects background + backgroundColor together).
+dmg:
+    background: build/dmg/background.png
+    # Icon centers, must match the arrow/sparkles in the background image.
+    # Left = the tree (Arbor.app), right = Applications alias.
+    contents:
+        - x: 165
+          y: 185
+          type: file
+        - x: 495
+          y: 185
+          type: link
+          path: /Applications
 win:
     target:
         - target: nsis
