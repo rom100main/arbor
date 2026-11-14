@@ -5,6 +5,28 @@ All notable changes will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-11-14
+
+### Added
+
+- Extensions page in settings, with a shortcut to the Chrome Web Store and to the `dev-extensions` folder
+- Dev extensions now work in the released app: drop an unpacked extension folder into `dev-extensions` and approve it on startup
+- Omnibox host emphasis: scheme, port, path, query and fragment are greyed out, the host stays full-strength
+- Six new icons for containers and tabs: photo, folder, link, desktop, clock and sun
+- Branded macOS DMG installer background matching the app icon, with drag-to-Applications instructions
+
+### Changed
+
+- Windows always open maximized
+- Settings text is larger and easier to read
+- Rename popup revamped: larger input, colors and icons, and buttons
+
+### Fixed
+
+- Omnibox URL empty at launch and when switching tabs
+- Extension MV3 workers failing to start, extension popups not waking the worker or not seeing tabs from container sessions, and frozen `chrome` globals breaking polyfills and lazy APIs
+- Extension storage losing chunked values on reload, due to missing quota fallbacks
+
 ## [0.1.0] - 2026-11-12
 
 ### Added
