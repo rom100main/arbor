@@ -15,6 +15,7 @@
         "dist:dir": "npm run build && electron-builder --dir",
         "check:preload": "node scripts/check-preload.ts",
         "build:icons": "node scripts/build-icons.ts",
+        "build:dmg-background": "sh scripts/build-dmg-background.sh",
         "licenses:generate": "node scripts/licenses/generate.ts",
         "licenses:check": "node scripts/licenses/check.ts",
         "preview": "vp preview",
