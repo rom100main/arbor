@@ -105,24 +105,64 @@ const patchMainWorld = function patchMainWorld(hostKey: string): void {
         return settle(Reflect.apply(fn, hostApi, [area, rest[0]]), callback)
     }
 
-    const makeArea = (area: string): Record<string, unknown> => ({
-        get(...args: unknown[]): unknown {
-            return call("get", area, args)
+    // Chrome StorageArea quota constants.
+    // Extensions read them at runtime,
+    // replacing an area without them makes every comparison false and every chunk unreadable,
+    // so chunked values vanish on reload.
+    // Native areas are consulted first, these are the documented values for when the host area exposes none.
+    const QUOTA_FALLBACKS: Record<string, Record<string, number>> = {
+        local: { QUOTA_BYTES: 10485760, QUOTA_BYTES_PER_ITEM: 5242880, MAX_ITEMS: 512 },
+        sync: {
+            QUOTA_BYTES: 102400,
+            QUOTA_BYTES_PER_ITEM: 8192,
+            MAX_ITEMS: 512,
+            MAX_WRITE_OPERATIONS_PER_MINUTE: 120,
+            MAX_WRITE_OPERATIONS_PER_HOUR: 1800,
+            MAX_SUSTAINED_WRITE_OPERATIONS_PER_MINUTE: 120,
         },
-        set(...args: unknown[]): unknown {
-            return call("set", area, args)
-        },
-        remove(...args: unknown[]): unknown {
-            return call("remove", area, args)
-        },
-        clear(...args: unknown[]): unknown {
-            return call("clear", area, args)
-        },
-        getBytesInUse(...args: unknown[]): unknown {
-            return call("getBytesInUse", area, args)
-        },
-        onChanged: stubEvent(),
-    })
+        managed: { QUOTA_BYTES: 10485760, QUOTA_BYTES_PER_ITEM: 5242880, MAX_ITEMS: 512 },
+        session: { QUOTA_BYTES: 1048576, QUOTA_BYTES_PER_ITEM: 1048576, MAX_ITEMS: 1000 },
+    }
+    const QUOTA_KEYS = [
+        "QUOTA_BYTES",
+        "QUOTA_BYTES_PER_ITEM",
+        "MAX_ITEMS",
+        "MAX_WRITE_OPERATIONS_PER_MINUTE",
+        "MAX_WRITE_OPERATIONS_PER_HOUR",
+        "MAX_SUSTAINED_WRITE_OPERATIONS_PER_MINUTE",
+    ]
+
+    const makeArea = (area: string, source?: unknown): Record<string, unknown> => {
+        const result: Record<string, unknown> = {
+            get(...args: unknown[]): unknown {
+                return call("get", area, args)
+            },
+            set(...args: unknown[]): unknown {
+                return call("set", area, args)
+            },
+            remove(...args: unknown[]): unknown {
+                return call("remove", area, args)
+            },
+            clear(...args: unknown[]): unknown {
+                return call("clear", area, args)
+            },
+            getBytesInUse(...args: unknown[]): unknown {
+                return call("getBytesInUse", area, args)
+            },
+            onChanged: stubEvent(),
+        }
+        const fallback = QUOTA_FALLBACKS[area]
+        if (fallback) {
+            for (const [key, value] of Object.entries(fallback)) result[key] = value
+        }
+        if (typeof source === "object" && source !== null) {
+            for (const key of QUOTA_KEYS) {
+                const value: unknown = Reflect.get(source, key)
+                if (typeof value === "number") result[key] = value
+            }
+        }
+        return result
+    }
 
     /** Assignment first (survives a throwing setter), then defineProperty for frozen namespaces. */
     const define = (target: object, name: string, value: unknown): void => {
@@ -142,10 +182,10 @@ const patchMainWorld = function patchMainWorld(hostKey: string): void {
     const patchStorage = (storage: unknown): void => {
         if (typeof storage !== "object" || storage === null) return
         // sync/managed alias local via canonicalArea in main.
-        define(storage, "local", makeArea("local"))
-        define(storage, "sync", makeArea("sync"))
-        define(storage, "managed", makeArea("managed"))
-        define(storage, "session", makeArea("session"))
+        // The original area is passed so its quota constants survive.
+        for (const area of ["local", "sync", "managed", "session"]) {
+            define(storage, area, makeArea(area, Reflect.get(storage, area)))
+        }
         define(storage, "onChanged", stubEvent())
     }
 
