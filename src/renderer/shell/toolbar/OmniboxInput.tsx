@@ -18,10 +18,16 @@ const restingRect = (el: HTMLElement): DOMRect => {
 export const OmniboxInput = (props: { tabId: TabId | null; url: string }) => {
     const [value, setValue] = createSignal(props.url)
     // Follow the page URL unless the user is editing.
+    // A tab switch always shows the new tab's URL,
+    // even if the input happens to be focused
+    // (at startup nothing is being edited yet).
     createEffect(
-        () => props.url,
-        (url) => {
-            if (document.activeElement?.classList.contains("omnibox") !== true) setValue(url)
+        () => [props.tabId, props.url] as const,
+        ([tabId, url], prev) => {
+            const tabChanged = prev !== undefined && prev[0] !== tabId
+            if (tabChanged || document.activeElement?.classList.contains("omnibox") !== true) {
+                setValue(url)
+            }
         },
     )
 
@@ -44,9 +50,17 @@ export const OmniboxInput = (props: { tabId: TabId | null; url: string }) => {
     }
 
     // New tabs (and menu shortcuts like Cmd+L) request focus through this counter.
+    // The counter starts at 0: without this guard the effect would focus the input on mount,
+    // stealing focus at startup and blocking the URL sync above
+    // (the input counts as "being edited" while focused).
+    let handledFocusRequest = 0
     createEffect(
         () => useOmniboxFocus()(),
-        () => focusInput(),
+        (request) => {
+            if (request === handledFocusRequest) return
+            handledFocusRequest = request
+            focusInput()
+        },
     )
     window.arbor.onFocusOmnibox(requestOmniboxFocus)
 
