@@ -2,7 +2,7 @@
     "name": "arbor",
     "productName": "Arbor",
     "private": true,
-    "version": "0.1.0",
+    "version": "0.2.0",
     "description": "A desktop browser that keeps tabs as trees.",
     "author": "rom100main",
     "repository": "github:rom100main/arbor",
@@ -40,9 +40,9 @@
         "electron": "^45.3.0",
         "electron-builder": "26.18.1",
         "generate-license-file": "^4.2.5",
-        "stylelint": "^17.16.0",
+        "stylelint": "^18.0.0",
         "stylelint-config-recess-order": "^7.10.0",
-        "stylelint-config-standard": "^40.0.0",
+        "stylelint-config-standard": "^41.0.0",
         "typescript": "^7.0.2",
         "vite": "npm:@voidzero-dev/vite-plus-core@1.6.0",
         "vite-plugin-electron": "^1.2.0",
@@ -52,7 +52,8 @@
         "vite": "npm:@voidzero-dev/vite-plus-core@1.6.0",
         "adm-zip": "^0.6.1",
         "minimatch@^9.0.3": "11.0.5",
-        "minimatch@^10.2.5": "11.0.5"
+        "minimatch@^10.2.5": "11.0.5",
+        "glob@^13.0.0": "14.0.6"
     },
     "devEngines": {
         "packageManager": {
