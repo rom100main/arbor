@@ -14,6 +14,13 @@
 // 3. `permissions.contains({ origins })` in electron-chrome-extensions is exact-string equality,
 //     so a granted `https://*/*` does not cover `https://some.com/*` (Chrome does).
 //     Wrap `contains` to fall back to match-pattern subsumption.
+// 4. electron-chrome-extensions ends its preload with `Object.freeze(chrome)`.
+//     A frozen `chrome` breaks lazy native APIs (`Failed to create API on Chrome object`)
+//     and polyfills that assign `chrome.contentScripts` / `chrome.scripting` etc.
+//     ("Cannot add property contentScripts, object is not extensible"),
+//     which fails MV3 service-worker registration.
+//     Replace the frozen globals with unfrozen clones before anything else.
+//     Namespaces are shared by reference, so IPC still works.
 //
 
 import { contextBridge } from "electron"
@@ -36,6 +43,43 @@ const patchMainWorld = function patchMainWorld(coveredBy: OriginsCoveredBy): voi
     // globalThis is referenced inside the function body (never hoisted out):
     // this function is evaluated in the extension's main world.
     const globals = globalThis as typeof globalThis & ExtensionGlobals
+
+    const unfreezeGlobal = (key: "chrome" | "browser"): void => {
+        const value = globals[key]
+        if (!value || typeof value !== "object" || Object.isExtensible(value)) return
+        // Shallow freeze only: copy descriptors onto a fresh extensible object.
+        const clone: ApiNamespace = {}
+        for (const name of Reflect.ownKeys(value)) {
+            const descriptor = Object.getOwnPropertyDescriptor(value, name)
+            if (descriptor) {
+                try {
+                    Object.defineProperty(clone, name, descriptor)
+                } catch {
+                    // Skip a single uncopyable property.
+                }
+            }
+        }
+        try {
+            Reflect.set(globals, key, clone)
+        } catch {
+            // Read-only global binding; try the descriptor below.
+        }
+        if (Reflect.get(globals, key) !== clone) {
+            try {
+                Object.defineProperty(globals, key, {
+                    value: clone,
+                    writable: true,
+                    configurable: true,
+                    enumerable: true,
+                })
+            } catch {
+                // Non-configurable global; leave the frozen one in place.
+            }
+        }
+    }
+    unfreezeGlobal("chrome")
+    unfreezeGlobal("browser")
+
     const chromeApi = globals.chrome
     const browserApi = globals.browser
 
@@ -170,6 +214,35 @@ const patchMainWorld = function patchMainWorld(coveredBy: OriginsCoveredBy): voi
             browserApi.tabs.create = chromeApi.tabs.create
         } catch {
             // ignore
+        }
+    }
+
+    // Electron's native `browser.tabs`/`browser.windows` consult Chromium's tab strip,
+    // which WebContentsViews never join, so they return no tabs.
+    // The crx `chrome.tabs`/`chrome.windows` read Arbor's mirrored store.
+    // webextension-polyfill adopts the native `browser` global as-is when it is a plain object,
+    // so its `browser.tabs.query` saw an empty tab list.
+    // Point those two namespaces at chrome's.
+    // Other namespaces stay native (i18n, runtime, ...).
+    if (chromeApi && browserApi) {
+        for (const key of ["tabs", "windows"]) {
+            const chromeNs = chromeApi[key]
+            if (chromeNs && browserApi[key] !== chromeNs) {
+                try {
+                    Object.defineProperty(browserApi, key, {
+                        value: chromeNs,
+                        configurable: true,
+                        enumerable: true,
+                        writable: true,
+                    })
+                } catch {
+                    try {
+                        browserApi[key] = chromeNs
+                    } catch {
+                        // Frozen namespace; leave the native one in place.
+                    }
+                }
+            }
         }
     }
 }

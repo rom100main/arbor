@@ -316,6 +316,20 @@ export const createOverlays = (win: BrowserWindow, ipc: Pusher): Overlays => {
     ): void => {
         const popupWin = view.browserWindow
         if (!popupWin || popupWin.isDestroyed()) return
+        // MV3 workers idle-exit,
+        // wake this extension's worker so the popup's first runtime messages
+        // (e.g. tabs.query side effects) find a listener.
+        if (view.extensionId) {
+            const ses = popupWin.webContents.session
+            const scope = `chrome-extension://${view.extensionId}/`
+            void (async () => {
+                try {
+                    await ses.serviceWorkers.startWorkerForScope(scope)
+                } catch {
+                    // Best effort: the popup still loads.
+                }
+            })()
+        }
         const setBounds = popupWin.setBounds.bind(popupWin)
         popupWin.setBounds = (rect: Electron.Rectangle): void => {
             setBounds(anchorAbove(rect, view.parent, view.extensionId))

@@ -100,8 +100,9 @@ const loadExtension = (ses: Session, source: string, options?: Electron.LoadExte
 const workerScope = (extensionId: string): string => `chrome-extension://${extensionId}/`
 
 /**
- * MV3 service workers sometimes fail the first `startWorkerForScope` right after `loadExtension`
- * (electron-chrome-web-store swallows that rejection), so it is retried a few times before giving up.
+ * MV3 service workers often reject the first `startWorkerForScope` right after `loadExtension`
+ * (electron-chrome-web-store swallows that rejection), and concurrent starts race each other
+ * (large workers), so starts are serialized per session and retried.
  */
 const startWorker = (
     ses: Session,
@@ -113,7 +114,7 @@ const startWorker = (
         catch: (cause) => new WorkerStartFailed({ extensionId: extension.id, cause }),
     }).pipe(
         Effect.retry(
-            Schedule.recurs(2).pipe(Schedule.addDelay(() => Effect.succeed("400 millis"))),
+            Schedule.recurs(7).pipe(Schedule.addDelay(() => Effect.succeed("500 millis"))),
         ),
         Effect.andThen(Effect.logDebug("MV3 worker started")),
         Effect.asVoid,
@@ -292,11 +293,14 @@ export class Extensions extends Context.Service<Extensions, ExtensionsService>()
                     (extension) =>
                         startWorker(ses, extension).pipe(
                             Effect.catchCause((cause) =>
-                                Effect.logError("Failed to start worker", cause),
+                                Effect.logError(
+                                    `Failed to start worker for extension ${extension.id}`,
+                                    cause,
+                                ),
                             ),
-                            Effect.annotateLogs({ extensionId: extension.id }),
                         ),
-                    { concurrency: "unbounded", discard: true },
+                    // Serialized: concurrent startWorkerForScope calls race and starve large workers.
+                    { concurrency: 1, discard: true },
                 )
 
             /**
@@ -533,10 +537,36 @@ export class Extensions extends Context.Service<Extensions, ExtensionsService>()
                     }),
                 attachTab: (win, webContents) =>
                     Effect.sync(() => {
-                        const library = ElectronChromeExtensions.fromSession(webContents.session)
-                        if (!library) return
-                        library.addTab(webContents, win)
-                        library.selectTab(webContents)
+                        // Mirror into every session's store:
+                        // the extensions list lives in the default session,
+                        // so its library creates action popups there,
+                        // but tabs live in container sessions.
+                        // chrome.tabs.query from such a popup must still see them.
+                        // The store itself has no session check
+                        // (the public addTab/selectTab do),
+                        // so mirror through it.
+                        for (const ses of sessions.keys()) {
+                            const library = ElectronChromeExtensions.fromSession(ses)
+                            if (!library) continue
+                            try {
+                                const ctx: unknown = Reflect.get(library, "ctx")
+                                if (typeof ctx !== "object" || ctx === null) continue
+                                const crxStore: unknown = Reflect.get(ctx, "store")
+                                if (typeof crxStore !== "object" || crxStore === null) continue
+                                const addTab: unknown = Reflect.get(crxStore, "addTab")
+                                const setActiveTab: unknown = Reflect.get(crxStore, "setActiveTab")
+                                if (
+                                    typeof addTab !== "function" ||
+                                    typeof setActiveTab !== "function"
+                                ) {
+                                    continue
+                                }
+                                Reflect.apply(addTab, crxStore, [webContents, win])
+                                Reflect.apply(setActiveTab, crxStore, [webContents])
+                            } catch {
+                                // One session's store must not break the window's show.
+                            }
+                        }
                     }),
                 actionInfo: actions.info,
                 openMenu,

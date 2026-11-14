@@ -34,6 +34,28 @@ const roundedCrxPopups: Plugin = {
     },
 }
 
+// electron-chrome-web-store starts workers with a scope missing the trailing slash  (`chrome-extension://<id>`),
+// which startWorkerForScope always rejects.
+// Patch the scope literal so the library's own start attempt succeeds,
+// and drop its single-try failure log (transient, Arbor retries and logs real ones).
+const webStoreWorkerScope: Plugin = {
+    name: "arbor-web-store-worker-scope",
+    transform(code, id) {
+        if (id.includes("electron-chrome-web-store") && code.includes("startWorkerForScope")) {
+            return code
+                .replaceAll(
+                    "`chrome-extension://${extension.id}`",
+                    "`chrome-extension://${extension.id}/`",
+                )
+                .replaceAll(
+                    "console.error(`Failed to start worker for extension ${extension.id}`)",
+                    "void 0",
+                )
+        }
+        return null
+    },
+}
+
 export default defineConfig({
     base: "./",
     build: {
@@ -54,7 +76,7 @@ export default defineConfig({
                 entry: "src/main/index.ts",
                 vite: {
                     build: { outDir: "dist/electron/main", emptyOutDir: true },
-                    plugins: [roundedCrxPopups],
+                    plugins: [roundedCrxPopups, webStoreWorkerScope],
                 },
             },
             preload: {

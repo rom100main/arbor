@@ -1,8 +1,9 @@
 import { Option, Schema } from "effect"
 
 /**
- * Electron's extension loader warns about permission names it does not know
- * (`webNavigation` is provided by electron-chrome-extensions itself, `privacy` is optional and unimplemented).
+ * Electron's extension loader warns about permission names it does not know.
+ * `contextMenus` / `cookies` / `webNavigation` are provided by electron-chrome-extensions itself,
+ * `browsingData` / `privacy` are optional and unimplemented.
  * Drop only those all-benign warnings so real extension load problems stay visible.
  */
 const decodeWarningType = Schema.decodeUnknownOption(
@@ -24,7 +25,13 @@ export const filterBenignExtensionLoadWarnings = (): void => {
             name === "ExtensionLoadWarning" || text.includes("ExtensionLoadWarning")
         if (isExtensionLoad) {
             const unknown = [...text.matchAll(/Permission '([^']+)' is unknown/g)].map((m) => m[1])
-            const benign = new Set(["webNavigation", "privacy"])
+            const benign = new Set([
+                "contextMenus",
+                "cookies",
+                "webNavigation",
+                "browsingData",
+                "privacy",
+            ])
             if (unknown.length > 0 && unknown.every((permission) => benign.has(permission))) {
                 return
             }
