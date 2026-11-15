@@ -10,6 +10,7 @@ Arbor is a Chromium-based desktop browser built with Electron. Tabs opened from 
 - Containers: one isolated Electron session per Container, like Firefox Multi-Account Containers
 - Omnibox: one input for addresses and search queries, with suggestions
 - Chrome extensions (install from the Chrome Web Store)
+- Ad and tracker blocking
 - Downloads
 - Browsing history
 - Cross platform: macOS (aarch64), Windows (x64 and arm64) and Linux
