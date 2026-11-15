@@ -1,4 +1,4 @@
-import { Effect, Layer, type Duration } from "effect"
+import { Effect, Layer } from "effect"
 
 import { fromPersisted, toPersisted } from "../state/persist"
 import { initialState } from "../state/state"
@@ -10,10 +10,7 @@ import { loadOrEmpty, persistChanges } from "./persisted-ref"
  * The store, loaded from `state.json` at boot and saved back on every change.
  * The store already keeps the state in memory, so this only connects its changes to the saver.
  */
-export const browserStoreFromFile = (
-    path: string,
-    debounce?: Duration.Input,
-): Layer.Layer<BrowserStore> =>
+export const browserStoreFromFile = (path: string): Layer.Layer<BrowserStore> =>
     Layer.effect(
         BrowserStore,
         Effect.gen(function* () {
@@ -21,7 +18,7 @@ export const browserStoreFromFile = (
             const store = yield* BrowserStore.make(initial)
             yield* persistChanges(
                 { current: store.state, changes: store.changes },
-                { path, encode: toPersisted, debounce },
+                { path, encode: toPersisted },
             )
             return store
         }),

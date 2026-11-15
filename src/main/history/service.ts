@@ -56,7 +56,6 @@ export interface HistoryService {
 export interface HistoryOptions {
     /** Where entries are remembered across restarts. */
     readonly historyPath: string
-    readonly maxEntries?: number
 }
 
 const toSnapshot = (entries: ReadonlyArray<HistoryEntry>): HistorySnapshot => ({
@@ -78,14 +77,13 @@ const capEntries = (
 const make = (options: HistoryOptions) =>
     Effect.gen(function* () {
         const settings = yield* SettingsStore
-        const max = options.maxEntries ?? MAX_HISTORY_ENTRIES
         const persisted = yield* PersistedRef.make({
             path: options.historyPath,
             read: readJson(options.historyPath, decodeHistory),
             encode: (entries: ReadonlyArray<HistoryEntry>) => entries,
             empty: () => [],
         })
-        const stored = capEntries(yield* persisted.get, max)
+        const stored = capEntries(yield* persisted.get, MAX_HISTORY_ENTRIES)
         const items = yield* SubscriptionRef.make<ReadonlyArray<HistoryEntry>>(stored)
         const run = yield* FiberSet.makeRuntime()
 
@@ -114,7 +112,7 @@ const make = (options: HistoryOptions) =>
             persisted.modifySome(() => [undefined, Option.some(next)] as const)
 
         const update = (next: ReadonlyArray<HistoryEntry>): Effect.Effect<void> => {
-            const capped = capEntries(next, max)
+            const capped = capEntries(next, MAX_HISTORY_ENTRIES)
             publish(capped)
             return persist(capped)
         }

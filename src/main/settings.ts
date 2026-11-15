@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Option, Result, Schema, type Duration, type Stream } from "effect"
+import { Context, Effect, Layer, Option, Result, Schema, type Stream } from "effect"
 
 import { SettingsRejected } from "../shared/errors"
 import { DEFAULT_SEARCH_TEMPLATE, DEFAULT_SETTINGS } from "../shared/settings"
@@ -81,14 +81,13 @@ const defaults = (): Settings => ({ ...DEFAULT_SETTINGS, pinnedExtensionIds: [] 
  * Global user preferences, persisted apart from browser state so that clearing tabs and
  * containers never resets them.
  */
-const make = (path: string, debounce?: Duration.Input) =>
+const make = (path: string) =>
     Effect.gen(function* () {
         const ref = yield* PersistedRef.make({
             path,
             read: readJson(path, fromPersistedSettings),
             encode: (settings: Settings) => settings,
             empty: defaults,
-            debounce,
         })
 
         const set = (input: unknown): Effect.Effect<Settings, SettingsRejected> => {
@@ -136,6 +135,5 @@ const make = (path: string, debounce?: Duration.Input) =>
 export class SettingsStore extends Context.Service<SettingsStore, SettingsService>()(
     "arbor.Settings",
 ) {
-    static readonly layer = (path: string, debounce?: Duration.Input) =>
-        Layer.effect(SettingsStore, make(path, debounce))
+    static readonly layer = (path: string) => Layer.effect(SettingsStore, make(path))
 }

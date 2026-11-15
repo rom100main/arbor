@@ -1,8 +1,9 @@
 import path from "node:path"
 
 import { Layer } from "effect"
-import { app, shell } from "electron"
+import { app } from "electron"
 
+import { Adblock } from "./adblock/adblock"
 import { Downloads } from "./downloads/downloads"
 import { Extensions } from "./extension/extensions"
 import { PermissionPrompts } from "./extension/prompts"
@@ -28,19 +29,17 @@ export const AppServices = (userData: string) => {
     const downloads = Downloads.layer({
         folder: app.getPath("downloads"),
         historyPath: path.join(userData, "downloads.json"),
-        opener: {
-            reveal: (file) => shell.showItemInFolder(file),
-            open: (target) => void shell.openPath(target),
-        },
     }).pipe(Layer.provideMerge(base))
     const extensions = Extensions.layer.pipe(
         Layer.provideMerge(PermissionPrompts.modal),
         Layer.provideMerge(updater),
     )
+    const adblock = Adblock.layer({ cachePath: path.join(userData, "adblock", "engine.bin") })
     const history = History.layer({ historyPath: path.join(userData, "history.json") }).pipe(
         Layer.provideMerge(base),
     )
     return WindowManager.layer.pipe(
+        Layer.provideMerge(adblock),
         Layer.provideMerge(extensions),
         Layer.provideMerge(downloads),
         Layer.provideMerge(history),

@@ -55,7 +55,6 @@ export const persistChanges = <A>(
     options: {
         readonly path: string
         readonly encode: (a: A) => unknown
-        readonly debounce?: Duration.Input
     },
 ): Effect.Effect<void, never, Scope.Scope> =>
     Effect.gen(function* () {
@@ -78,7 +77,7 @@ export const persistChanges = <A>(
         yield* source.changes.pipe(
             Stream.tap(() => Deferred.succeed(subscribed, undefined)),
             Stream.drop(1),
-            Stream.debounce(options.debounce ?? DEFAULT_DEBOUNCE),
+            Stream.debounce(DEFAULT_DEBOUNCE),
             Stream.runForEach(() => flush),
             Effect.forkScoped,
         )
@@ -91,7 +90,6 @@ export const make = <A>(options: {
     readonly read: Effect.Effect<A, FileMissing | FileUnreadable>
     readonly encode: (a: A) => unknown
     readonly empty: () => A
-    readonly debounce?: Duration.Input
 }): Effect.Effect<PersistedRef<A>, never, Scope.Scope> =>
     Effect.gen(function* () {
         const ref = yield* SubscriptionRef.make(yield* loadOrEmpty(options.read, options.empty))

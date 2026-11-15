@@ -9,7 +9,7 @@ import { existsSync } from "node:fs"
 import path from "node:path"
 
 import { Context, Effect, FiberSet, Layer, Option, Stream, SubscriptionRef } from "effect"
-import type { DownloadItem, Session } from "electron"
+import { shell, type DownloadItem, type Session } from "electron"
 
 import { isActive } from "../../shared/downloads"
 import type { DownloadId, DownloadInfo, DownloadsSnapshot } from "../../shared/protocol"
@@ -44,12 +44,6 @@ export interface DownloadsOptions {
     readonly folder: string
     /** Where settled downloads are remembered across restarts. */
     readonly historyPath: string
-    /** Injected so tests never touch Electron or the disk. */
-    readonly opener: {
-        readonly reveal: (file: string) => void
-        readonly open: (target: string) => void
-    }
-    readonly exists?: (candidate: string) => boolean
 }
 
 type SettledState = "completed" | "cancelled" | "interrupted"
@@ -71,7 +65,6 @@ const make = (options: DownloadsOptions) =>
         const live = new Map<DownloadId, DownloadItem>()
         const idOf = new WeakMap<DownloadItem, DownloadId>()
         const attached = new WeakSet<Session>()
-        const exists = options.exists ?? existsSync
 
         // Read synchronously:
         // the setting is also mirrored for the `will-download` callback, which cannot wait on an Effect.
@@ -182,7 +175,7 @@ const make = (options: DownloadsOptions) =>
                 })
             } else {
                 // Electron creates the folder recursively when it is missing.
-                item.setSavePath(uniqueSavePath(options.folder, filename, exists))
+                item.setSavePath(uniqueSavePath(options.folder, filename, existsSync))
             }
 
             item.on("updated", () => update(item))
@@ -248,13 +241,13 @@ const make = (options: DownloadsOptions) =>
         const reveal = (id: DownloadId) =>
             Effect.sync(() => {
                 const savePath = find(id)?.savePath
-                if (savePath) options.opener.reveal(savePath)
+                if (savePath) shell.showItemInFolder(savePath)
             })
 
         const open = (id: DownloadId) =>
             Effect.sync(() => {
                 const savePath = find(id)?.savePath
-                if (savePath) options.opener.open(savePath)
+                if (savePath) void shell.openPath(savePath)
             })
 
         return Downloads.of({
@@ -268,7 +261,7 @@ const make = (options: DownloadsOptions) =>
             clearSettled,
             reveal,
             open,
-            openFolder: Effect.sync(() => options.opener.open(options.folder)),
+            openFolder: Effect.sync(() => void shell.openPath(options.folder)),
         })
     })
 

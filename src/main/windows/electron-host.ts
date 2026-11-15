@@ -14,6 +14,7 @@ import {
 import { containerPartition } from "../../shared/constants"
 import type { ContainerId } from "../../shared/protocol"
 import { TITLEBAR_HEIGHT, type Settings } from "../../shared/settings"
+import { Adblock } from "../adblock/adblock"
 import { Downloads } from "../downloads/downloads"
 import { Extensions } from "../extension/extensions"
 import { IpcPush, makePusher } from "../ipc/router"
@@ -69,12 +70,13 @@ const loadUrl = (view: WebContentsView, url: string): Effect.Effect<void, LoadFa
 export const makeWindowHost: Effect.Effect<
     WindowHostService,
     never,
-    SettingsStore | IpcPush | Extensions | Downloads
+    SettingsStore | IpcPush | Extensions | Downloads | Adblock
 > = Effect.gen(function* () {
     const settingsStore = yield* SettingsStore
     const pushes = yield* IpcPush
     const extensions = yield* Extensions
     const downloads = yield* Downloads
+    const adblock = yield* Adblock
     // arbor:// internal pages: their own session, so only they carry the preload bridge.
     registerInternalPages()
 
@@ -83,7 +85,10 @@ export const makeWindowHost: Effect.Effect<
         if (key.kind === "internal") return Effect.succeed(internalSession())
         const partition = sessionForContainer(key.containerId)
         return Effect.as(
-            Effect.andThen(extensions.install(partition), downloads.attach(partition)),
+            Effect.andThen(
+                extensions.install(partition),
+                Effect.andThen(downloads.attach(partition), adblock.attach(partition)),
+            ),
             partition,
         )
     }

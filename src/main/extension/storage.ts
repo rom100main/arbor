@@ -1,4 +1,4 @@
-import { Context, Effect, FiberSet, Layer, Option, type Duration } from "effect"
+import { Context, Effect, FiberSet, Layer, Option } from "effect"
 import {
     ipcMain,
     type IpcMainInvokeEvent,
@@ -77,14 +77,13 @@ const CHANNEL = "arbor:ext-storage"
  * `local`/`sync`/`managed` persist to disk, `session` is process-lifetime only, so it lives in a `Map`.
  * Each op is applied atomically in main, so N extension service workers cannot interleave.
  */
-const make = (path: string, debounce?: Duration.Input) =>
+const make = (path: string) =>
     Effect.gen(function* () {
         const local = yield* PersistedRef.make<LocalAreas>({
             path,
             read: readJson(path, decodeLocal),
             encode: encodeLocal,
             empty: () => ({}),
-            debounce,
         })
         const session = new Map<string, StorageItems>()
 
@@ -168,6 +167,5 @@ const make = (path: string, debounce?: Duration.Input) =>
 export class ExtensionStorage extends Context.Service<ExtensionStorage, ExtensionStorageService>()(
     "arbor.ExtensionStorage",
 ) {
-    static readonly layer = (path: string, debounce?: Duration.Input) =>
-        Layer.effect(ExtensionStorage, make(path, debounce))
+    static readonly layer = (path: string) => Layer.effect(ExtensionStorage, make(path))
 }
