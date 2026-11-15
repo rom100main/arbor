@@ -14,7 +14,7 @@ import {
 import { containerPartition } from "../../shared/constants"
 import type { ContainerId } from "../../shared/protocol"
 import { TITLEBAR_HEIGHT, type Settings } from "../../shared/settings"
-import { Adblock } from "../adblock/adblock"
+import { Adblock } from "../adblock"
 import { Downloads } from "../downloads/downloads"
 import { Extensions } from "../extension/extensions"
 import { IpcPush, makePusher } from "../ipc/router"

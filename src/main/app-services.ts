@@ -3,7 +3,7 @@ import path from "node:path"
 import { Layer } from "effect"
 import { app } from "electron"
 
-import { Adblock } from "./adblock/adblock"
+import { Adblock } from "./adblock"
 import { Downloads } from "./downloads/downloads"
 import { Extensions } from "./extension/extensions"
 import { PermissionPrompts } from "./extension/prompts"

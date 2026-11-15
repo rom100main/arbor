@@ -1,0 +1,175 @@
+/**
+ * The Adblock module:
+ * native, main-process ad and tracker blocking for every Container session,
+ * powered by Ghostery's filtering engine.
+ *
+ * Lists are fetched fresh on every launch.
+ * The serialized engine is cached on disk so the next launch can block immediately and offline,
+ * then swapped for the fresh lists when the fetch lands.
+ */
+
+import { mkdir, readFile, writeFile } from "node:fs/promises"
+import { createRequire } from "node:module"
+import path from "node:path"
+
+import { ElectronBlocker } from "@ghostery/adblocker-electron"
+import { Context, Deferred, Effect, FiberSet, Layer, Option } from "effect"
+import { ipcMain, type Session } from "electron"
+
+const ghostPreloadPath = ((): string =>
+    createRequire(import.meta.url).resolve("@ghostery/adblocker-electron-preload"))()
+
+export interface AdblockService {
+    /** Hook a session's webRequest and cosmetic preload. Safe to call repeatedly for one session. */
+    readonly attach: (ses: Session) => Effect.Effect<void>
+    /**
+     * Completes once the startup pass latched an engine (cache or fresh).
+     * Never fails: blocking simply stays off when both fail.
+     */
+    readonly ready: Effect.Effect<void>
+}
+
+export interface AdblockOptions {
+    /** Where the serialized engine cache lives: `<userData>/adblock/engine.bin`. */
+    readonly cachePath: string
+}
+
+const INJECT_CHANNEL = "@ghostery/adblocker/inject-cosmetic-filters"
+const MUTATION_CHANNEL = "@ghostery/adblocker/is-mutation-observer-enabled"
+
+const make = (options: AdblockOptions) =>
+    Effect.gen(function* () {
+        const run = yield* FiberSet.makeRuntime()
+
+        let blocker: ElectronBlocker | null = null
+
+        /**
+         * Network hooks delegate to `blocker`,
+         * so a fresh-list swap needs no session work:
+         * the next request already uses the new engine.
+         * Requests before it lands are allowed.
+         */
+        const onBeforeRequest = (
+            details: Parameters<ElectronBlocker["onBeforeRequest"]>[0],
+            callback: Parameters<ElectronBlocker["onBeforeRequest"]>[1],
+        ): void => {
+            if (!blocker) {
+                callback({})
+                return
+            }
+            blocker.onBeforeRequest(details, callback)
+        }
+
+        const onHeadersReceived = (
+            details: Parameters<ElectronBlocker["onHeadersReceived"]>[0],
+            callback: Parameters<ElectronBlocker["onHeadersReceived"]>[1],
+        ): void => {
+            if (!blocker) {
+                callback({})
+                return
+            }
+            blocker.onHeadersReceived(details, callback)
+        }
+
+        /**
+         * Cosmetic filters need the Ghostery preload in every session,
+         * but its two `ipcMain` handlers are process-global, so they register once.
+         * `ElectronBlocker.enableBlockingInSession`
+         * registers them per session and throws on the second Container,
+         * hence this thin wiring.
+         */
+        let ipcWired = false
+        const ensureIpc = (): void => {
+            if (ipcWired) return
+            ipcWired = true
+            ipcMain.handle(INJECT_CHANNEL, (event, url: string, msg) => {
+                return blocker ? blocker.onInjectCosmeticFilters(event, url, msg) : undefined
+            })
+            ipcMain.handle(MUTATION_CHANNEL, (event) =>
+                blocker ? blocker.onIsMutationObserverEnabled(event) : Promise.resolve(false),
+            )
+        }
+
+        const attached = new Set<Session>()
+
+        const attach = (ses: Session) =>
+            Effect.sync(() => {
+                if (attached.has(ses)) return
+                attached.add(ses)
+                ensureIpc()
+                ses.registerPreloadScript({ type: "frame", filePath: ghostPreloadPath })
+                ses.webRequest.onBeforeRequest({ urls: ["<all_urls>"] }, onBeforeRequest)
+                ses.webRequest.onHeadersReceived({ urls: ["<all_urls>"] }, onHeadersReceived)
+            })
+
+        // `null` when there is no cache file or it does not deserialize.
+        // `Effect.option` turns a failed read / deserialize into absence.
+        const loadCache = Effect.gen(function* () {
+            const raw = yield* Effect.tryPromise({
+                try: () => readFile(options.cachePath),
+                catch: (error) => error,
+            }).pipe(Effect.option)
+            if (Option.isNone(raw)) return null
+            const parsed = yield* Effect.try({
+                try: () => ElectronBlocker.deserialize(raw.value),
+                catch: (error) => error,
+            }).pipe(Effect.option)
+            return Option.getOrNull(parsed)
+        })
+
+        /**
+         * One startup pass: block fast from cache if there is one,
+         * then replace it with freshly fetched lists and refresh the cache.
+         * A failed fetch never clears the cache,
+         * a failed deserialize just falls through to the fetch.
+         */
+        const refresh = Effect.gen(function* () {
+            const cached = yield* loadCache
+            if (cached) {
+                blocker = cached
+                yield* Effect.logInfo("Adblock: blocking from cached lists")
+            }
+            const fresh = yield* Effect.tryPromise({
+                try: () => ElectronBlocker.fromPrebuiltAdsAndTracking(globalThis.fetch),
+                catch: (error) => error,
+            }).pipe(Effect.option)
+            if (Option.isNone(fresh)) {
+                if (!cached) {
+                    yield* Effect.logError("Adblock: filter lists failed to load, blocking is off")
+                } else {
+                    yield* Effect.logError("Adblock: filter update failed, keeping cached lists")
+                }
+                return
+            }
+            blocker = fresh.value
+            const next = fresh.value
+            yield* Effect.logInfo("Adblock: lists updated")
+            yield* Effect.tryPromise({
+                try: () =>
+                    mkdir(path.dirname(options.cachePath), { recursive: true }).then(() =>
+                        writeFile(options.cachePath, next.serialize()),
+                    ),
+                catch: (error) => error,
+            }).pipe(
+                Effect.tapError((error) => Effect.logError("Adblock: cache write failed", error)),
+                Effect.ignore,
+            )
+        })
+
+        const done = yield* Deferred.make<void>()
+        run(
+            Effect.andThen(
+                Effect.catchCause(refresh, (cause) =>
+                    Effect.logError("Adblock: startup failed", cause),
+                ),
+                Deferred.succeed(done, void 0),
+            ),
+        )
+
+        return Adblock.of({ attach, ready: Deferred.await(done) })
+    })
+
+export class Adblock extends Context.Service<Adblock, AdblockService>()("arbor.Adblock") {
+    static readonly layer = (options: AdblockOptions): Layer.Layer<Adblock> =>
+        Layer.effect(Adblock, make(options))
+}
