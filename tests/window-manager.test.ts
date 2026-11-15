@@ -14,6 +14,7 @@ import type { DownloadInfo } from "../src/shared/protocol"
 import { fakeDownloads } from "./support/downloads"
 import { runTest, settle } from "./support/effect"
 import { noExtensions } from "./support/extensions"
+import { noAdblock } from "./support/adblock"
 import { fakeHistory } from "./support/history"
 import * as fakeIpc from "./support/ipc"
 import { fakeRenderer } from "./support/ipc"
@@ -51,6 +52,7 @@ const startAppWith = (configure: (host: MemoryHost, ipc: MemoryIpc) => void) =>
             CurrentWindow.layer,
             Layer.succeed(PermissionPrompts, scriptedPrompts([]).service),
             noExtensions,
+            noAdblock,
             Updater.none,
             downloads.layer,
             history.layer,

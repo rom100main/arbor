@@ -43,7 +43,6 @@ const open = () =>
             Downloads.layer({
                 folder: "/Downloads",
                 historyPath: HISTORY,
-                opener: { reveal: () => {}, open: () => {} },
             }).pipe(Layer.provideMerge(SettingsStore.layer(SETTINGS))),
             scope,
         )

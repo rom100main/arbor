@@ -12,16 +12,21 @@ import { files } from "../support/memory-fs"
 
 vi.mock("node:fs", () => import("../support/memory-fs"))
 
+/** `shell` in memory: the Downloads service calls it, tests see the calls. */
+const opened = { reveal: [] as string[], open: [] as string[] }
+vi.mock("electron", () => ({
+    shell: {
+        showItemInFolder: (file: string): void => void opened.reveal.push(file),
+        openPath: (target: string): void => void opened.open.push(target),
+    },
+}))
+
 const FOLDER = "/Downloads"
 const HISTORY = "/data/downloads.json"
 const SETTINGS = "/data/settings.json"
 
-const opened = { reveal: [] as string[], open: [] as string[] }
-const taken = new Set<string>()
-
 beforeEach(() => {
     files.clear()
-    taken.clear()
     opened.reveal.length = 0
     opened.open.length = 0
 })
@@ -33,11 +38,6 @@ const open = () =>
             Downloads.layer({
                 folder: FOLDER,
                 historyPath: HISTORY,
-                opener: {
-                    reveal: (file) => void opened.reveal.push(file),
-                    open: (target) => void opened.open.push(target),
-                },
-                exists: (candidate) => taken.has(candidate),
             }).pipe(Layer.provideMerge(SettingsStore.layer(SETTINGS))),
             scope,
         )
@@ -90,7 +90,7 @@ describe("Downloads service", () => {
                 yield* settings.set({ downloadAskWhereToSave: false })
                 yield* settle
 
-                taken.add(path.join(FOLDER, "a.txt"))
+                files.set(path.join(FOLDER, "a.txt"), "")
                 const automatic = new FakeItem("a.txt", "https://example.com/a.txt", 1)
                 start(session, automatic)
 

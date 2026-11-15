@@ -1,0 +1,156 @@
+import { Context, Effect, Layer, Scope } from "effect"
+import type { Session } from "electron"
+import { describe, expect, it, vi } from "vite-plus/test"
+
+import { Adblock } from "../../src/main/adblock"
+import { files } from "../support/memory-fs"
+
+/** Live runtime, not the test clock: the startup pass awaits real promises. */
+const runTest = Effect.runPromise
+
+vi.mock("node:fs", () => import("../support/memory-fs"))
+vi.mock("node:fs/promises", () => import("../support/memory-fs-promises"))
+
+const ipcHandlers = new Map<string, (event: unknown, ...args: never[]) => unknown>()
+vi.mock("electron", () => ({
+    ipcMain: {
+        handle: (
+            channel: string,
+            listener: (event: unknown, ...args: never[]) => unknown,
+        ): void => {
+            if (ipcHandlers.has(channel)) throw new Error(`Duplicate handler for ${channel}`)
+            ipcHandlers.set(channel, listener)
+        },
+        removeHandler: (channel: string): void => {
+            ipcHandlers.delete(channel)
+        },
+    },
+}))
+
+/** Controls the mocked list fetch per test. */
+const controls = vi.hoisted(() => ({ fetchResult: null as Promise<unknown> | null }))
+
+const fakeBlockerCalls: string[] = []
+vi.mock("@ghostery/adblocker-electron", () => ({
+    ElectronBlocker: {
+        deserialize: (): never => {
+            throw new Error("no cache in tests")
+        },
+        fromPrebuiltAdsAndTracking: (): Promise<unknown> =>
+            controls.fetchResult ?? Promise.reject(new Error("unset")),
+    },
+}))
+
+type BeforeRequest = (details: unknown, callback: (response: unknown) => void) => void
+
+class FakeSession {
+    beforeRequest: BeforeRequest | null = null
+    preloads: string[] = []
+
+    registerPreloadScript = (): string => {
+        this.preloads.push("preload")
+        return `preload-${this.preloads.length}`
+    }
+
+    webRequest = {
+        onBeforeRequest: (_filter: unknown, listener: BeforeRequest): void => {
+            this.beforeRequest = listener
+        },
+        onHeadersReceived: (): void => undefined,
+    }
+}
+
+const asSession = (session: FakeSession): Session =>
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    session as unknown as Session
+
+const open = Effect.gen(function* () {
+    const scope = yield* Scope.make()
+    const context = yield* Layer.buildWithScope(
+        Adblock.layer({ cachePath: "/data/adblock/engine.bin" }),
+        scope,
+    )
+    return { adblock: Context.get(context, Adblock), scope }
+})
+
+const stale = () =>
+    Effect.sync(() => {
+        files.clear()
+        ipcHandlers.clear()
+        fakeBlockerCalls.length = 0
+        controls.fetchResult = null
+    })
+
+/** A stub engine that records use. */
+const stubEngine = {
+    onBeforeRequest: (_details: unknown, callback: (response: unknown) => void): void => {
+        fakeBlockerCalls.push("beforeRequest")
+        callback({})
+    },
+    onHeadersReceived: (_details: unknown, callback: (response: unknown) => void): void => {
+        callback({})
+    },
+    onInjectCosmeticFilters: (): void => undefined,
+    onIsMutationObserverEnabled: (): Promise<boolean> => Promise.resolve(false),
+    serialize: (): Uint8Array => new Uint8Array([1]),
+}
+
+describe("Adblock service", () => {
+    it("hooks a session once and delegates to the loaded engine", () =>
+        runTest(
+            Effect.gen(function* () {
+                yield* stale()
+                controls.fetchResult = Promise.resolve(stubEngine)
+                const { adblock } = yield* open
+                yield* adblock.ready
+                const first = new FakeSession()
+                const second = new FakeSession()
+                yield* adblock.attach(asSession(first))
+                // Attaching the same session again registers nothing twice.
+                yield* adblock.attach(asSession(first))
+                // Cosmetic handlers are process-global, so a second
+                // Container must not re-register them.
+                yield* adblock.attach(asSession(second))
+
+                expect(first.preloads).toHaveLength(1)
+                expect(first.beforeRequest).not.toBeNull()
+                expect([...ipcHandlers.keys()].sort()).toEqual([
+                    "@ghostery/adblocker/inject-cosmetic-filters",
+                    "@ghostery/adblocker/is-mutation-observer-enabled",
+                ])
+                first.beforeRequest?.({}, () => undefined)
+                expect(fakeBlockerCalls).toEqual(["beforeRequest"])
+            }),
+        ))
+
+    it("allows every request until the lists land", () =>
+        runTest(
+            Effect.gen(function* () {
+                yield* stale()
+                controls.fetchResult = new Promise(() => undefined)
+                const { adblock } = yield* open
+                const session = new FakeSession()
+                yield* adblock.attach(asSession(session))
+
+                const replies: unknown[] = []
+                session.beforeRequest?.({}, (response) => void replies.push(response))
+                expect(replies).toEqual([{}])
+            }),
+        ))
+
+    it("keeps running unblocked when the fetch fails", () =>
+        runTest(
+            Effect.gen(function* () {
+                yield* stale()
+                controls.fetchResult = Promise.reject(new Error("offline"))
+                const { adblock } = yield* open
+                yield* adblock.ready
+                const session = new FakeSession()
+                yield* adblock.attach(asSession(session))
+
+                const replies: unknown[] = []
+                session.beforeRequest?.({}, (response) => void replies.push(response))
+                expect(replies).toEqual([{}])
+            }),
+        ))
+})
