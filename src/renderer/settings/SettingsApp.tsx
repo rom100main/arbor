@@ -437,11 +437,32 @@ const HistorySection = () => {
 
 const AdblockingSection = () => {
     const settings = useSettings()
+    const [draft, setDraft] = createSignal("")
 
     const mode = (): AdblockMode => (settings().adblockEnabled ? "on" : "off")
 
     const chooseMode = (next: AdblockMode): void => {
         void window.arbor.setSettings({ adblockEnabled: next === "on" })
+    }
+
+    const addSite = (): void => {
+        const pattern = draft().trim()
+        if (pattern.length === 0 || settings().adblockDisabledSites.includes(pattern)) {
+            setDraft("")
+            return
+        }
+        setDraft("")
+        void window.arbor.setSettings({
+            adblockDisabledSites: [...settings().adblockDisabledSites, pattern],
+        })
+    }
+
+    const removeSite = (pattern: string): void => {
+        void window.arbor.setSettings({
+            adblockDisabledSites: settings().adblockDisabledSites.filter(
+                (site) => site !== pattern,
+            ),
+        })
     }
 
     return (
@@ -460,6 +481,60 @@ const AdblockingSection = () => {
                     variant="wide"
                 />
                 <p class="settings-hint">Powered by <a href="https://www.ghostery.com/">Ghostery</a>.</p>
+            </div>
+            <div class="settings-group">
+                <h2>Sites without blocking</h2>
+                <div class="settings-disabled-row">
+                    <input
+                        class="settings-input settings-disabled-input"
+                        aria-label="Website to disable ad blocking for"
+                        type="text"
+                        spellcheck={false}
+                        autocomplete="off"
+                        placeholder="example.com or *.example.com"
+                        value={draft()}
+                        onInput={(event) => setDraft(event.currentTarget.value)}
+                        onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                                event.preventDefault()
+                                addSite()
+                            }
+                        }}
+                    />
+                    <button
+                        type="button"
+                        class="settings-button"
+                        disabled={draft().trim().length === 0}
+                        onClick={addSite}
+                    >
+                        <Icon name="plus" size={14} />
+                        Add
+                    </button>
+                </div>
+                <Show when={settings().adblockDisabledSites.length > 0}>
+                    <ul class="settings-disabled-list">
+                        <For each={settings().adblockDisabledSites}>
+                            {(site) => (
+                                <li class="settings-disabled-item">
+                                    <code>{site}</code>
+                                    <button
+                                        type="button"
+                                        class="settings-disabled-remove"
+                                        aria-label={`Remove ${site}`}
+                                        onClick={() => removeSite(site)}
+                                    >
+                                        <Icon name="x" size={13} />
+                                    </button>
+                                </li>
+                            )}
+                        </For>
+                    </ul>
+                </Show>
+                <p class="settings-hint">
+                    Use <code>*</code> to match anything:
+                    <code>*.example.com</code> covers every subdomain, or
+                    <code>https://example.com/*</code> matches a path.
+                </p>
             </div>
         </section>
     )
