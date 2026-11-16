@@ -34,7 +34,9 @@ export const AppServices = (userData: string) => {
         Layer.provideMerge(PermissionPrompts.modal),
         Layer.provideMerge(updater),
     )
-    const adblock = Adblock.layer({ cachePath: path.join(userData, "adblock", "engine.bin") })
+    const adblock = Adblock.layer({ cachePath: path.join(userData, "adblock", "engine.bin") }).pipe(
+        Layer.provideMerge(base),
+    )
     const history = History.layer({ historyPath: path.join(userData, "history.json") }).pipe(
         Layer.provideMerge(base),
     )

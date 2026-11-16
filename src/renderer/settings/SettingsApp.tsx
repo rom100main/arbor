@@ -23,6 +23,7 @@ const NAV: { route: SettingsRoute; label: string; icon: IconName }[] = [
     { route: "search", label: "Search", icon: "search" },
     { route: "downloads", label: "Downloads", icon: "download" },
     { route: "history", label: "History", icon: "history" },
+    { route: "adblocking", label: "Ad blocking", icon: "shield" },
     { route: "extensions", label: "Extensions", icon: "puzzle" },
     { route: "appearance", label: "Appearance", icon: "settings" },
 ]
@@ -99,6 +100,20 @@ const HISTORY_RETENTION_ICONS: Record<HistoryRetention, IconName> = {
 /** The UI's view of `downloadAskWhereToSave`, not a second stored field. */
 type SaveMode = "ask" | "automatic"
 
+type AdblockMode = "on" | "off"
+
+const ADBLOCK_MODES = ["on", "off"] as const
+
+const ADBLOCK_MODE_LABELS: Record<AdblockMode, string> = {
+    on: "Block ads and tracking",
+    off: "Don't block",
+}
+
+const ADBLOCK_MODE_ICONS: Record<AdblockMode, IconName> = {
+    on: "shield",
+    off: "shield-off",
+}
+
 const SAVE_MODES = ["ask", "automatic"] as const
 
 const SAVE_MODE_LABELS: Record<SaveMode, string> = {
@@ -156,6 +171,9 @@ export const SettingsApp = () => {
                     </Match>
                     <Match when={route() === "history"}>
                         <HistorySection />
+                    </Match>
+                    <Match when={route() === "adblocking"}>
+                        <AdblockingSection />
                     </Match>
                     <Match when={route() === "extensions"}>
                         <ExtensionsSection />
@@ -412,6 +430,35 @@ const HistorySection = () => {
                     <Icon name="history" size={14} />
                     Open history
                 </button>
+            </div>
+        </section>
+    )
+}
+
+const AdblockingSection = () => {
+    const settings = useSettings()
+
+    const mode = (): AdblockMode => (settings().adblockEnabled ? "on" : "off")
+
+    const chooseMode = (next: AdblockMode): void => {
+        void window.arbor.setSettings({ adblockEnabled: next === "on" })
+    }
+
+    return (
+        <section>
+            <h1>Ad blocking</h1>
+            <div class="settings-group">
+                <h2>Protection</h2>
+                <OptionCards
+                    name="adblock-mode"
+                    label="Protection"
+                    options={ADBLOCK_MODES}
+                    labels={ADBLOCK_MODE_LABELS}
+                    icons={ADBLOCK_MODE_ICONS}
+                    value={mode()}
+                    onChange={chooseMode}
+                    variant="wide"
+                />
             </div>
         </section>
     )

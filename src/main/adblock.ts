@@ -13,8 +13,10 @@ import { createRequire } from "node:module"
 import path from "node:path"
 
 import { ElectronBlocker } from "@ghostery/adblocker-electron"
-import { Context, Deferred, Effect, FiberSet, Layer, Option } from "effect"
+import { Context, Deferred, Effect, FiberSet, Layer, Option, Stream } from "effect"
 import { ipcMain, type Session } from "electron"
+
+import { SettingsStore } from "./settings"
 
 const ghostPreloadPath = ((): string =>
     createRequire(import.meta.url).resolve("@ghostery/adblocker-electron-preload"))()
@@ -39,9 +41,25 @@ const MUTATION_CHANNEL = "@ghostery/adblocker/is-mutation-observer-enabled"
 
 const make = (options: AdblockOptions) =>
     Effect.gen(function* () {
+        const settings = yield* SettingsStore
         const run = yield* FiberSet.makeRuntime()
 
         let blocker: ElectronBlocker | null = null
+
+        /**
+         * Read synchronously: the webRequest hooks cannot wait on an Effect.
+         * Mirrored from the setting, so toggling blocks or unblocks everywhere at once,
+         * without touching any session.
+         */
+        let enabled = (yield* settings.get).adblockEnabled
+        yield* settings.changes.pipe(
+            Stream.runForEach((next) =>
+                Effect.sync(() => {
+                    enabled = next.adblockEnabled
+                }),
+            ),
+            Effect.forkScoped,
+        )
 
         /**
          * Network hooks delegate to `blocker`,
@@ -53,7 +71,7 @@ const make = (options: AdblockOptions) =>
             details: Parameters<ElectronBlocker["onBeforeRequest"]>[0],
             callback: Parameters<ElectronBlocker["onBeforeRequest"]>[1],
         ): void => {
-            if (!blocker) {
+            if (!enabled || !blocker) {
                 callback({})
                 return
             }
@@ -64,7 +82,7 @@ const make = (options: AdblockOptions) =>
             details: Parameters<ElectronBlocker["onHeadersReceived"]>[0],
             callback: Parameters<ElectronBlocker["onHeadersReceived"]>[1],
         ): void => {
-            if (!blocker) {
+            if (!enabled || !blocker) {
                 callback({})
                 return
             }
@@ -83,10 +101,14 @@ const make = (options: AdblockOptions) =>
             if (ipcWired) return
             ipcWired = true
             ipcMain.handle(INJECT_CHANNEL, (event, url: string, msg) => {
-                return blocker ? blocker.onInjectCosmeticFilters(event, url, msg) : undefined
+                return enabled && blocker
+                    ? blocker.onInjectCosmeticFilters(event, url, msg)
+                    : undefined
             })
             ipcMain.handle(MUTATION_CHANNEL, (event) =>
-                blocker ? blocker.onIsMutationObserverEnabled(event) : Promise.resolve(false),
+                enabled && blocker
+                    ? blocker.onIsMutationObserverEnabled(event)
+                    : Promise.resolve(false),
             )
         }
 
@@ -170,6 +192,6 @@ const make = (options: AdblockOptions) =>
     })
 
 export class Adblock extends Context.Service<Adblock, AdblockService>()("arbor.Adblock") {
-    static readonly layer = (options: AdblockOptions): Layer.Layer<Adblock> =>
+    static readonly layer = (options: AdblockOptions): Layer.Layer<Adblock, never, SettingsStore> =>
         Layer.effect(Adblock, make(options))
 }

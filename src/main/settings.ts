@@ -32,6 +32,10 @@ const PersistedSettings = Schema.Struct({
         Settings.fields.historyRetention,
         () => DEFAULT_SETTINGS.historyRetention,
     ),
+    adblockEnabled: orDefault(
+        Settings.fields.adblockEnabled,
+        () => DEFAULT_SETTINGS.adblockEnabled,
+    ),
 })
 
 const parseSettings = decodeOr(PersistedSettings)
@@ -60,6 +64,7 @@ export const fromPersistedSettings = (data: unknown): Settings | null => {
         downloadAskWhereToSave: parsed.downloadAskWhereToSave,
         historyEnabled: parsed.historyEnabled,
         historyRetention: parsed.historyRetention,
+        adblockEnabled: parsed.adblockEnabled,
     }
 }
 
