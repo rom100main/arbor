@@ -9,16 +9,24 @@
  */
 
 import { mkdir, readFile, writeFile } from "node:fs/promises"
+import { createRequire } from "node:module"
 import path from "node:path"
 
 import { ElectronBlocker } from "@ghostery/adblocker-electron"
 import { Context, Deferred, Effect, FiberSet, Layer, Option, Stream } from "effect"
-import { type Session } from "electron"
+import { ipcMain, type Session } from "electron"
+import { parse } from "tldts-experimental"
 
 import { SettingsStore } from "./settings"
 
+const ghostPreloadPath = ((): string =>
+    createRequire(import.meta.url).resolve("@ghostery/adblocker-electron-preload"))()
+
+const INJECT_CHANNEL = "@ghostery/adblocker/inject-cosmetic-filters"
+const MUTATION_CHANNEL = "@ghostery/adblocker/is-mutation-observer-enabled"
+
 export interface AdblockService {
-    /** Hook a session's webRequest. Safe to call repeatedly for one session. */
+    /** Hook a session's webRequest and cosmetic preload. Safe to call repeatedly for one session. */
     readonly attach: (ses: Session) => Effect.Effect<void>
     /**
      * Completes once the startup pass latched an engine (cache or fresh).
@@ -82,12 +90,76 @@ const make = (options: AdblockOptions) =>
             blocker.onHeadersReceived(details, callback)
         }
 
+        /**
+         * Cosmetic filters need the Ghostery preload in every session,
+         * but its two `ipcMain` handlers are process-global, so they register once.
+         * `ElectronBlocker.enableBlockingInSession`
+         * registers them per session and throws on the second Container,
+         * hence this thin wiring.
+         *
+         * Injection is CSS only.
+         * Ghostery's own handler also runs `+js` scriptlets via `executeJavaScript`;
+         * those patch page globals and break some websites.
+         * CSS hiding cannot break the page's scripts, so works everywhere.
+         * `getInjectionRules: false` keeps the engine from even compiling a scriptlet to run.
+         */
+        let ipcWired = false
+        const ensureIpc = (): void => {
+            if (ipcWired) return
+            ipcWired = true
+            ipcMain.handle(INJECT_CHANNEL, (event, url: string, msg) => {
+                if (!enabled || !blocker) return Promise.resolve()
+                try {
+                    const parsed = parse(url)
+                    const hostname = parsed.hostname || ""
+                    const domain = parsed.domain || ""
+                    const isFirstRun = msg === undefined
+                    const { active, styles } = blocker.getCosmeticsFilters({
+                        domain,
+                        hostname,
+                        url,
+                        classes: msg?.classes,
+                        hrefs: msg?.hrefs,
+                        ids: msg?.ids,
+                        getBaseRules: isFirstRun,
+                        getInjectionRules: false,
+                        getExtendedRules: false,
+                        getRulesFromHostname: isFirstRun,
+                        getRulesFromDOM: !isFirstRun,
+                        callerContext: {
+                            frameId: event.frameId,
+                            processId: event.processId,
+                            lifecycle: msg?.lifecycle,
+                        },
+                    })
+                    if (!active || styles.length === 0) return Promise.resolve()
+                    // A sender destroyed mid-navigation just fails the insert: expected.
+                    return event.sender
+                        .insertCSS(styles, { cssOrigin: "user" })
+                        .then(
+                            () => undefined,
+                            () => undefined,
+                        )
+                } catch (error) {
+                    run(Effect.logError("Adblock: cosmetic filter failed", error))
+                    return Promise.resolve()
+                }
+            })
+            ipcMain.handle(MUTATION_CHANNEL, (event) =>
+                enabled && blocker
+                    ? blocker.onIsMutationObserverEnabled(event)
+                    : Promise.resolve(false),
+            )
+        }
+
         const attached = new Set<Session>()
 
         const attach = (ses: Session) =>
             Effect.sync(() => {
                 if (attached.has(ses)) return
                 attached.add(ses)
+                ensureIpc()
+                ses.registerPreloadScript({ type: "frame", filePath: ghostPreloadPath })
                 ses.webRequest.onBeforeRequest({ urls: ["<all_urls>"] }, onBeforeRequest)
                 ses.webRequest.onHeadersReceived({ urls: ["<all_urls>"] }, onHeadersReceived)
             })

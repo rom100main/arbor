@@ -14,7 +14,7 @@ const runTest = Effect.runPromise
 vi.mock("node:fs", () => import("../support/memory-fs"))
 vi.mock("node:fs/promises", () => import("../support/memory-fs-promises"))
 
-const ipcHandlers = new Map<string, (event: unknown, ...args: never[]) => unknown>()
+const ipcHandlers = new Map<string, (event: unknown, url: string, msg?: unknown) => unknown>()
 vi.mock("electron", () => ({
     ipcMain: {
         handle: (
@@ -22,7 +22,8 @@ vi.mock("electron", () => ({
             listener: (event: unknown, ...args: never[]) => unknown,
         ): void => {
             if (ipcHandlers.has(channel)) throw new Error(`Duplicate handler for ${channel}`)
-            ipcHandlers.set(channel, listener)
+            // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+            ipcHandlers.set(channel, listener as (event: unknown, url: string) => unknown)
         },
         removeHandler: (channel: string): void => {
             ipcHandlers.delete(channel)
@@ -48,6 +49,16 @@ type BeforeRequest = (details: unknown, callback: (response: unknown) => void) =
 
 class FakeSession {
     beforeRequest: BeforeRequest | null = null
+    preloads: { type: string; filePath: string; excludeMatches?: readonly string[] }[] = []
+
+    registerPreloadScript = (script: {
+        type: string
+        filePath: string
+        excludeMatches?: readonly string[]
+    }): string => {
+        this.preloads.push(script)
+        return `preload-${this.preloads.length}`
+    }
 
     webRequest = {
         onBeforeRequest: (_filter: unknown, listener: BeforeRequest): void => {
@@ -93,6 +104,12 @@ const stubEngine = {
     onHeadersReceived: (_details: unknown, callback: (response: unknown) => void): void => {
         callback({})
     },
+    getCosmeticsFilters: (): unknown => ({
+        active: true,
+        styles: ".ad { display: none !important; }",
+        scripts: ["(function(){ throw new Error('must not run') })()"],
+    }),
+    onIsMutationObserverEnabled: (): Promise<boolean> => Promise.resolve(false),
     serialize: (): Uint8Array => new Uint8Array([1]),
 }
 
@@ -109,13 +126,49 @@ describe("Adblock service", () => {
                 yield* adblock.attach(asSession(first))
                 // Attaching the same session again registers nothing twice.
                 yield* adblock.attach(asSession(first))
+                // Cosmetic handlers are process-global, so a second
+                // Container must not re-register them.
                 yield* adblock.attach(asSession(second))
 
+                expect(first.preloads).toHaveLength(1)
+                expect(first.preloads[0]?.filePath).toEqual(expect.stringContaining("preload"))
                 expect(first.beforeRequest).not.toBeNull()
-                // Network-only: no cosmetic preload or IPC handlers.
-                expect([...ipcHandlers.keys()]).toEqual([])
+                expect([...ipcHandlers.keys()].sort()).toEqual([
+                    "@ghostery/adblocker/inject-cosmetic-filters",
+                    "@ghostery/adblocker/is-mutation-observer-enabled",
+                ])
                 first.beforeRequest?.({}, () => undefined)
                 expect(fakeBlockerCalls).toEqual(["beforeRequest"])
+            }),
+        ))
+
+    it("injects cosmetic CSS only, never scriptlets", () =>
+        runTest(
+            Effect.gen(function* () {
+                yield* stale()
+                controls.fetchResult = Promise.resolve(stubEngine)
+                const { adblock } = yield* open
+                yield* adblock.ready
+                yield* adblock.attach(asSession(new FakeSession()))
+
+                const insertCSS = vi.fn(() => Promise.resolve("key"))
+                const executeJavaScript = vi.fn(() => Promise.resolve(undefined))
+                const handler = ipcHandlers.get("@ghostery/adblocker/inject-cosmetic-filters")
+                expect(handler).toBeDefined()
+                yield* Effect.promise(() =>
+                    Promise.resolve(
+                        handler?.(
+                            { frameId: 1, processId: 2, sender: { insertCSS, executeJavaScript } },
+                            "https://www.youtube.com/",
+                            undefined,
+                        ),
+                    ),
+                )
+                expect(insertCSS).toHaveBeenCalledTimes(1)
+                expect(insertCSS).toHaveBeenCalledWith(".ad { display: none !important; }", {
+                    cssOrigin: "user",
+                })
+                expect(executeJavaScript).not.toHaveBeenCalled()
             }),
         ))
 
