@@ -3,7 +3,10 @@ import type { Session } from "electron"
 import { describe, expect, it, vi } from "vite-plus/test"
 
 import { Adblock } from "../../src/main/adblock"
+import { SettingsStore } from "../../src/main/settings"
 import { files } from "../support/memory-fs"
+
+const SETTINGS = "/data/settings.json"
 
 /** Live runtime, not the test clock: the startup pass awaits real promises. */
 const runTest = Effect.runPromise
@@ -67,10 +70,16 @@ const asSession = (session: FakeSession): Session =>
 const open = Effect.gen(function* () {
     const scope = yield* Scope.make()
     const context = yield* Layer.buildWithScope(
-        Adblock.layer({ cachePath: "/data/adblock/engine.bin" }),
+        Adblock.layer({ cachePath: "/data/adblock/engine.bin" }).pipe(
+            Layer.provideMerge(SettingsStore.layer(SETTINGS)),
+        ),
         scope,
     )
-    return { adblock: Context.get(context, Adblock), scope }
+    return {
+        adblock: Context.get(context, Adblock),
+        settings: Context.get(context, SettingsStore),
+        scope,
+    }
 })
 
 const stale = () =>
@@ -151,6 +160,50 @@ describe("Adblock service", () => {
                 const replies: unknown[] = []
                 session.beforeRequest?.({}, (response) => void replies.push(response))
                 expect(replies).toEqual([{}])
+            }),
+        ))
+
+    it("is on by default and blocks, then allows everything once disabled", () =>
+        runTest(
+            Effect.gen(function* () {
+                yield* stale()
+                controls.fetchResult = Promise.resolve(stubEngine)
+                const { adblock, settings } = yield* open
+                yield* adblock.ready
+                const session = new FakeSession()
+                yield* adblock.attach(asSession(session))
+
+                session.beforeRequest?.({}, () => undefined)
+                expect(fakeBlockerCalls).toEqual(["beforeRequest"])
+
+                yield* settings.set({ adblockEnabled: false })
+                // The mirrored flag updates on the next settings event; give
+                // the subscription a chance to run.
+                yield* Effect.yieldNow
+                session.beforeRequest?.({}, () => undefined)
+                expect(fakeBlockerCalls).toEqual(["beforeRequest"])
+
+                yield* settings.set({ adblockEnabled: true })
+                yield* Effect.yieldNow
+                session.beforeRequest?.({}, () => undefined)
+                expect(fakeBlockerCalls).toEqual(["beforeRequest", "beforeRequest"])
+            }),
+        ))
+
+    it("starts unblocked when the setting is off", () =>
+        runTest(
+            Effect.gen(function* () {
+                yield* stale()
+                // Seed settings before the service builds.
+                files.set(SETTINGS, JSON.stringify({ adblockEnabled: false }))
+                controls.fetchResult = Promise.resolve(stubEngine)
+                const { adblock } = yield* open
+                yield* adblock.ready
+                const session = new FakeSession()
+                yield* adblock.attach(asSession(session))
+
+                session.beforeRequest?.({}, () => undefined)
+                expect(fakeBlockerCalls).toEqual([])
             }),
         ))
 })

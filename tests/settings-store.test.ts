@@ -87,6 +87,7 @@ describe("fromPersistedSettings", () => {
             downloadAskWhereToSave: true,
             historyEnabled: DEFAULT_SETTINGS.historyEnabled,
             historyRetention: DEFAULT_SETTINGS.historyRetention,
+            adblockEnabled: DEFAULT_SETTINGS.adblockEnabled,
         })
     })
 })
@@ -118,6 +119,7 @@ describe("settings store", () => {
                     downloadAskWhereToSave: DEFAULT_SETTINGS.downloadAskWhereToSave,
                     historyEnabled: DEFAULT_SETTINGS.historyEnabled,
                     historyRetention: DEFAULT_SETTINGS.historyRetention,
+                    adblockEnabled: DEFAULT_SETTINGS.adblockEnabled,
                 })
 
                 const reloaded = yield* (yield* open()).store.get
