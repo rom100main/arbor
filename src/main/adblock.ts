@@ -163,12 +163,10 @@ const make = (options: AdblockOptions) =>
                     })
                     if (!active || styles.length === 0) return Promise.resolve()
                     // A sender destroyed mid-navigation just fails the insert: expected.
-                    return event.sender
-                        .insertCSS(styles, { cssOrigin: "user" })
-                        .then(
-                            () => undefined,
-                            () => undefined,
-                        )
+                    return event.sender.insertCSS(styles, { cssOrigin: "user" }).then(
+                        () => undefined,
+                        () => undefined,
+                    )
                 } catch (error) {
                     run(Effect.logError("Adblock: cosmetic filter failed", error))
                     return Promise.resolve()

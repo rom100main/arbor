@@ -142,8 +142,8 @@
     flex-direction: column;
     gap: 4px;
     max-width: 512px;
-    margin: 0;
     padding: 0;
+    margin: 0;
     list-style: none;
 }
 

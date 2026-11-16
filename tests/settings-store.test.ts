@@ -71,9 +71,9 @@ describe("fromPersistedSettings", () => {
             })?.adblockDisabledSites,
         ).toEqual(["*.example.com"])
         // A non-array value falls back to the default list.
-        expect(fromPersistedSettings({ adblockDisabledSites: "nope" })?.adblockDisabledSites).toEqual(
-            [],
-        )
+        expect(
+            fromPersistedSettings({ adblockDisabledSites: "nope" })?.adblockDisabledSites,
+        ).toEqual([])
     })
 
     it("defaults the download save mode and rejects a non-boolean", () => {

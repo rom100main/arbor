@@ -480,7 +480,9 @@ const AdblockingSection = () => {
                     onChange={chooseMode}
                     variant="wide"
                 />
-                <p class="settings-hint">Powered by <a href="https://www.ghostery.com/">Ghostery</a>.</p>
+                <p class="settings-hint">
+                    Powered by <a href="https://www.ghostery.com/">Ghostery</a>.
+                </p>
             </div>
             <div class="settings-group">
                 <h2>Sites without blocking</h2>

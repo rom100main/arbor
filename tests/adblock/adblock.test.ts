@@ -259,8 +259,9 @@ describe("Adblock service", () => {
                 yield* adblock.attach(asSession(session))
 
                 const replies: unknown[] = []
-                session.beforeRequest?.({ resourceType: "mainFrame" }, (response) =>
-                    void replies.push(response),
+                session.beforeRequest?.(
+                    { resourceType: "mainFrame" },
+                    (response) => void replies.push(response),
                 )
                 expect(replies).toEqual([{}])
                 expect(fakeBlockerCalls).toEqual([])
@@ -343,12 +344,10 @@ describe("matchesDisabledPattern", () => {
     })
 
     it("matches a full URL pattern against the whole URL", () => {
-        expect(
-            matchesDisabledPattern(["https://example.com/*"], "https://example.com/page"),
-        ).toBe(true)
-        expect(
-            matchesDisabledPattern(["https://example.com/*"], "https://example.com"),
-        ).toBe(false)
+        expect(matchesDisabledPattern(["https://example.com/*"], "https://example.com/page")).toBe(
+            true,
+        )
+        expect(matchesDisabledPattern(["https://example.com/*"], "https://example.com")).toBe(false)
     })
 
     it("is case-insensitive and ignores empty patterns", () => {
