@@ -127,12 +127,13 @@ const optionsUrlFor = (extension: Electron.Extension): string | null => {
     return new URL(page.replace(/^\/+/, ""), extension.url).href
 }
 
-/** Extensions that gate on the User Agent refuse Electron: match electron-browser-shell's Chrome-like UA. */
-const chromeUserAgent = (ses: Session): string =>
-    ses
-        .getUserAgent()
-        .replace(/\sElectron\/\S+/, "")
-        .replace(new RegExp(`\\s${app.getName()}/\\S+`), "")
+/** Chrome-like UA for pages and extensions: Electron token removed, Arbor token kept. */
+const chromeUserAgent = (ses: Session): string => {
+    const raw = ses.getUserAgent()
+    const withoutElectron = raw.replace(/\sElectron\/\S+/, "")
+    if (/\sArbor\/\S+/.test(withoutElectron)) return withoutElectron
+    return raw.replace(/\sElectron\/\S+/, ` Arbor/${app.getVersion()}`)
+}
 
 export class Extensions extends Context.Service<Extensions, ExtensionsService>()(
     "arbor.Extensions",
