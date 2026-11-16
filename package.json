@@ -2,7 +2,7 @@
     "name": "arbor",
     "productName": "Arbor",
     "private": true,
-    "version": "0.2.0",
+    "version": "0.3.0",
     "description": "A desktop browser that keeps tabs as trees.",
     "author": "rom100main",
     "repository": "github:rom100main/arbor",
