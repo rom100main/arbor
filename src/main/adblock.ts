@@ -9,20 +9,16 @@
  */
 
 import { mkdir, readFile, writeFile } from "node:fs/promises"
-import { createRequire } from "node:module"
 import path from "node:path"
 
 import { ElectronBlocker } from "@ghostery/adblocker-electron"
 import { Context, Deferred, Effect, FiberSet, Layer, Option, Stream } from "effect"
-import { ipcMain, type Session } from "electron"
+import { type Session } from "electron"
 
 import { SettingsStore } from "./settings"
 
-const ghostPreloadPath = ((): string =>
-    createRequire(import.meta.url).resolve("@ghostery/adblocker-electron-preload"))()
-
 export interface AdblockService {
-    /** Hook a session's webRequest and cosmetic preload. Safe to call repeatedly for one session. */
+    /** Hook a session's webRequest. Safe to call repeatedly for one session. */
     readonly attach: (ses: Session) => Effect.Effect<void>
     /**
      * Completes once the startup pass latched an engine (cache or fresh).
@@ -35,9 +31,6 @@ export interface AdblockOptions {
     /** Where the serialized engine cache lives: `<userData>/adblock/engine.bin`. */
     readonly cachePath: string
 }
-
-const INJECT_CHANNEL = "@ghostery/adblocker/inject-cosmetic-filters"
-const MUTATION_CHANNEL = "@ghostery/adblocker/is-mutation-observer-enabled"
 
 const make = (options: AdblockOptions) =>
     Effect.gen(function* () {
@@ -71,7 +64,7 @@ const make = (options: AdblockOptions) =>
             details: Parameters<ElectronBlocker["onBeforeRequest"]>[0],
             callback: Parameters<ElectronBlocker["onBeforeRequest"]>[1],
         ): void => {
-            if (!enabled || !blocker) {
+            if (!enabled || !blocker || details.resourceType === "mainFrame") {
                 callback({})
                 return
             }
@@ -89,37 +82,12 @@ const make = (options: AdblockOptions) =>
             blocker.onHeadersReceived(details, callback)
         }
 
-        /**
-         * Cosmetic filters need the Ghostery preload in every session,
-         * but its two `ipcMain` handlers are process-global, so they register once.
-         * `ElectronBlocker.enableBlockingInSession`
-         * registers them per session and throws on the second Container,
-         * hence this thin wiring.
-         */
-        let ipcWired = false
-        const ensureIpc = (): void => {
-            if (ipcWired) return
-            ipcWired = true
-            ipcMain.handle(INJECT_CHANNEL, (event, url: string, msg) => {
-                return enabled && blocker
-                    ? blocker.onInjectCosmeticFilters(event, url, msg)
-                    : undefined
-            })
-            ipcMain.handle(MUTATION_CHANNEL, (event) =>
-                enabled && blocker
-                    ? blocker.onIsMutationObserverEnabled(event)
-                    : Promise.resolve(false),
-            )
-        }
-
         const attached = new Set<Session>()
 
         const attach = (ses: Session) =>
             Effect.sync(() => {
                 if (attached.has(ses)) return
                 attached.add(ses)
-                ensureIpc()
-                ses.registerPreloadScript({ type: "frame", filePath: ghostPreloadPath })
                 ses.webRequest.onBeforeRequest({ urls: ["<all_urls>"] }, onBeforeRequest)
                 ses.webRequest.onHeadersReceived({ urls: ["<all_urls>"] }, onHeadersReceived)
             })

@@ -48,12 +48,6 @@ type BeforeRequest = (details: unknown, callback: (response: unknown) => void) =
 
 class FakeSession {
     beforeRequest: BeforeRequest | null = null
-    preloads: string[] = []
-
-    registerPreloadScript = (): string => {
-        this.preloads.push("preload")
-        return `preload-${this.preloads.length}`
-    }
 
     webRequest = {
         onBeforeRequest: (_filter: unknown, listener: BeforeRequest): void => {
@@ -99,8 +93,6 @@ const stubEngine = {
     onHeadersReceived: (_details: unknown, callback: (response: unknown) => void): void => {
         callback({})
     },
-    onInjectCosmeticFilters: (): void => undefined,
-    onIsMutationObserverEnabled: (): Promise<boolean> => Promise.resolve(false),
     serialize: (): Uint8Array => new Uint8Array([1]),
 }
 
@@ -117,16 +109,11 @@ describe("Adblock service", () => {
                 yield* adblock.attach(asSession(first))
                 // Attaching the same session again registers nothing twice.
                 yield* adblock.attach(asSession(first))
-                // Cosmetic handlers are process-global, so a second
-                // Container must not re-register them.
                 yield* adblock.attach(asSession(second))
 
-                expect(first.preloads).toHaveLength(1)
                 expect(first.beforeRequest).not.toBeNull()
-                expect([...ipcHandlers.keys()].sort()).toEqual([
-                    "@ghostery/adblocker/inject-cosmetic-filters",
-                    "@ghostery/adblocker/is-mutation-observer-enabled",
-                ])
+                // Network-only: no cosmetic preload or IPC handlers.
+                expect([...ipcHandlers.keys()]).toEqual([])
                 first.beforeRequest?.({}, () => undefined)
                 expect(fakeBlockerCalls).toEqual(["beforeRequest"])
             }),
@@ -203,6 +190,25 @@ describe("Adblock service", () => {
                 yield* adblock.attach(asSession(session))
 
                 session.beforeRequest?.({}, () => undefined)
+                expect(fakeBlockerCalls).toEqual([])
+            }),
+        ))
+
+    it("never delegates main-frame navigations to the engine", () =>
+        runTest(
+            Effect.gen(function* () {
+                yield* stale()
+                controls.fetchResult = Promise.resolve(stubEngine)
+                const { adblock } = yield* open
+                yield* adblock.ready
+                const session = new FakeSession()
+                yield* adblock.attach(asSession(session))
+
+                const replies: unknown[] = []
+                session.beforeRequest?.({ resourceType: "mainFrame" }, (response) =>
+                    void replies.push(response),
+                )
+                expect(replies).toEqual([{}])
                 expect(fakeBlockerCalls).toEqual([])
             }),
         ))
