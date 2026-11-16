@@ -36,6 +36,7 @@ const PersistedSettings = Schema.Struct({
         Settings.fields.adblockEnabled,
         () => DEFAULT_SETTINGS.adblockEnabled,
     ),
+    adblockDisabledSites: orDefault(Schema.Array(Schema.Unknown), () => []),
 })
 
 const parseSettings = decodeOr(PersistedSettings)
@@ -46,6 +47,15 @@ const cleanPinned = (ids: readonly unknown[]): string[] =>
     [...new Set(ids.filter((id): id is string => typeof id === "string"))].filter(
         (id) => id.length > 0,
     )
+
+const cleanDisabledSites = (patterns: readonly unknown[]): string[] =>
+    [
+        ...new Set(
+            patterns
+                .filter((pattern): pattern is string => typeof pattern === "string")
+                .map((pattern) => pattern.trim()),
+        ),
+    ].filter((pattern) => pattern.length > 0)
 
 /**
  * Parse a settings payload, repairing individual fields rather than rejecting the file:
@@ -65,6 +75,7 @@ export const fromPersistedSettings = (data: unknown): Settings | null => {
         historyEnabled: parsed.historyEnabled,
         historyRetention: parsed.historyRetention,
         adblockEnabled: parsed.adblockEnabled,
+        adblockDisabledSites: cleanDisabledSites(parsed.adblockDisabledSites),
     }
 }
 
@@ -80,7 +91,11 @@ export interface SettingsService {
     readonly unpin: (extensionId: string) => Effect.Effect<void>
 }
 
-const defaults = (): Settings => ({ ...DEFAULT_SETTINGS, pinnedExtensionIds: [] })
+const defaults = (): Settings => ({
+    ...DEFAULT_SETTINGS,
+    pinnedExtensionIds: [],
+    adblockDisabledSites: [],
+})
 
 /**
  * Global user preferences, persisted apart from browser state so that clearing tabs and
@@ -107,6 +122,9 @@ const make = (path: string) =>
                     ...patch,
                     ...(patch.pinnedExtensionIds && {
                         pinnedExtensionIds: cleanPinned(patch.pinnedExtensionIds),
+                    }),
+                    ...(patch.adblockDisabledSites && {
+                        adblockDisabledSites: cleanDisabledSites(patch.adblockDisabledSites),
                     }),
                 }
                 return [next, Option.some(next)] as const

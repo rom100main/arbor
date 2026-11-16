@@ -62,6 +62,7 @@ export const DEFAULT_SETTINGS: Settings = {
     historyEnabled: true,
     historyRetention: "forever",
     adblockEnabled: true,
+    adblockDisabledSites: [],
 }
 
 const SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*:/i

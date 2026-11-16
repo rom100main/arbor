@@ -42,6 +42,7 @@ export const Settings = Schema.Struct({
     historyEnabled: Schema.Boolean,
     historyRetention: HistoryRetention,
     adblockEnabled: Schema.Boolean,
+    adblockDisabledSites: Schema.Array(Schema.NonEmptyString),
 })
 export type Settings = typeof Settings.Type
 

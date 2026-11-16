@@ -25,6 +25,23 @@ const ghostPreloadPath = ((): string =>
 const INJECT_CHANNEL = "@ghostery/adblocker/inject-cosmetic-filters"
 const MUTATION_CHANNEL = "@ghostery/adblocker/is-mutation-observer-enabled"
 
+const globToRegExp = (glob: string): RegExp =>
+    new RegExp(`^${glob.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replaceAll("*", ".*")}$`, "i")
+
+export const matchesDisabledPattern = (patterns: readonly string[], url: string): boolean => {
+    try {
+        const { hostname } = new URL(url)
+        return patterns.some((raw) => {
+            const pattern = raw.trim()
+            if (pattern.length === 0) return false
+            const target = pattern.includes("://") || pattern.includes("/") ? url : hostname
+            return globToRegExp(pattern).test(target)
+        })
+    } catch {
+        return false
+    }
+}
+
 export interface AdblockService {
     /** Hook a session's webRequest and cosmetic preload. Safe to call repeatedly for one session. */
     readonly attach: (ses: Session) => Effect.Effect<void>
@@ -52,15 +69,22 @@ const make = (options: AdblockOptions) =>
          * Mirrored from the setting, so toggling blocks or unblocks everywhere at once,
          * without touching any session.
          */
-        let enabled = (yield* settings.get).adblockEnabled
+        const initial = yield* settings.get
+        let enabled = initial.adblockEnabled
+        let disabledSites = initial.adblockDisabledSites
         yield* settings.changes.pipe(
             Stream.runForEach((next) =>
                 Effect.sync(() => {
                     enabled = next.adblockEnabled
+                    disabledSites = next.adblockDisabledSites
                 }),
             ),
             Effect.forkScoped,
         )
+
+        /** A disabled site gets no blocking at all: no network verdicts, no cosmetic CSS. */
+        const isDisabledSite = (url: string): boolean =>
+            disabledSites.length > 0 && matchesDisabledPattern(disabledSites, url)
 
         /**
          * Network hooks delegate to `blocker`,
@@ -72,7 +96,12 @@ const make = (options: AdblockOptions) =>
             details: Parameters<ElectronBlocker["onBeforeRequest"]>[0],
             callback: Parameters<ElectronBlocker["onBeforeRequest"]>[1],
         ): void => {
-            if (!enabled || !blocker || details.resourceType === "mainFrame") {
+            if (
+                !enabled ||
+                !blocker ||
+                details.resourceType === "mainFrame" ||
+                isDisabledSite(details.url)
+            ) {
                 callback({})
                 return
             }
@@ -83,7 +112,7 @@ const make = (options: AdblockOptions) =>
             details: Parameters<ElectronBlocker["onHeadersReceived"]>[0],
             callback: Parameters<ElectronBlocker["onHeadersReceived"]>[1],
         ): void => {
-            if (!enabled || !blocker) {
+            if (!enabled || !blocker || isDisabledSite(details.url)) {
                 callback({})
                 return
             }
@@ -108,7 +137,7 @@ const make = (options: AdblockOptions) =>
             if (ipcWired) return
             ipcWired = true
             ipcMain.handle(INJECT_CHANNEL, (event, url: string, msg) => {
-                if (!enabled || !blocker) return Promise.resolve()
+                if (!enabled || !blocker || isDisabledSite(url)) return Promise.resolve()
                 try {
                     const parsed = parse(url)
                     const hostname = parsed.hostname || ""
@@ -145,11 +174,15 @@ const make = (options: AdblockOptions) =>
                     return Promise.resolve()
                 }
             })
-            ipcMain.handle(MUTATION_CHANNEL, (event) =>
-                enabled && blocker
-                    ? blocker.onIsMutationObserverEnabled(event)
-                    : Promise.resolve(false),
-            )
+            ipcMain.handle(MUTATION_CHANNEL, (event) => {
+                if (!enabled || !blocker) return Promise.resolve(false)
+                const senderUrl =
+                    typeof event.sender?.getURL === "function" ? event.sender.getURL() : ""
+                if (senderUrl.length > 0 && isDisabledSite(senderUrl)) {
+                    return Promise.resolve(false)
+                }
+                return blocker.onIsMutationObserverEnabled(event)
+            })
         }
 
         const attached = new Set<Session>()
