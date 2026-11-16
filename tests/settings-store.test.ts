@@ -64,6 +64,18 @@ describe("fromPersistedSettings", () => {
         expect(restored!.urlBarVisibility).toBe(DEFAULT_SETTINGS.urlBarVisibility)
     })
 
+    it("cleans disabled sites: trims, dedupes, drops junk", () => {
+        expect(
+            fromPersistedSettings({
+                adblockDisabledSites: ["  *.example.com  ", "*.example.com", "", 7, null],
+            })?.adblockDisabledSites,
+        ).toEqual(["*.example.com"])
+        // A non-array value falls back to the default list.
+        expect(fromPersistedSettings({ adblockDisabledSites: "nope" })?.adblockDisabledSites).toEqual(
+            [],
+        )
+    })
+
     it("defaults the download save mode and rejects a non-boolean", () => {
         expect(fromPersistedSettings({})?.downloadAskWhereToSave).toBe(true)
         expect(
@@ -88,6 +100,7 @@ describe("fromPersistedSettings", () => {
             historyEnabled: DEFAULT_SETTINGS.historyEnabled,
             historyRetention: DEFAULT_SETTINGS.historyRetention,
             adblockEnabled: DEFAULT_SETTINGS.adblockEnabled,
+            adblockDisabledSites: DEFAULT_SETTINGS.adblockDisabledSites,
         })
     })
 })
@@ -120,6 +133,7 @@ describe("settings store", () => {
                     historyEnabled: DEFAULT_SETTINGS.historyEnabled,
                     historyRetention: DEFAULT_SETTINGS.historyRetention,
                     adblockEnabled: DEFAULT_SETTINGS.adblockEnabled,
+                    adblockDisabledSites: DEFAULT_SETTINGS.adblockDisabledSites,
                 })
 
                 const reloaded = yield* (yield* open()).store.get
@@ -195,6 +209,23 @@ describe("settings store", () => {
 
                 const reloaded = yield* (yield* open()).store.get
                 expect(reloaded.downloadAskWhereToSave).toBe(false)
+            }),
+        ))
+
+    it("persists the disabled-sites list, cleaned", () =>
+        runTest(
+            Effect.gen(function* () {
+                const first = yield* open()
+                yield* first.store.set({
+                    adblockDisabledSites: ["  *.example.com  ", "*.example.com", "plain.test"],
+                })
+                yield* Scope.close(first.scope, Exit.void)
+                expect(onDisk()).toMatchObject({
+                    adblockDisabledSites: ["*.example.com", "plain.test"],
+                })
+
+                const reloaded = yield* (yield* open()).store.get
+                expect(reloaded.adblockDisabledSites).toEqual(["*.example.com", "plain.test"])
             }),
         ))
 

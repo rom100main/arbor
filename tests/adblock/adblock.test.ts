@@ -2,7 +2,7 @@ import { Context, Effect, Layer, Scope } from "effect"
 import type { Session } from "electron"
 import { describe, expect, it, vi } from "vite-plus/test"
 
-import { Adblock } from "../../src/main/adblock"
+import { Adblock, matchesDisabledPattern } from "../../src/main/adblock"
 import { SettingsStore } from "../../src/main/settings"
 import { files } from "../support/memory-fs"
 
@@ -31,8 +31,9 @@ vi.mock("electron", () => ({
     },
 }))
 
-/** Controls the mocked list fetch per test. */
-const controls = vi.hoisted(() => ({ fetchResult: null as Promise<unknown> | null }))
+/** Controls the mocked list fetch per test. A factory, so a rejection is
+ * created when the startup pass asks, never before it. */
+const controls = vi.hoisted(() => ({ fetchResult: null as (() => Promise<unknown>) | null }))
 
 const fakeBlockerCalls: string[] = []
 vi.mock("@ghostery/adblocker-electron", () => ({
@@ -41,7 +42,7 @@ vi.mock("@ghostery/adblocker-electron", () => ({
             throw new Error("no cache in tests")
         },
         fromPrebuiltAdsAndTracking: (): Promise<unknown> =>
-            controls.fetchResult ?? Promise.reject(new Error("unset")),
+            controls.fetchResult?.() ?? Promise.reject(new Error("unset")),
     },
 }))
 
@@ -118,7 +119,7 @@ describe("Adblock service", () => {
         runTest(
             Effect.gen(function* () {
                 yield* stale()
-                controls.fetchResult = Promise.resolve(stubEngine)
+                controls.fetchResult = () => Promise.resolve(stubEngine)
                 const { adblock } = yield* open
                 yield* adblock.ready
                 const first = new FakeSession()
@@ -146,7 +147,7 @@ describe("Adblock service", () => {
         runTest(
             Effect.gen(function* () {
                 yield* stale()
-                controls.fetchResult = Promise.resolve(stubEngine)
+                controls.fetchResult = () => Promise.resolve(stubEngine)
                 const { adblock } = yield* open
                 yield* adblock.ready
                 yield* adblock.attach(asSession(new FakeSession()))
@@ -176,7 +177,7 @@ describe("Adblock service", () => {
         runTest(
             Effect.gen(function* () {
                 yield* stale()
-                controls.fetchResult = new Promise(() => undefined)
+                controls.fetchResult = () => new Promise(() => undefined)
                 const { adblock } = yield* open
                 const session = new FakeSession()
                 yield* adblock.attach(asSession(session))
@@ -191,7 +192,7 @@ describe("Adblock service", () => {
         runTest(
             Effect.gen(function* () {
                 yield* stale()
-                controls.fetchResult = Promise.reject(new Error("offline"))
+                controls.fetchResult = () => Promise.reject(new Error("offline"))
                 const { adblock } = yield* open
                 yield* adblock.ready
                 const session = new FakeSession()
@@ -207,7 +208,7 @@ describe("Adblock service", () => {
         runTest(
             Effect.gen(function* () {
                 yield* stale()
-                controls.fetchResult = Promise.resolve(stubEngine)
+                controls.fetchResult = () => Promise.resolve(stubEngine)
                 const { adblock, settings } = yield* open
                 yield* adblock.ready
                 const session = new FakeSession()
@@ -236,7 +237,7 @@ describe("Adblock service", () => {
                 yield* stale()
                 // Seed settings before the service builds.
                 files.set(SETTINGS, JSON.stringify({ adblockEnabled: false }))
-                controls.fetchResult = Promise.resolve(stubEngine)
+                controls.fetchResult = () => Promise.resolve(stubEngine)
                 const { adblock } = yield* open
                 yield* adblock.ready
                 const session = new FakeSession()
@@ -251,7 +252,7 @@ describe("Adblock service", () => {
         runTest(
             Effect.gen(function* () {
                 yield* stale()
-                controls.fetchResult = Promise.resolve(stubEngine)
+                controls.fetchResult = () => Promise.resolve(stubEngine)
                 const { adblock } = yield* open
                 yield* adblock.ready
                 const session = new FakeSession()
@@ -265,4 +266,97 @@ describe("Adblock service", () => {
                 expect(fakeBlockerCalls).toEqual([])
             }),
         ))
+
+    it("lets disabled sites through unblocked and skips their cosmetic CSS", () =>
+        runTest(
+            Effect.gen(function* () {
+                yield* stale()
+                controls.fetchResult = () => Promise.resolve(stubEngine)
+                const { adblock, settings } = yield* open
+                yield* adblock.ready
+                yield* settings.set({ adblockDisabledSites: ["*.example.com"] })
+                // The mirrored list updates on the next settings event.
+                yield* Effect.yieldNow
+                const session = new FakeSession()
+                yield* adblock.attach(asSession(session))
+
+                const replies: unknown[] = []
+                session.beforeRequest?.(
+                    { url: "https://sub.example.com/ad.js", resourceType: "script" },
+                    (response) => void replies.push(response),
+                )
+                expect(replies).toEqual([{}])
+                expect(fakeBlockerCalls).toEqual([])
+
+                // Other sites still block.
+                session.beforeRequest?.(
+                    { url: "https://other.com/ad.js", resourceType: "script" },
+                    () => undefined,
+                )
+                expect(fakeBlockerCalls).toEqual(["beforeRequest"])
+
+                const insertCSS = vi.fn(() => Promise.resolve("key"))
+                const handler = ipcHandlers.get("@ghostery/adblocker/inject-cosmetic-filters")
+                yield* Effect.promise(() =>
+                    Promise.resolve(
+                        handler?.(
+                            { frameId: 1, processId: 2, sender: { insertCSS } },
+                            "https://sub.example.com/",
+                            undefined,
+                        ),
+                    ),
+                )
+                expect(insertCSS).not.toHaveBeenCalled()
+            }),
+        ))
+
+    it("starts unblocked for disabled sites seeded on disk", () =>
+        runTest(
+            Effect.gen(function* () {
+                yield* stale()
+                files.set(SETTINGS, JSON.stringify({ adblockDisabledSites: ["example.com"] }))
+                controls.fetchResult = () => Promise.resolve(stubEngine)
+                const { adblock } = yield* open
+                yield* adblock.ready
+                const session = new FakeSession()
+                yield* adblock.attach(asSession(session))
+
+                session.beforeRequest?.(
+                    { url: "https://example.com/ad.js", resourceType: "script" },
+                    () => undefined,
+                )
+                expect(fakeBlockerCalls).toEqual([])
+            }),
+        ))
+})
+
+describe("matchesDisabledPattern", () => {
+    it("matches a bare host against the hostname", () => {
+        expect(matchesDisabledPattern(["example.com"], "https://example.com/page")).toBe(true)
+        expect(matchesDisabledPattern(["example.com"], "https://other.com/page")).toBe(false)
+        expect(matchesDisabledPattern(["example.com"], "https://sub.example.com/page")).toBe(false)
+    })
+
+    it("matches a wildcard host against subdomains", () => {
+        expect(matchesDisabledPattern(["*.example.com"], "https://sub.example.com/page")).toBe(true)
+        expect(matchesDisabledPattern(["*.example.com"], "https://example.com/page")).toBe(false)
+    })
+
+    it("matches a full URL pattern against the whole URL", () => {
+        expect(
+            matchesDisabledPattern(["https://example.com/*"], "https://example.com/page"),
+        ).toBe(true)
+        expect(
+            matchesDisabledPattern(["https://example.com/*"], "https://example.com"),
+        ).toBe(false)
+    })
+
+    it("is case-insensitive and ignores empty patterns", () => {
+        expect(matchesDisabledPattern(["EXAMPLE.COM"], "https://example.com/")).toBe(true)
+        expect(matchesDisabledPattern(["", "  "], "https://example.com/")).toBe(false)
+    })
+
+    it("never matches an invalid URL", () => {
+        expect(matchesDisabledPattern(["*"], "not a url")).toBe(false)
+    })
 })
