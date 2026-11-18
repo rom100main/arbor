@@ -1,7 +1,9 @@
-import { createEffect, onCleanup } from "solid-js"
+import { createEffect, createSignal, onCleanup } from "solid-js"
 
+import type { CloseContainerConfirmation } from "../../shared/protocol"
 import {
     chromeInsets,
+    effectiveVisibilities,
     HISTORY_URL,
     SETTINGS_URL,
     SIDEBAR_COMPACT_WIDTH,
@@ -10,6 +12,7 @@ import {
     TOOLBAR_HEIGHT,
 } from "../../shared/settings"
 import { Icon } from "../ui/Icon"
+import { ConfirmCloseContainer } from "./ConfirmCloseContainer"
 import { requestTabTreeFocus } from "./focus"
 import { createReveal, REVEAL_MS, revealZones } from "./reveal"
 import { useSettings } from "./settings"
@@ -33,10 +36,27 @@ export const MainShell = () => {
         return snap?.tabs.find((t) => t.id === snap.activeTabId)?.url ?? ""
     }
 
+    // --- fullscreen: both bars are hidden, whatever the settings say
+
+    const [fullscreen, setFullscreen] = createSignal(false)
+    onCleanup(window.arbor.onFullscreen(setFullscreen))
+    // Leaving fullscreen goes back through this accessor to the settings' values.
+    const effective = () => effectiveVisibilities(settings(), fullscreen())
+
+    // --- confirm closing a container
+
+    const [confirmClose, setConfirmClose] = createSignal<CloseContainerConfirmation | null>(null)
+    onCleanup(window.arbor.onConfirmCloseContainer(setConfirmClose))
+    const confirmCloseContainer = (): void => {
+        const request = confirmClose()
+        setConfirmClose(null)
+        if (request) void window.arbor.closeTab({ tabId: request.tabId, confirmed: true })
+    }
+
     // --- revealing bars
 
     const zones = () =>
-        revealZones(settings(), { width: window.innerWidth, height: window.innerHeight })
+        revealZones(effective(), { width: window.innerWidth, height: window.innerHeight })
     const sidebar = createReveal(() => zones().sidebar)
     const toolbar = createReveal(() => zones().toolbar)
     const titlebar = createReveal(() => zones().titlebar)
@@ -87,7 +107,7 @@ export const MainShell = () => {
     onCleanup(window.arbor.onToolbarPopup((open) => toolbar.setPinned(open)))
 
     createEffect(
-        () => [settings().sidebarVisibility, settings().urlBarVisibility] as const,
+        () => [effective().sidebarVisibility, effective().urlBarVisibility, fullscreen()] as const,
         () => {
             sidebar.sync()
             toolbar.sync()
@@ -105,7 +125,7 @@ export const MainShell = () => {
     }
     onCleanup(() => clearTimeout(lowerTimer))
     createEffect(
-        () => sidebar.open() || toolbar.open() || titlebar.open(),
+        () => sidebar.open() || toolbar.open() || titlebar.open() || confirmClose() !== null,
         (anyOpen) => {
             if (anyOpen) {
                 setRaised(true)
@@ -120,6 +140,11 @@ export const MainShell = () => {
     // so give it back at once rather than after the closing animation.
     const onShellMouseDown = (event: MouseEvent): void => {
         if (event.target !== event.currentTarget) return
+        if (confirmClose() !== null) {
+            setConfirmClose(null)
+            if (!sidebar.isOpen() && !toolbar.isOpen() && !titlebar.isOpen()) setRaised(false)
+            return
+        }
         sidebar.dismiss()
         toolbar.dismiss()
         titlebar.dismiss()
@@ -174,11 +199,16 @@ export const MainShell = () => {
                 "--sidebar-compact-width": `${SIDEBAR_COMPACT_WIDTH}px`,
                 "--toolbar-height": `${TOOLBAR_HEIGHT}px`,
                 "--titlebar-height": `${TITLEBAR_HEIGHT}px`,
-                "--toolbar-inset": `${chromeInsets(settings()).bottom}px`,
+                "--toolbar-inset": `${chromeInsets(settings(), fullscreen()).bottom}px`,
                 "--reveal-duration": `${REVEAL_MS}ms`,
             }}
             onMouseDown={onShellMouseDown}
         >
+            <ConfirmCloseContainer
+                request={confirmClose()}
+                onConfirm={confirmCloseContainer}
+                onCancel={() => setConfirmClose(null)}
+            />
             <section
                 aria-label="Title bar"
                 class={{
@@ -190,7 +220,7 @@ export const MainShell = () => {
                 Arbor
             </section>
             <Sidebar
-                visibility={settings().sidebarVisibility}
+                visibility={effective().sidebarVisibility}
                 open={sidebar.open()}
                 onFocusChange={sidebar.setFocused}
                 onDismiss={sidebar.dismiss}
@@ -199,8 +229,8 @@ export const MainShell = () => {
                 aria-label="URL bar"
                 class={{
                     toolbar: true,
-                    stowed: settings().urlBarVisibility === "hidden" && !toolbar.open(),
-                    floating: settings().urlBarVisibility === "hidden" && toolbar.open(),
+                    stowed: effective().urlBarVisibility === "hidden" && !toolbar.open(),
+                    floating: effective().urlBarVisibility === "hidden" && toolbar.open(),
                 }}
                 onFocusIn={onToolbarFocusIn}
                 onFocusOut={onToolbarFocusOut}
