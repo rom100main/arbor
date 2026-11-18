@@ -29,7 +29,8 @@ const sameDisplay = (a: DisplayTab, b: DisplayTab): boolean =>
     a.url === b.url &&
     a.title === b.title &&
     a.favicon === b.favicon &&
-    a.userLabel === b.userLabel
+    a.userLabel === b.userLabel &&
+    a.hibernated === b.hibernated
 
 const stableDisplayTabs = (cache: Map<TabId, DisplayTab>, tabs: DisplayTab[]): DisplayTab[] => {
     const visible = new Set<TabId>()

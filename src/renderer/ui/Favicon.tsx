@@ -4,7 +4,7 @@ import { Icon } from "./Icon"
 
 import "./Favicon.css"
 
-export const Favicon = (props: { url: string | null; size?: number }) => {
+export const Favicon = (props: { url: string | null; size?: number; grayscale?: boolean }) => {
     const [failed, setFailed] = createSignal(false)
     createEffect(
         () => props.url,
@@ -23,7 +23,7 @@ export const Favicon = (props: { url: string | null; size?: number }) => {
             }
         >
             <img
-                class="favicon"
+                class={{ favicon: true, grayscale: props.grayscale }}
                 src={props.url!}
                 alt=""
                 draggable="false"

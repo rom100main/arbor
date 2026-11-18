@@ -106,17 +106,7 @@ export const Sidebar = (props: {
                     <div class="container-strip" ref={(el) => (strip = el)}>
                         <div class="container-strip-inner">
                             <For each={snapshot()?.containers ?? []}>
-                                {(container) => (
-                                    <ContainerChip
-                                        container={container}
-                                        onRename={() =>
-                                            window.arbor.openRenameModal({
-                                                kind: "container",
-                                                containerId: container.id,
-                                            })
-                                        }
-                                    />
-                                )}
+                                {(container) => <ContainerChip container={container} />}
                             </For>
                             <button
                                 class="container-chip add"
@@ -360,9 +350,6 @@ const TabPage = (props: {
                         }
                         registerRow={(el) => registerRow(tab.id, el)}
                         onFocus={() => setFocusedId(tab.id)}
-                        onRename={() =>
-                            window.arbor.openRenameModal({ kind: "tab", tabId: tab.id })
-                        }
                     />
                 )}
             </For>

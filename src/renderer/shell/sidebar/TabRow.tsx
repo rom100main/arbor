@@ -26,7 +26,6 @@ export const TabRow = (props: {
     tabbable: boolean
     registerRow: (el: HTMLDivElement | undefined) => void
     onFocus: () => void
-    onRename: () => void
 }) => {
     const snapshot = useSnapshot()
     const label = () => props.tab.userLabel || props.tab.title || props.tab.url
@@ -48,6 +47,7 @@ export const TabRow = (props: {
             class={{
                 "tab-row": true,
                 active: snapshot()?.activeTabId === props.tab.id,
+                unloaded: props.tab.hibernated,
                 "drop-before": dropClass("before"),
                 "drop-after": dropClass("after"),
                 "drop-child": dropClass("child"),
@@ -67,7 +67,11 @@ export const TabRow = (props: {
             onFocus={props.onFocus}
             onContextMenu={(event) => {
                 event.preventDefault()
-                props.onRename()
+                window.arbor.tabMenu({
+                    tabId: props.tab.id,
+                    x: event.clientX,
+                    y: event.clientY,
+                })
             }}
             onDragStart={(event) => {
                 setDraggedTabId(props.tab.id)
@@ -111,7 +115,7 @@ export const TabRow = (props: {
             onDragEnd={clearDragState}
         >
             <div class={{ "row-leading": true, "has-children": props.hasChildren }}>
-                <Favicon url={props.tab.favicon} />
+                <Favicon url={props.tab.favicon} grayscale={props.tab.hibernated} />
                 <Show when={props.hasChildren}>
                     <button
                         class="chevron overlay"

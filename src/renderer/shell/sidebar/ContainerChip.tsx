@@ -17,7 +17,7 @@ import {
 
 import "./ContainerChip.css"
 
-export const ContainerChip = (props: { container: ContainerMeta; onRename: () => void }) => {
+export const ContainerChip = (props: { container: ContainerMeta }) => {
     const snapshot = useSnapshot()
     const active = () => snapshot()?.activeContainerId === props.container.id
     const orderDrop = () => containerOrderDrop()
@@ -42,7 +42,11 @@ export const ContainerChip = (props: { container: ContainerMeta; onRename: () =>
             onClick={() => void window.arbor.switchContainer({ containerId: props.container.id })}
             onContextMenu={(event) => {
                 event.preventDefault()
-                props.onRename()
+                window.arbor.containerMenu({
+                    containerId: props.container.id,
+                    x: event.clientX,
+                    y: event.clientY,
+                })
             }}
             draggable="true"
             onDragStart={(event) => {
