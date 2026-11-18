@@ -85,6 +85,8 @@ export const PUSHES = {
     renameTarget: "arbor:rename:target",
     permissionRequest: "arbor:permission:request",
     shellEdge: "arbor:shell:edge",
+    fullscreen: "arbor:window:fullscreen",
+    confirmCloseContainer: "arbor:container:confirm-close",
     updateStatus: "arbor:update:status",
     downloads: "arbor:downloads:changed",
     history: "arbor:history:changed",

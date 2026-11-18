@@ -27,20 +27,42 @@ export interface ChromeInsets {
 }
 
 /**
+ * What the bars do in fullscreen: both are `hidden`,
+ * so they only float over the page on edge hover,
+ * whatever the settings say.
+ * Leaving fullscreen restores the settings' values through this same function.
+ */
+export const effectiveVisibilities = (
+    settings: Pick<Settings, "sidebarVisibility" | "urlBarVisibility">,
+    fullscreen: boolean,
+): Pick<Settings, "sidebarVisibility" | "urlBarVisibility"> =>
+    fullscreen
+        ? { sidebarVisibility: "hidden", urlBarVisibility: "hidden" }
+        : {
+              sidebarVisibility: settings.sidebarVisibility,
+              urlBarVisibility: settings.urlBarVisibility,
+          }
+
+/**
  * Space the shell keeps for itself along the window's left and bottom edge.
  * A revealed bar slides over the page rather than resizing it, so only the resting state counts here.
+ * In fullscreen both bars are hidden, so the page gets the whole window.
  */
 export const chromeInsets = (
     settings: Pick<Settings, "sidebarVisibility" | "urlBarVisibility">,
-): ChromeInsets => ({
-    left:
-        settings.sidebarVisibility === "displayed"
-            ? SIDEBAR_WIDTH
-            : settings.sidebarVisibility === "compact"
-              ? SIDEBAR_COMPACT_WIDTH
-              : 0,
-    bottom: settings.urlBarVisibility === "displayed" ? TOOLBAR_HEIGHT : 0,
-})
+    fullscreen = false,
+): ChromeInsets => {
+    const effective = effectiveVisibilities(settings, fullscreen)
+    return {
+        left:
+            effective.sidebarVisibility === "displayed"
+                ? SIDEBAR_WIDTH
+                : effective.sidebarVisibility === "compact"
+                  ? SIDEBAR_COMPACT_WIDTH
+                  : 0,
+        bottom: effective.urlBarVisibility === "displayed" ? TOOLBAR_HEIGHT : 0,
+    }
+}
 
 export const DEFAULT_SEARCH_TEMPLATE = "https://duckduckgo.com/?q=%s"
 

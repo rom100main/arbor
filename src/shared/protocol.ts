@@ -206,6 +206,14 @@ export const RenameTarget = Schema.Union([
 ])
 export type RenameTarget = typeof RenameTarget.Type
 
+/** Closing this tab would empty its container, which is then removed: ask before it happens. */
+export const CloseContainerConfirmation = Schema.Struct({
+    tabId: TabId,
+    containerId: ContainerId,
+    containerName: Schema.String,
+})
+export type CloseContainerConfirmation = typeof CloseContainerConfirmation.Type
+
 /** Where a popup hangs from, in window coordinates: its left edge, top and width. */
 export const Anchor = Schema.Struct({
     x: Schema.Finite,

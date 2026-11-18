@@ -18,6 +18,7 @@ import {
 import {
     Anchor,
     BrowserSnapshot,
+    CloseContainerConfirmation,
     ContainerIcon,
     ContainerId,
     DownloadId,
@@ -164,7 +165,11 @@ export const Requests = {
         error: UnknownTab,
     }),
     closeTab: request({
-        payload: Schema.Struct({ tabId: TabId }),
+        payload: Schema.Struct({
+            tabId: TabId,
+            /** Set once the user accepted the close-container confirmation. */
+            confirmed: Schema.optionalKey(Schema.Boolean),
+        }),
         error: Schema.Union([UnknownTab, UnknownContainer, LastTab]),
     }),
     renameTab: request({
@@ -255,6 +260,8 @@ export const Pushes = {
     renameTarget: push(RenameTarget),
     permissionRequest: push(PermissionPromptRequest),
     shellEdge: push(RevealEdge),
+    fullscreen: push(Schema.Boolean),
+    confirmCloseContainer: push(CloseContainerConfirmation),
     updateStatus: push(UpdateStatus),
     downloads: push(DownloadsSnapshot),
     history: push(HistorySnapshot),
