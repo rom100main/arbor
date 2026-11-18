@@ -67,6 +67,8 @@ const handlersFor = (store: StoreService): RequestHandlers<never> => ({
     historyClearAll: () => Effect.void,
     getUpdateStatus: () => Effect.succeed({ kind: "idle" }),
     installUpdate: () => Effect.void,
+    findSearch: () => Effect.succeed({ total: 0, activeIndex: -1, error: null }),
+    findStep: () => Effect.succeed({ total: 0, activeIndex: -1, error: null }),
 })
 
 // Type-level guard (checked by `vp check`): a handler is required for every request.
@@ -95,6 +97,7 @@ const quietEvents: EventHandlers<never> = {
     permissionRespond: () => Effect.void,
     shellRaise: (raised) => Effect.sync(() => eventsSeen.push(raised)),
     titlebarReveal: () => Effect.void,
+    findClose: () => Effect.void,
 }
 
 /** Every Arbor channel served over an in-memory transport, with a real store behind it. */

@@ -39,6 +39,9 @@ const noOverlays = (): Overlays => ({
     positionLibraryPopup: () => undefined,
     openRename: () => undefined,
     closeRename: () => undefined,
+    showFindBar: () => undefined,
+    hideFindBar: () => undefined,
+    findBarOpen: () => false,
     closeAll: () => undefined,
 })
 
