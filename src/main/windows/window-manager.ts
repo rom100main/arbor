@@ -185,7 +185,7 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                             yield* history.visit({ url: event.url, containerId: tab.containerId })
                             yield* history.meta(event.url, { title: "", favicon: null })
                         } else if (event.kind === "navigatedInPage") {
-                            yield* history.inPage(event.url)
+                            yield* history.inPage(event.url, tab.containerId)
                         } else if (event.kind === "title") {
                             yield* history.meta(tab.url, { title: event.title })
                         } else if (event.kind === "favicon") {

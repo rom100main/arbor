@@ -114,9 +114,13 @@ export interface DisplayTab extends TabNode {
 export const HistoryEntryId = Schema.TemplateLiteral(["history-", Schema.String])
 export type HistoryEntryId = typeof HistoryEntryId.Type
 
-/** One deduplicated visited page, across containers.
- * `containerId` is display metadata only:
- * it may dangle after the container is deleted, and the entry stays valid. */
+/**
+ * One deduplicated visited page, across containers.
+ * `containerId` is the last container the URL was visited from,
+ * and is display metadata only:
+ * it may dangle after the container is deleted,
+ * and the entry stays valid.
+ */
 export const HistoryEntry = Schema.Struct({
     id: HistoryEntryId,
     url: Schema.String,

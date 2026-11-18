@@ -35,7 +35,7 @@ export interface HistoryService {
     /** Record a navigation: create the entry or bump its visit count. */
     readonly visit: (input: { url: string; containerId: ContainerId }) => Effect.Effect<void>
     /** A hash-only navigation: bump recency without a new visit count. */
-    readonly inPage: (url: string) => Effect.Effect<void>
+    readonly inPage: (url: string, containerId?: ContainerId) => Effect.Effect<void>
     /** Merge a late title / favicon into the entry for `url`. */
     readonly meta: (
         url: string,
@@ -130,6 +130,7 @@ const make = (options: HistoryOptions) =>
                             entry.id === existing.id
                                 ? {
                                       ...entry,
+                                      containerId,
                                       lastVisitedAt: now,
                                       visitCount: entry.visitCount + 1,
                                   }
@@ -151,7 +152,7 @@ const make = (options: HistoryOptions) =>
                 yield* update([entry, ...records])
             })
 
-        const inPage = (url: string) =>
+        const inPage = (url: string, containerId?: ContainerId) =>
             Effect.gen(function* () {
                 if (!enabled) return
                 if (!isRecordableUrl(url)) return
@@ -161,7 +162,13 @@ const make = (options: HistoryOptions) =>
                 if (!existing) return
                 yield* update(
                     records.map((entry) =>
-                        entry.id === existing.id ? { ...entry, lastVisitedAt: now } : entry,
+                        entry.id === existing.id
+                            ? {
+                                  ...entry,
+                                  ...(containerId !== undefined ? { containerId } : {}),
+                                  lastVisitedAt: now,
+                              }
+                            : entry,
                     ),
                 )
             })

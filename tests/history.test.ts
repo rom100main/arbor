@@ -91,6 +91,21 @@ describe("history service", () => {
             }),
         ))
 
+    it("updates the container to the last container the URL was visited from", () =>
+        runTest(
+            Effect.gen(function* () {
+                const { history } = yield* open()
+                yield* visit(history, "https://example.com/a", "container-1")
+                yield* TestClock.adjust(1000)
+                yield* settle
+                yield* visit(history, "https://example.com/a", "container-2")
+                const snapshot = yield* history.snapshot
+                expect(snapshot.entries[0].containerId).toBe("container-2")
+                yield* history.inPage("https://example.com/a#section", "container-3")
+                expect((yield* history.snapshot).entries[0].containerId).toBe("container-3")
+            }),
+        ))
+
     it("dedupes by fragment-stripped URL", () =>
         runTest(
             Effect.gen(function* () {
