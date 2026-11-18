@@ -5,6 +5,23 @@ All notable changes will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-11-18
+
+### Added
+
+- Find in page with Cmd/Ctrl+F: match count, previous/next, case-sensitive, whole-word and regex options
+- Hibernate tabs and containers from the right-click menu to unload pages and save memory, hibernated tabs stay in the tree and reload when activated
+- Tabs not loaded are greyed out in the tab tree
+- Confirmation popup when closing a container's last tab
+
+### Changed
+
+- In fullscreen the tab tree and url bar are hidden and float over the page on edge hover, so the page gets the whole window
+
+### Fixed
+
+- History entries show the container they were last visited from
+
 ## [0.3.0] - 2026-11-16
 
 ### Added
