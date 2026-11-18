@@ -24,6 +24,7 @@ import type { TabMeta } from "../state/tabs"
 import { Updater } from "../update/updater"
 import { CurrentWindow } from "./current-window"
 import { makeWindowHost } from "./electron-host"
+import { runFindClear } from "./find-in-page"
 import {
     sameSessionKey,
     sessionKeyFor,
@@ -140,6 +141,14 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                             ? state.tabs.get(next.activeTabId)
                             : undefined
                         if (active && shown !== active.id) {
+                            // Leaving a tab clears its find highlights and closes the bar.
+                            if (overlays.findBarOpen() && shown !== null) {
+                                const previous = views.get(shown)
+                                if (previous) {
+                                    yield* Effect.promise(() => runFindClear(previous.webContents))
+                                }
+                                overlays.hideFindBar()
+                            }
                             yield* handle.show(yield* viewFor(active))
                             shown = active.id
                         }
@@ -278,6 +287,8 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                                     ? Effect.ignore(store.switchContainer(container.id))
                                     : Effect.void
                             }
+                            case "findInPage":
+                                return Effect.sync(() => overlays.showFindBar())
                             // The last kind left: "history".
                             default:
                                 return historyStep(action.step)

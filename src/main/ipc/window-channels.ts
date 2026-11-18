@@ -7,7 +7,7 @@
 import { Effect, Option } from "effect"
 
 import { NoActionPopup } from "../../shared/errors"
-import type { OmniboxActivation, RenameTarget, TabId } from "../../shared/protocol"
+import type { FindStatus, OmniboxActivation, RenameTarget, TabId } from "../../shared/protocol"
 import { DEFAULT_SEARCH_TEMPLATE } from "../../shared/settings"
 import { omniboxTarget } from "../../shared/url"
 import type { DownloadsService } from "../downloads/downloads"
@@ -20,6 +20,7 @@ import { snapshot, type DomainState } from "../state/state"
 import type { StoreService } from "../state/store"
 import type { UpdaterService } from "../update/updater"
 import { sessionForContainer } from "../windows/electron-host"
+import { runFindClear, runFindSearch, runFindStep } from "../windows/find-in-page"
 import type { HistoryStep, ViewHandle, WindowHandle } from "../windows/host"
 import type { Overlays } from "../windows/overlays"
 import type { EventHandlers, IpcPushService, RequestHandlers } from "./router"
@@ -47,6 +48,13 @@ const navHistory = (ctx: WindowContext, tabId: TabId, step: HistoryStep): Effect
     return view ? ctx.handle.history(view, step) : Effect.void
 }
 
+/** The active tab's view, if it has one. */
+const activeView = (ctx: WindowContext): Effect.Effect<ViewHandle | undefined> =>
+    Effect.map(ctx.store.state, (state) => {
+        const { activeTabId } = snapshot(state)
+        return activeTabId !== null ? ctx.viewOf(activeTabId) : undefined
+    })
+
 /**
  * Middle click on Back/Forward:
  * open the entry it would visit as a child tab, in the background, so the current page stays put.
@@ -67,6 +75,10 @@ const historyInBackground = (
 
 export const windowRequests = (ctx: WindowContext): RequestHandlers<never> => {
     const { store, settings, overlays, extensions, downloads, history, pushes } = ctx
+    // The active match over all frames: stepping needs the current position, not a fresh search.
+    const lastFindStatus: { current: FindStatus } = {
+        current: { total: 0, activeIndex: -1, error: null },
+    }
 
     // Closing a container's last tab asks first:
     // the shell shows the confirmation popup, and only its `confirmed` close reaches the store.
@@ -157,6 +169,25 @@ export const windowRequests = (ctx: WindowContext): RequestHandlers<never> => {
 
         getUpdateStatus: () => ctx.updater.status,
         installUpdate: () => ctx.updater.install,
+
+        findSearch: (find) =>
+            Effect.gen(function* () {
+                const view = yield* activeView(ctx)
+                if (!view) return { total: 0, activeIndex: -1, error: null } satisfies FindStatus
+                const status = yield* Effect.promise(() => runFindSearch(view.webContents, find))
+                lastFindStatus.current = status
+                return status
+            }),
+        findStep: ({ forward }) =>
+            Effect.gen(function* () {
+                const view = yield* activeView(ctx)
+                if (!view) return lastFindStatus.current
+                const status = yield* Effect.promise(() =>
+                    runFindStep(view.webContents, lastFindStatus.current, forward),
+                )
+                lastFindStatus.current = status
+                return status
+            }),
     }
 }
 
@@ -245,5 +276,13 @@ export const windowEvents = (ctx: WindowContext): EventHandlers<never> => {
         permissionRespond: (allowed) => ctx.prompts.respond(allowed),
         shellRaise: (raised) => ctx.handle.raiseShell(raised),
         titlebarReveal: (open) => ctx.handle.setWindowButtons(open),
+        findClose: () =>
+            Effect.gen(function* () {
+                overlays.hideFindBar()
+                const view = yield* activeView(ctx)
+                if (!view) return
+                yield* Effect.promise(() => runFindClear(view.webContents))
+                yield* Effect.sync(() => view.webContents.focus())
+            }),
     }
 }

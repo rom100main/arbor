@@ -95,6 +95,7 @@ export type MenuAction =
     | { readonly kind: "stepTab"; readonly delta: 1 | -1 }
     | { readonly kind: "switchContainer"; readonly index: number }
     | { readonly kind: "history"; readonly step: HistoryStep }
+    | { readonly kind: "findInPage" }
 
 export interface WindowHostService {
     readonly open: Effect.Effect<WindowHandle, never, Scope.Scope>

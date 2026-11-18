@@ -54,6 +54,9 @@ const DOWNLOADS_POPUP_WIDTH = 380
 const DOWNLOADS_POPUP_DEFAULT_HEIGHT = 220
 const DOWNLOADS_POPUP_MAX_HEIGHT = 520
 
+const FIND_BAR_WIDTH = 440
+const FIND_BAR_HEIGHT = 48
+
 const ACTION_POPUP_MIN_WIDTH = 360
 const ACTION_POPUP_MIN_HEIGHT = 480
 const ACTION_POPUP_GAP = 5
@@ -110,6 +113,11 @@ export interface Overlays {
 
     readonly openRename: (target: RenameTarget) => void
     readonly closeRename: () => void
+
+    /** Show the find-in-page bar in the top-right corner of the page. */
+    readonly showFindBar: () => void
+    readonly hideFindBar: () => void
+    readonly findBarOpen: () => boolean
 
     /** Destroy every overlay: the window is closing. */
     readonly closeAll: () => void
@@ -438,14 +446,60 @@ export const createOverlays = (win: BrowserWindow, ipc: Pusher): Overlays => {
         created.show()
     }
 
+    // --- find-in-page bar
+
+    // Hidden, not destroyed, on close: the renderer keeps its query for the next open.
+    let findBar: BrowserWindow | null = null
+
+    const placeFindBar = (): void => {
+        if (!alive(findBar)) return
+        const bounds = win.getContentBounds()
+        findBar.setBounds({
+            x: Math.round(bounds.x + bounds.width - FIND_BAR_WIDTH - 12),
+            y: Math.round(bounds.y + 12),
+            width: FIND_BAR_WIDTH,
+            height: FIND_BAR_HEIGHT,
+        })
+    }
+
+    const showFindBar = (): void => {
+        if (!alive(findBar)) {
+            const created = overlayWindow(win, {
+                width: FIND_BAR_WIDTH,
+                height: FIND_BAR_HEIGHT,
+                hasShadow: true,
+                webPreferences: { preload: preloadPath },
+            })
+            findBar = created
+            created.on("closed", () => {
+                if (findBar === created) findBar = null
+            })
+            ipc.attach(created.webContents)
+            // Focused once the renderer is ready to listen.
+            created.webContents.on("did-finish-load", () => ipc.push("openFind"))
+            void loadRenderer(created, "find")
+        }
+        placeFindBar()
+        findBar?.show()
+        findBar?.focus()
+        // The renderer reloads nothing on reopen: tell it to focus the input.
+        ipc.push("openFind")
+    }
+
+    const hideFindBar = (): void => {
+        if (alive(findBar)) findBar.hide()
+    }
+
     // --- window wiring
 
     win.on("resize", () => {
         if (alive(rename)) rename.setBounds(win.getContentBounds())
+        placeFindBar()
     })
     win.on("move", () => {
         hideOmnibox()
         if (alive(rename)) rename.setBounds(win.getContentBounds())
+        placeFindBar()
     })
     win.on("blur", hideOmnibox)
 
@@ -479,12 +533,17 @@ export const createOverlays = (win: BrowserWindow, ipc: Pusher): Overlays => {
         positionLibraryPopup,
         openRename,
         closeRename,
+        showFindBar,
+        hideFindBar,
+        findBarOpen: () => alive(findBar) && findBar.isVisible(),
         closeAll: () => {
             if (alive(omnibox)) omnibox.destroy()
             closeExtensions()
             closeDownloads()
             closeActionPopup()
             closeRename()
+            if (alive(findBar)) findBar.destroy()
+            findBar = null
             libraryPopups.clear()
             syncToolbarPopup()
         },

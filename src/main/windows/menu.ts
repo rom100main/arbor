@@ -65,6 +65,8 @@ export const menuTemplate = (
         {
             label: "View",
             submenu: [
+                item("Find in Page", "CmdOrCtrl+F", { kind: "findInPage" }),
+                { type: "separator" },
                 item("Reload Page", "CmdOrCtrl+R", { kind: "history", step: "reload" }),
                 { type: "separator" },
                 { role: "toggleDevTools" },
