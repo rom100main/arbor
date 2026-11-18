@@ -10,6 +10,7 @@ import type {
 import { closeTab, reopenTab } from "./close-reopen"
 import {
     createContainer,
+    hibernateContainer,
     renameContainer,
     reorderContainer,
     setContainerColor,
@@ -22,6 +23,7 @@ import { snapshot, type DomainState } from "./state"
 import {
     createChildTab,
     createTab,
+    hibernateTab,
     renameTab,
     selectTab,
     setCollapsed,
@@ -75,6 +77,10 @@ export interface StoreService {
         tabId: TabId,
         label: string | null,
     ) => Effect.Effect<void, OpError<typeof renameTab>>
+    readonly hibernateTab: (tabId: TabId) => Effect.Effect<void, OpError<typeof hibernateTab>>
+    readonly hibernateContainer: (
+        containerId: ContainerId,
+    ) => Effect.Effect<void, OpError<typeof hibernateContainer>>
     readonly closeTab: (tabId: TabId) => Effect.Effect<void, OpError<typeof closeTab>>
     readonly reopenTab: () => Effect.Effect<void, OpError<typeof reopenTab>>
     readonly moveTab: (options: MoveTabOptions) => Effect.Effect<void, OpError<typeof moveTab>>
@@ -160,6 +166,9 @@ const make = (initial: DomainState) =>
             setCollapsed: (tabId, collapsed) =>
                 commit((state) => setCollapsed(state, tabId, collapsed)),
             renameTab: (tabId, label) => commit((state) => renameTab(state, tabId, label)),
+            hibernateTab: (tabId) => commit((state) => hibernateTab(state, tabId)),
+            hibernateContainer: (containerId) =>
+                commit((state) => hibernateContainer(state, containerId)),
             closeTab: Effect.fn("BrowserStore.closeTab")(function* (tabId: TabId) {
                 const now = yield* Clock.currentTimeMillis
                 yield* commit((state) => closeTab(state, tabId, now))

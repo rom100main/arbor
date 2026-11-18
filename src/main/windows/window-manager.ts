@@ -131,7 +131,13 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                             const tab = state.tabs.get(tabId)
                             // A tab moved to another Container,
                             // or into or out of `arbor://`, needs a view on another session.
-                            if (tab && sameSessionKey(view.sessionKey, sessionKeyFor(tab))) continue
+                            // A hibernated tab has no page at all.
+                            if (
+                                tab &&
+                                !tab.hibernated &&
+                                sameSessionKey(view.sessionKey, sessionKeyFor(tab))
+                            )
+                                continue
                             views.delete(tabId)
                             if (shown === tabId) shown = null
                             yield* handle.close(view)
@@ -140,7 +146,7 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                         const active = next.activeTabId
                             ? state.tabs.get(next.activeTabId)
                             : undefined
-                        if (active && shown !== active.id) {
+                        if (active && !active.hibernated && shown !== active.id) {
                             // Leaving a tab clears its find highlights and closes the bar.
                             if (overlays.findBarOpen() && shown !== null) {
                                 const previous = views.get(shown)

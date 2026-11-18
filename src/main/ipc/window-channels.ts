@@ -140,6 +140,8 @@ export const windowRequests = (ctx: WindowContext): RequestHandlers<never> => {
         setCollapsed: ({ tabId, collapsed }) => store.setCollapsed(tabId, collapsed),
         closeTab: ({ tabId, confirmed }) => closeTab(tabId, confirmed),
         renameTab: ({ tabId, label }) => store.renameTab(tabId, label),
+        hibernateTab: ({ tabId }) => store.hibernateTab(tabId),
+        hibernateContainer: ({ containerId }) => store.hibernateContainer(containerId),
         moveTab: (move) => store.moveTab(move),
         moveToContainer: ({ tabId, containerId }) => store.moveToContainer(tabId, containerId),
 

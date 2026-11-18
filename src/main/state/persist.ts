@@ -54,6 +54,7 @@ export const PersistedTab = Schema.Struct({
     collapsed: orDefault(TabNode.fields.collapsed, () => false),
     userLabel: orDefault(TabNode.fields.userLabel, () => null),
     favicon: orDefault(TabNode.fields.favicon, () => null),
+    hibernated: orDefault(TabNode.fields.hibernated, () => true),
     lastActiveAt: orDefault(TabNode.fields.lastActiveAt, () => 0),
 })
 
@@ -179,9 +180,16 @@ export const fromPersisted = (data: unknown): DomainState | null => {
         extensionConsent[id] = cloneGrant(grant)
     }
 
+    // Nothing is loaded after a restart, except the tab the window shows.
+    const shownTabId = liveContainers.find((c) => c.id === activeContainerId)?.activeTabId ?? null
+    const cold = new Map<TabId, TabNode>()
+    for (const tab of reindexed.values()) {
+        cold.set(tab.id, { ...tab, hibernated: tab.id !== shownTabId })
+    }
+
     return {
         containers: liveContainers,
-        tabs: reindexed,
+        tabs: cold,
         closeHistory: [],
         activeContainerId,
         extensionConsent,

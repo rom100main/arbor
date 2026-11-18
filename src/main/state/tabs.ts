@@ -2,9 +2,11 @@ import { Result } from "effect"
 
 import { NoContainer } from "../../shared/errors"
 import type { ContainerId, TabId, TabNode } from "../../shared/protocol"
+import { displayTabs } from "../../shared/tree-display"
 import {
     childrenOf,
     containerOf,
+    descendantsOf,
     putTab,
     reindex,
     siblingsOf,
@@ -54,6 +56,7 @@ export const createTab = (state: DomainState, options: CreateTabOptions) =>
             collapsed: false,
             userLabel: null,
             favicon: null,
+            hibernated: false,
             lastActiveAt: now,
         }
 
@@ -99,6 +102,8 @@ export const createChildTab = (
             collapsed: false,
             userLabel: null,
             favicon: null,
+            // A background tab has no page until it is activated.
+            hibernated: options.background === true,
             lastActiveAt: options.now,
         }
         const next = withTabs(state, new Map(state.tabs))
@@ -118,7 +123,7 @@ export const createChildTab = (
 export const selectTab = (state: DomainState, tabId: TabId, now: number) =>
     Result.gen(function* () {
         const tab = yield* tabOf(state, tabId)
-        const next = putTab(state, touch(tab, now))
+        const next = putTab(state, touch({ ...tab, hibernated: false }, now))
         return {
             ...next,
             activeContainerId: tab.containerId,
@@ -133,6 +138,43 @@ export const setCollapsed = (state: DomainState, tabId: TabId, collapsed: boolea
         const tab = yield* tabOf(state, tabId)
         if (tab.collapsed === collapsed) return state
         return putTab(state, { ...tab, collapsed })
+    })
+
+/** Fallback active tab after hibernating: first loaded tab in display order. */
+const loadedFallback = (state: DomainState, containerId: ContainerId) =>
+    displayTabs([...state.tabs.values()], containerId).find((t) => !t.hibernated)?.id ?? null
+
+/**
+ * Hibernate a tab and its whole subtree (a collapsed parent takes its children with it).
+ * The tab stays in the tree: only its page goes away.
+ * If the active tab hibernates, the container activates its first loaded tab instead.
+ */
+export const hibernateTab = (state: DomainState, tabId: TabId) =>
+    Result.gen(function* () {
+        const tab = yield* tabOf(state, tabId)
+        const subtree = [tab, ...descendantsOf(state, tab)]
+        const fresh = subtree.filter((t) => !t.hibernated)
+        if (fresh.length === 0) return state
+        const next = withTabs(state, new Map(state.tabs))
+        for (const node of subtree) next.tabs.set(node.id, { ...node, hibernated: true })
+        const container = state.containers.find((c) => c.id === tab.containerId)
+        const hibernatedIds = new Set(subtree.map((t) => t.id))
+        if (
+            container &&
+            container.activeTabId !== null &&
+            hibernatedIds.has(container.activeTabId)
+        ) {
+            const fallback = loadedFallback(next, tab.containerId)
+            if (fallback !== null) {
+                return {
+                    ...next,
+                    containers: next.containers.map((c) =>
+                        c.id === tab.containerId ? { ...c, activeTabId: fallback } : c,
+                    ),
+                }
+            }
+        }
+        return next
     })
 
 /** Custom label overriding the page title until cleared. */

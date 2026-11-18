@@ -170,7 +170,7 @@ export const reopenTab = (initial: DomainState, now: number) =>
             entry.parentIdBefore !== null ? state.tabs.get(entry.parentIdBefore) : undefined
         const parentId = parent && parent.containerId === containerId ? entry.parentIdBefore : null
 
-        const root: TabNode = { ...entry.nodes[0], containerId, parentId }
+        const root: TabNode = { ...entry.nodes[0], containerId, parentId, hibernated: false }
         const descendants = entry.nodes.slice(1).map((node) => ({ ...node, containerId }))
 
         const next = withTabs(state, new Map(state.tabs))

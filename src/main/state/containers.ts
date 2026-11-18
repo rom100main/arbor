@@ -3,7 +3,7 @@ import { Result } from "effect"
 import { CONTAINER_COLORS } from "../../shared/constants"
 import { EmptyContainer } from "../../shared/errors"
 import type { ContainerIcon, ContainerId, ContainerMeta, TabId } from "../../shared/protocol"
-import { containerOf, putTab, touch, type DomainState } from "./state"
+import { containerOf, putTab, touch, withTabs, type DomainState } from "./state"
 import { createTab } from "./tabs"
 
 export interface CreateContainerOptions {
@@ -45,8 +45,22 @@ export const switchContainer = (state: DomainState, containerId: ContainerId, no
             return yield* Result.fail(new EmptyContainer({ containerId }))
         }
         const active = state.tabs.get(container.activeTabId)
-        const next = active ? putTab(state, touch(active, now)) : state
+        // Showing a container loads its active tab.
+        const next = active ? putTab(state, touch({ ...active, hibernated: false }, now)) : state
         return { ...next, activeContainerId: containerId }
+    })
+
+/** Hibernate every tab in the container; the container stays, only its pages go away. */
+export const hibernateContainer = (state: DomainState, containerId: ContainerId) =>
+    Result.gen(function* () {
+        yield* containerOf(state, containerId)
+        const targets = [...state.tabs.values()].filter((t) => t.containerId === containerId)
+        if (targets.every((t) => t.hibernated)) return state
+        const next = withTabs(state, new Map(state.tabs))
+        for (const tab of targets) next.tabs.set(tab.id, { ...tab, hibernated: true })
+        // If the container was showing, activate its first loaded tab.
+        // Here every tab hibernates, so the pointer stays on a hibernated tab.
+        return next
     })
 
 const updateContainer = (
