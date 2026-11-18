@@ -7,13 +7,51 @@ on:
 
 permissions:
     contents: read
+    pull-requests: read
 
 concurrency:
     group: ci-${{ github.ref }}
     cancel-in-progress: true
 
 jobs:
+    changes:
+        runs-on: ubuntu-24.04
+        outputs:
+            code: ${{ steps.filter.outputs.code }}
+            dependencies: ${{ steps.filter.outputs.dependencies }}
+        steps:
+            - uses: actions/checkout@v5
+              with:
+                  persist-credentials: false
+                  # push to main diffs against the previous commit, needs history.
+                  fetch-depth: 0
+
+            - uses: dorny/paths-filter@v3
+              id: filter
+              with:
+                  base: ${{ github.ref }}
+                  filters: |
+                      code:
+                          - "src/**"
+                          - "tests/**"
+                          - "scripts/**"
+                          - "build/**"
+                          - "vite.config.ts"
+                          - "tsconfig.json"
+                          - ".stylelintrc.json"
+                          - "package.json"
+                          - "package-lock.json"
+                          - "electron-builder.yml"
+                          - ".github/workflows/ci.yml"
+                      dependencies:
+                          - "package.json"
+                          - "package-lock.json"
+                          - "THIRD-PARTY-NOTICES.md"
+                          - "scripts/licenses/**"
+
     check:
+        needs: changes
+        if: needs.changes.outputs.code == 'true' || needs.changes.outputs.dependencies == 'true'
         runs-on: ubuntu-24.04
         timeout-minutes: 20
         steps:
@@ -32,7 +70,11 @@ jobs:
               run: npm install -g npm@11.20.0
 
             - run: npm ci
-            - run: npm run check
-            - run: npm test
-            - run: npm run licenses:check
-            - run: npm run build
+            - if: needs.changes.outputs.code == 'true'
+              run: npm run check
+            - if: needs.changes.outputs.code == 'true'
+              run: npm test
+            - if: needs.changes.outputs.dependencies == 'true'
+              run: npm run licenses:check
+            - if: needs.changes.outputs.code == 'true'
+              run: npm run build
