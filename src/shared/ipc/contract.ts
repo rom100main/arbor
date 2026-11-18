@@ -249,6 +249,12 @@ export const Events = {
         ]),
     ),
     closeRenameModal: event(),
+    // Right-click in the shell: main pops the OS menu at the cursor.
+    // `x`/`y` are window coordinates (the shell covers the whole window).
+    tabMenu: event(Schema.Struct({ tabId: TabId, x: Schema.Finite, y: Schema.Finite })),
+    containerMenu: event(
+        Schema.Struct({ containerId: ContainerId, x: Schema.Finite, y: Schema.Finite }),
+    ),
     extensionsToggle: event(Anchor),
     extensionsClose: event(),
     extensionsSetPopupHeight: event(Schema.Finite),

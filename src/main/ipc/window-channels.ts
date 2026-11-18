@@ -5,6 +5,7 @@
  */
 
 import { Effect, Option } from "effect"
+import { Menu } from "electron"
 
 import { NoActionPopup } from "../../shared/errors"
 import type { FindStatus, OmniboxActivation, RenameTarget, TabId } from "../../shared/protocol"
@@ -267,6 +268,54 @@ export const windowEvents = (ctx: WindowContext): EventHandlers<never> => {
                 overlays.openRename(current)
             }),
         closeRenameModal: () => Effect.sync(() => overlays.closeRename()),
+        // The OS menu at the cursor: Rename, or Hibernate (greyed when the page is already gone).
+        tabMenu: ({ tabId, x, y }) =>
+            Effect.gen(function* () {
+                const state = yield* store.state
+                const current = renameTarget(state, { kind: "tab", tabId })
+                if (!current) return
+                const hibernated = state.tabs.get(tabId)?.hibernated ?? false
+                yield* Effect.sync(() =>
+                    Menu.buildFromTemplate([
+                        {
+                            label: "Rename",
+                            click: () => {
+                                overlays.hideOmnibox()
+                                overlays.openRename(current)
+                            },
+                        },
+                        {
+                            label: "Hibernate",
+                            enabled: !hibernated,
+                            click: () => ctx.background(store.hibernateTab(tabId)),
+                        },
+                    ]).popup({ window: ctx.handle.native, x, y }),
+                )
+            }),
+        containerMenu: ({ containerId, x, y }) =>
+            Effect.gen(function* () {
+                const state = yield* store.state
+                const current = renameTarget(state, { kind: "container", containerId })
+                if (!current) return
+                const tabs = [...state.tabs.values()].filter((t) => t.containerId === containerId)
+                const hibernated = tabs.length > 0 && tabs.every((t) => t.hibernated)
+                yield* Effect.sync(() =>
+                    Menu.buildFromTemplate([
+                        {
+                            label: "Rename",
+                            click: () => {
+                                overlays.hideOmnibox()
+                                overlays.openRename(current)
+                            },
+                        },
+                        {
+                            label: "Hibernate",
+                            enabled: !hibernated,
+                            click: () => ctx.background(store.hibernateContainer(containerId)),
+                        },
+                    ]).popup({ window: ctx.handle.native, x, y }),
+                )
+            }),
         extensionsToggle: (anchor) => Effect.sync(() => overlays.toggleExtensions(anchor)),
         extensionsClose: () => Effect.sync(() => overlays.closeExtensions()),
         extensionsSetPopupHeight: (height) =>

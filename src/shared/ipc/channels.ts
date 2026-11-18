@@ -64,6 +64,8 @@ export const EVENTS = {
     omniboxActivateSelected: "arbor:omnibox:activate-selected",
     openRenameModal: "arbor:rename-modal:open",
     closeRenameModal: "arbor:rename-modal:close",
+    tabMenu: "arbor:tab:menu",
+    containerMenu: "arbor:container:menu",
     extensionsToggle: "arbor:extensions:toggle",
     extensionsClose: "arbor:extensions:close",
     extensionsSetPopupHeight: "arbor:extensions:popup-height",
