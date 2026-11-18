@@ -108,6 +108,23 @@ export const closeTab = (state: DomainState, tabId: TabId, now: number) =>
         return result
     })
 
+/**
+ * Whether closing `tabId` would remove its whole container:
+ * every tab in the container goes away with the close.
+ * A close the domain would refuse anyway
+ * (last tab of the last container, unknown tab)
+ * is not a confirmation case.
+ */
+export const closeEmptiesContainer = (state: DomainState, tabId: TabId): boolean => {
+    const tab = state.tabs.get(tabId)
+    if (!tab || state.containers.length <= 1) return false
+    const descendants = descendantsOf(state, tab)
+    const expands = descendants.length > 0 && !tab.collapsed
+    const removedCount = expands ? 1 : 1 + descendants.length
+    if (removedCount >= state.tabs.size) return false
+    return removedCount === tabCount(state, tab.containerId)
+}
+
 const promotedSuccessor = (
     state: DomainState,
     containerId: ContainerId,

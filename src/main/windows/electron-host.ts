@@ -134,9 +134,12 @@ export const makeWindowHost: Effect.Effect<
         const overlays = createOverlays(win, yield* makePusher(pushes))
         yield* Effect.addFinalizer(() => Effect.sync(() => overlays.closeAll()))
 
+        // In fullscreen the shell hides both bars: the page takes the whole window.
+        let fullscreen = win.isFullScreen()
         const shell = createShell(
             win,
             () => settings,
+            () => fullscreen,
             (edge) => {
                 run(pushes.push("shellEdge", edge))
             },
@@ -165,6 +168,14 @@ export const makeWindowHost: Effect.Effect<
             shell.layout()
             layoutViews()
         })
+        const onFullscreen = (next: boolean): void => {
+            fullscreen = next
+            run(pushes.push("fullscreen", next))
+            shell.layout()
+            layoutViews()
+        }
+        win.on("enter-full-screen", () => onFullscreen(true))
+        win.on("leave-full-screen", () => onFullscreen(false))
         // Showing or hiding a bar changes how much of the window the page gets.
         yield* settingsStore.changes.pipe(
             Stream.runForEach((next) =>

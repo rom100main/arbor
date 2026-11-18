@@ -16,6 +16,7 @@ import { History } from "../history/service"
 import { IpcPush, serveEvents, serveRequests } from "../ipc/router"
 import { windowEvents, windowRequests, type WindowContext } from "../ipc/window-channels"
 import { SettingsStore } from "../settings"
+import { closeEmptiesContainer } from "../state/close-reopen"
 import { snapshot, type DomainState } from "../state/state"
 import { BrowserStore } from "../state/store"
 import { stepVisibleTab } from "../state/tab-order"
@@ -237,10 +238,24 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                                     handle.focusShell,
                                     pushes.push("focusTabTree"),
                                 )
-                            case "closeTab":
-                                return activeTabId
-                                    ? Effect.ignore(store.closeTab(activeTabId))
-                                    : Effect.void
+                            case "closeTab": {
+                                if (activeTabId === null) return Effect.void
+                                // Closing a container's last tab asks first, like a shell close.
+                                if (closeEmptiesContainer(state, activeTabId)) {
+                                    const tab = state.tabs.get(activeTabId)
+                                    if (tab) {
+                                        const container = state.containers.find(
+                                            (c) => c.id === tab.containerId,
+                                        )
+                                        return pushes.push("confirmCloseContainer", {
+                                            tabId: activeTabId,
+                                            containerId: tab.containerId,
+                                            containerName: container?.name ?? "",
+                                        })
+                                    }
+                                }
+                                return Effect.ignore(store.closeTab(activeTabId))
+                            }
                             case "reopenTab":
                                 return Effect.ignore(store.reopenTab())
                             case "stepTab": {

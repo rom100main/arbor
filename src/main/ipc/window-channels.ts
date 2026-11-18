@@ -15,6 +15,7 @@ import type { ExtensionsService } from "../extension/extensions"
 import type { PermissionPromptsService } from "../extension/prompts"
 import type { HistoryService } from "../history/service"
 import type { SettingsService } from "../settings"
+import { closeEmptiesContainer } from "../state/close-reopen"
 import { snapshot, type DomainState } from "../state/state"
 import type { StoreService } from "../state/store"
 import type { UpdaterService } from "../update/updater"
@@ -65,7 +66,29 @@ const historyInBackground = (
 }
 
 export const windowRequests = (ctx: WindowContext): RequestHandlers<never> => {
-    const { store, settings, overlays, extensions, downloads, history } = ctx
+    const { store, settings, overlays, extensions, downloads, history, pushes } = ctx
+
+    // Closing a container's last tab asks first:
+    // the shell shows the confirmation popup, and only its `confirmed` close reaches the store.
+    const closeTab = (tabId: TabId, confirmed?: boolean) =>
+        Effect.gen(function* () {
+            if (confirmed !== true) {
+                const state = yield* store.state
+                if (closeEmptiesContainer(state, tabId)) {
+                    const tab = state.tabs.get(tabId)
+                    if (tab) {
+                        const container = state.containers.find((c) => c.id === tab.containerId)
+                        yield* pushes.push("confirmCloseContainer", {
+                            tabId,
+                            containerId: tab.containerId,
+                            containerName: container?.name ?? "",
+                        })
+                        return
+                    }
+                }
+            }
+            yield* store.closeTab(tabId)
+        })
     return {
         getSnapshot: () => store.snapshot,
         getSettings: () => settings.get,
@@ -103,7 +126,7 @@ export const windowRequests = (ctx: WindowContext): RequestHandlers<never> => {
         createTab: ({ url }) => store.createTab(url),
         selectTab: ({ tabId }) => store.selectTab(tabId),
         setCollapsed: ({ tabId, collapsed }) => store.setCollapsed(tabId, collapsed),
-        closeTab: ({ tabId }) => store.closeTab(tabId),
+        closeTab: ({ tabId, confirmed }) => closeTab(tabId, confirmed),
         renameTab: ({ tabId, label }) => store.renameTab(tabId, label),
         moveTab: (move) => store.moveTab(move),
         moveToContainer: ({ tabId, containerId }) => store.moveToContainer(tabId, containerId),

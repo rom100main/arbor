@@ -1,7 +1,13 @@
 import { WebContentsView, type BrowserWindow } from "electron"
 
 import type { RevealEdge } from "../../shared/protocol"
-import { chromeInsets, REVEAL_EDGE, type ChromeInsets, type Settings } from "../../shared/settings"
+import {
+    chromeInsets,
+    effectiveVisibilities,
+    REVEAL_EDGE,
+    type ChromeInsets,
+    type Settings,
+} from "../../shared/settings"
 import { preloadPath } from "./paths"
 
 /**
@@ -29,12 +35,15 @@ export interface Shell {
 
 const edgeAt = (
     settings: Settings,
+    fullscreen: boolean,
     size: { width: number; height: number },
     point: { x: number; y: number },
 ): RevealEdge | null => {
-    if (settings.sidebarVisibility === "hidden" && point.x <= REVEAL_EDGE) return "left"
+    // In fullscreen both bars are hidden, so both edges reveal, whatever the settings say.
+    const effective = effectiveVisibilities(settings, fullscreen)
+    if (effective.sidebarVisibility === "hidden" && point.x <= REVEAL_EDGE) return "left"
     if (point.y <= REVEAL_EDGE) return "top"
-    if (settings.urlBarVisibility === "hidden" && point.y >= size.height - REVEAL_EDGE) {
+    if (effective.urlBarVisibility === "hidden" && point.y >= size.height - REVEAL_EDGE) {
         return "bottom"
     }
     return null
@@ -43,6 +52,7 @@ const edgeAt = (
 export const createShell = (
     win: BrowserWindow,
     settings: () => Settings,
+    fullscreen: () => boolean,
     onEdge: (edge: RevealEdge) => void,
 ): Shell => {
     const view = new WebContentsView({ webPreferences: { preload: preloadPath } })
@@ -68,7 +78,7 @@ export const createShell = (
 
     const shell: Shell = {
         view,
-        insets: () => chromeInsets(settings()),
+        insets: () => chromeInsets(settings(), fullscreen()),
         layout: () => {
             if (!alive()) return
             const { width, height } = win.getContentBounds()
@@ -93,7 +103,7 @@ export const createShell = (
                     return
                 }
                 if (mouse.type !== "mouseMove") return
-                const edge = edgeAt(settings(), page.getBounds(), mouse)
+                const edge = edgeAt(settings(), fullscreen(), page.getBounds(), mouse)
                 if (edge === lastEdge) return
                 lastEdge = edge
                 if (edge !== null) onEdge(edge)
