@@ -25,6 +25,8 @@ export const REQUESTS = {
     setCollapsed: "arbor:tab:set-collapsed",
     closeTab: "arbor:tab:close",
     renameTab: "arbor:tab:rename",
+    hibernateTab: "arbor:tab:hibernate",
+    hibernateContainer: "arbor:container:hibernate",
     moveTab: "arbor:tab:move",
     moveToContainer: "arbor:tab:move-to-container",
     goBack: "arbor:tab:back",

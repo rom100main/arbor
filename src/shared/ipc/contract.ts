@@ -178,6 +178,14 @@ export const Requests = {
         payload: Schema.Struct({ tabId: TabId, label: Schema.NullOr(Schema.String) }),
         error: UnknownTab,
     }),
+    hibernateTab: request({
+        payload: Schema.Struct({ tabId: TabId }),
+        error: UnknownTab,
+    }),
+    hibernateContainer: request({
+        payload: Schema.Struct({ containerId: ContainerId }),
+        error: UnknownContainer,
+    }),
     moveTab: request({
         payload: Schema.Struct({
             tabId: TabId,

@@ -34,6 +34,8 @@ export const TabNode = Schema.Struct({
     collapsed: Schema.Boolean,
     userLabel: Schema.NullOr(Schema.String),
     favicon: Schema.NullOr(Schema.String),
+    /** No live page: the view is gone and the tab loads on activation. */
+    hibernated: Schema.Boolean,
     /** Epoch ms of the last time this tab was active to ranks omnibox suggestions. */
     lastActiveAt: Schema.Finite,
 })
