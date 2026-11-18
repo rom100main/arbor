@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test"
 
-import { closeTab, reopenTab } from "../src/main/state/close-reopen"
+import { closeEmptiesContainer, closeTab, reopenTab } from "../src/main/state/close-reopen"
 import { createContainer, setContainerIcon, switchContainer } from "../src/main/state/containers"
 import { moveTab, moveToContainer } from "../src/main/state/moves"
 import { initialState } from "../src/main/state/state"
@@ -64,6 +64,45 @@ describe("containers", () => {
         state = ok(closeTab(state, state.containers[0].activeTabId!, 0))
         expect(state.containers.map((c) => c.id)).toEqual([second])
         expect(state.activeContainerId).toBe(second)
+    })
+})
+
+describe("closeEmptiesContainer", () => {
+    it("is true when the close removes the container's last tab", () => {
+        let state = ok(createContainer(initialState(), newContainer()))
+        state = ok(createContainer(state, newContainer()))
+        expect(closeEmptiesContainer(state, state.containers[0].activeTabId!)).toBe(true)
+    })
+
+    it("is false when the container keeps a tab", () => {
+        let state = ok(createContainer(initialState(), newContainer()))
+        state = ok(createTab(state, newTab()))
+        state = ok(createContainer(state, newContainer()))
+        const tabs = [...state.tabs.values()].filter(
+            (t) => t.containerId === state.containers[0].id,
+        )
+        expect(tabs).toHaveLength(2)
+        // Closing one of two leaves one behind.
+        expect(closeEmptiesContainer(state, tabs[0].id)).toBe(false)
+        expect(closeEmptiesContainer(state, tabs[1].id)).toBe(false)
+    })
+
+    it("is false for the last tab of the last container and for unknown tabs", () => {
+        const state = ok(createContainer(initialState(), newContainer()))
+        expect(closeEmptiesContainer(state, state.containers[0].activeTabId!)).toBe(false)
+        expect(closeEmptiesContainer(state, "tab-missing")).toBe(false)
+    })
+
+    it("is false when an expanded close only promotes children", () => {
+        let state = ok(createContainer(initialState(), newContainer()))
+        const root = state.containers[0].activeTabId!
+        state = ok(createChildTab(state, root, newChild()))
+        state = ok(createContainer(state, newContainer()))
+        // Expanded root: closing it promotes the child, the container survives.
+        expect(closeEmptiesContainer(state, root)).toBe(false)
+        // Collapsed root: closing it removes the whole subtree, emptying the container.
+        state = ok(setCollapsed(state, root, true))
+        expect(closeEmptiesContainer(state, root)).toBe(true)
     })
 })
 

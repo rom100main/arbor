@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vite-plus/test"
 
 import { SEARCH_ENGINES } from "../src/renderer/settings/search-engines"
-import { normalizeSearchTemplate, searchUrl } from "../src/shared/settings"
+import {
+    chromeInsets,
+    effectiveVisibilities,
+    normalizeSearchTemplate,
+    searchUrl,
+} from "../src/shared/settings"
 
 describe("the suggested engines", () => {
     it("gives every engine a distinct name and a valid template", () => {
@@ -51,6 +56,26 @@ describe("normalizeSearchTemplate", () => {
         for (const input of ["", "%s", ":///%s", "https://%s", "http:// %s", "\u0000%s"]) {
             expect(() => normalizeSearchTemplate(input)).not.toThrow()
         }
+    })
+})
+
+describe("fullscreen visibility", () => {
+    const displayed = {
+        sidebarVisibility: "displayed" as const,
+        urlBarVisibility: "displayed" as const,
+    }
+
+    it("hides both bars in fullscreen and restores the settings outside", () => {
+        expect(effectiveVisibilities(displayed, true)).toEqual({
+            sidebarVisibility: "hidden",
+            urlBarVisibility: "hidden",
+        })
+        expect(effectiveVisibilities(displayed, false)).toEqual(displayed)
+    })
+
+    it("gives the page the whole window in fullscreen", () => {
+        expect(chromeInsets(displayed, true)).toEqual({ left: 0, bottom: 0 })
+        expect(chromeInsets(displayed, false)).toEqual({ left: 240, bottom: 44 })
     })
 })
 
