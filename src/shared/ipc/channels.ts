@@ -48,6 +48,9 @@ export const REQUESTS = {
 
     getUpdateStatus: "arbor:update:get-status",
     installUpdate: "arbor:update:install",
+
+    findSearch: "arbor:find:search",
+    findStep: "arbor:find:step",
 } as const
 
 /** Renderer tells main, no answer. */
@@ -69,6 +72,7 @@ export const EVENTS = {
     permissionRespond: "arbor:permission:respond",
     shellRaise: "arbor:shell:raise",
     titlebarReveal: "arbor:titlebar:reveal",
+    findClose: "arbor:find:close",
 } as const
 
 /** Main tells renderers. The preload exposes each as `on<Key>`. */
@@ -90,4 +94,5 @@ export const PUSHES = {
     updateStatus: "arbor:update:status",
     downloads: "arbor:downloads:changed",
     history: "arbor:history:changed",
+    openFind: "arbor:find:open",
 } as const

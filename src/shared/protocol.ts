@@ -228,3 +228,23 @@ export const Rect = Schema.Struct({
     height: Schema.Finite,
 })
 export type Rect = typeof Rect.Type
+
+/** What find-in-page matches: the text plus how it is matched. */
+export const FindQuery = Schema.Struct({
+    query: Schema.String,
+    caseSensitive: Schema.Boolean,
+    wholeWord: Schema.Boolean,
+    regex: Schema.Boolean,
+})
+export type FindQuery = typeof FindQuery.Type
+
+/** What find-in-page answers with: match counts plus a regex error, if any. */
+export const FindStatus = Schema.Struct({
+    /** Total number of matches highlighted in the page. */
+    total: Schema.Finite,
+    /** Zero-based index of the active match (`-1` when there is none). */
+    activeIndex: Schema.Finite,
+    /** The regex error message; `null` when the pattern compiled. */
+    error: Schema.NullOr(Schema.String),
+})
+export type FindStatus = typeof FindStatus.Type

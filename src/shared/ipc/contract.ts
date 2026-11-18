@@ -24,6 +24,8 @@ import {
     DownloadId,
     DownloadsSnapshot,
     ExtensionMenuRequest,
+    FindQuery,
+    FindStatus,
     HistoryEntryId,
     HistoryQuery,
     HistorySnapshot,
@@ -217,6 +219,12 @@ export const Requests = {
 
     getUpdateStatus: request({ success: UpdateStatus }),
     installUpdate: request({}),
+
+    findSearch: request({ payload: FindQuery, success: FindStatus }),
+    findStep: request({
+        payload: Schema.Struct({ forward: Schema.Boolean }),
+        success: FindStatus,
+    }),
 } satisfies { readonly [K in keyof typeof REQUESTS]: RequestDef }
 
 export const Events = {
@@ -245,6 +253,8 @@ export const Events = {
     shellRaise: event(Schema.Boolean),
     // The native window buttons (traffic lights / window controls) follow the title bar.
     titlebarReveal: event(Schema.Boolean),
+    // The find bar closed from the renderer: clear highlights and hide it.
+    findClose: event(),
 } satisfies { readonly [K in keyof typeof EVENTS]: EventDef }
 
 export const Pushes = {
@@ -265,6 +275,8 @@ export const Pushes = {
     updateStatus: push(UpdateStatus),
     downloads: push(DownloadsSnapshot),
     history: push(HistorySnapshot),
+    // Ctrl/Cmd+F: the find bar asks the renderer to focus its input.
+    openFind: push(),
 } satisfies { readonly [K in keyof typeof PUSHES]: PushDef }
 
 export type RequestKey = keyof typeof Requests
