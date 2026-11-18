@@ -2,7 +2,7 @@
     "name": "arbor",
     "productName": "Arbor",
     "private": true,
-    "version": "0.3.0",
+    "version": "0.4.0",
     "description": "A desktop browser that keeps tabs as trees.",
     "author": "rom100main",
     "repository": "github:rom100main/arbor",
@@ -27,30 +27,30 @@
     },
     "dependencies": {
         "@ghostery/adblocker-electron": "^2.20.3",
-        "@solidjs/web": "^2.0.0-rc.21",
-        "@tabler/icons": "^3.51.0",
+        "@solidjs/web": "^2.0.1",
+        "@tabler/icons": "^3.52.0",
         "effect": "^4.1.4",
         "electron-chrome-extensions": "^4.10.0",
         "electron-chrome-web-store": "^0.13.0",
         "electron-updater": "^6.8.11",
-        "solid-js": "^2.0.0-rc.21"
+        "solid-js": "^2.0.1"
     },
     "devDependencies": {
-        "@solidjs/vite-plugin": "^3.0.0-next.57",
+        "@solidjs/vite-plugin": "^3.0.1",
         "@types/node": "^26.6.6",
-        "electron": "^45.3.0",
+        "electron": "^45.3.4",
         "electron-builder": "26.18.1",
         "generate-license-file": "^4.2.5",
         "stylelint": "^17.16.0",
-        "stylelint-config-recess-order": "^7.10.0",
+        "stylelint-config-recess-order": "^7.10.1",
         "stylelint-config-standard": "^40.0.0",
         "typescript": "^7.0.2",
-        "vite": "npm:@voidzero-dev/vite-plus-core@1.6.0",
+        "vite": "npm:@voidzero-dev/vite-plus-core@8.3.8000",
         "vite-plugin-electron": "^1.2.0",
-        "vite-plus": "^1.6.0"
+        "vite-plus": "^1.7.0"
     },
     "overrides": {
-        "vite": "npm:@voidzero-dev/vite-plus-core@1.6.0",
+        "vite": "npm:@voidzero-dev/vite-plus-core@8.3.8000",
         "adm-zip": "^0.6.1",
         "minimatch@^9.0.3": "11.0.5",
         "minimatch@^10.2.5": "11.0.5",
