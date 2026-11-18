@@ -59,6 +59,7 @@ const tabFixture = (overrides: Partial<TabNode> = {}): TabNode => ({
     collapsed: false,
     userLabel: null,
     favicon: null,
+    hibernated: false,
     lastActiveAt: 0,
     ...overrides,
 })
@@ -80,8 +81,12 @@ describe("persist round-trip", () => {
         expect(restored!.containers).toEqual(state.containers)
         expect(restored!.activeContainerId).toBe(state.activeContainerId)
         expect(restored!.closeHistory).toEqual([])
+        // Nothing is loaded after a restart, except the shown tab.
+        const shown = state.containers.find((c) => c.id === state.activeContainerId)?.activeTabId
         expect([...restored!.tabs.values()].sort((a, b) => a.id.localeCompare(b.id))).toEqual(
-            [...state.tabs.values()].sort((a, b) => a.id.localeCompare(b.id)),
+            [...state.tabs.values()]
+                .sort((a, b) => a.id.localeCompare(b.id))
+                .map((t) => ({ ...t, hibernated: t.id !== shown })),
         )
     })
 

@@ -311,6 +311,25 @@ describe("reconciliation", () => {
             }),
         ))
 
+    it("closes the view of a hibernated tab", () =>
+        runTest(
+            Effect.gen(function* () {
+                const { host, store } = yield* startApp
+                const first = (yield* activeTab(store))!
+                yield* store.createTab("https://second.test/")
+                yield* settleLong
+                yield* store.hibernateTab(first)
+                yield* settleLong
+                expect(host.windows[0].calls).toContainEqual({ op: "close", tabId: first })
+                // Reactivating wakes it with a fresh view.
+                yield* store.selectTab(first)
+                yield* settleLong
+                expect(
+                    host.windows[0].calls.filter((call) => "tabId" in call && call.tabId === first),
+                ).toContainEqual({ op: "show", tabId: first })
+            }),
+        ))
+
     it("gives a tab moved to another Container a view on that Container's session", () =>
         runTest(
             Effect.gen(function* () {

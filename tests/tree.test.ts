@@ -1,11 +1,22 @@
 import { describe, expect, it } from "vite-plus/test"
 
 import { closeEmptiesContainer, closeTab, reopenTab } from "../src/main/state/close-reopen"
-import { createContainer, setContainerIcon, switchContainer } from "../src/main/state/containers"
+import {
+    createContainer,
+    hibernateContainer,
+    setContainerIcon,
+    switchContainer,
+} from "../src/main/state/containers"
 import { moveTab, moveToContainer } from "../src/main/state/moves"
 import { initialState } from "../src/main/state/state"
 import { stepVisibleTab } from "../src/main/state/tab-order"
-import { createChildTab, createTab, selectTab, setCollapsed } from "../src/main/state/tabs"
+import {
+    createChildTab,
+    createTab,
+    hibernateTab,
+    selectTab,
+    setCollapsed,
+} from "../src/main/state/tabs"
 import { childRow, neighborRow, parentRow } from "../src/renderer/shell/sidebar/navigation"
 import { InvalidMove, LastTab } from "../src/shared/errors"
 import { displayTabs } from "../src/shared/tree-display"
@@ -494,5 +505,78 @@ describe("stepVisibleTab (Ctrl+Tab visual order)", () => {
         const second = state.containers[1].id
         expect(stepVisibleTab(state.tabs, second, null, 1)).not.toBeNull()
         expect(stepVisibleTab(state.tabs, first, "tab-missing", 1)).not.toBeNull()
+    })
+})
+
+describe("hibernate", () => {
+    const buildTree = () => {
+        let state = ok(createContainer(initialState(), newContainer()))
+        const a = state.containers[0].activeTabId!
+        const b = nextTabId()
+        state = ok(createChildTab(state, a, newChild({ id: b })))
+        const c = nextTabId()
+        state = ok(createChildTab(state, a, newChild({ id: c })))
+        const d = nextTabId()
+        state = ok(createChildTab(state, b, newChild({ id: d })))
+        return { state, a, b, c, d }
+    }
+
+    it("hibernating a tab takes its whole subtree", () => {
+        const { state, a, b, c, d } = buildTree()
+        const hibernated = ok(hibernateTab(state, b))
+        expect(hibernated.tabs.get(b)!.hibernated).toBe(true)
+        expect(hibernated.tabs.get(d)!.hibernated).toBe(true)
+        expect(hibernated.tabs.get(a)!.hibernated).toBe(false)
+        expect(hibernated.tabs.get(c)!.hibernated).toBe(false)
+    })
+
+    it("hibernating a collapsed tab takes its hidden children too", () => {
+        const { state, b, d } = buildTree()
+        const collapsed = ok(setCollapsed(state, b, true))
+        const hibernated = ok(hibernateTab(collapsed, b))
+        expect(hibernated.tabs.get(b)!.hibernated).toBe(true)
+        expect(hibernated.tabs.get(d)!.hibernated).toBe(true)
+    })
+
+    it("hibernating the active tab activates the first loaded tab", () => {
+        const built = buildTree()
+        const selected = ok(selectTab(built.state, built.a, 0))
+        const hibernated = ok(hibernateTab(selected, built.a))
+        // a's whole subtree (b, c, d) hibernates, leaving no loaded fallback.
+        expect(hibernated.containers[0].activeTabId).toBe(built.a)
+    })
+
+    it("hibernating the active tab with a loaded sibling picks that sibling", () => {
+        let state = ok(createContainer(initialState(), newContainer()))
+        const a = state.containers[0].activeTabId!
+        state = ok(createTab(state, newTab()))
+        const b = state.containers[0].activeTabId!
+        state = ok(selectTab(state, a, 0))
+        const hibernated = ok(hibernateTab(state, a))
+        expect(hibernated.tabs.get(a)!.hibernated).toBe(true)
+        expect(hibernated.containers[0].activeTabId).toBe(b)
+    })
+
+    it("hibernating a container hibernates every tab in it", () => {
+        const { state } = buildTree()
+        const withSecond = ok(createContainer(state, newContainer()))
+        const other = withSecond.containers[1].id
+        const hibernated = ok(hibernateContainer(withSecond, withSecond.containers[0].id))
+        for (const tab of hibernated.tabs.values()) {
+            if (tab.containerId === other) expect(tab.hibernated).toBe(false)
+            else expect(tab.hibernated).toBe(true)
+        }
+        // Re-hibernating an already hibernated container is a no-op.
+        expect(ok(hibernateContainer(hibernated, withSecond.containers[0].id))).toBe(hibernated)
+    })
+
+    it("a background child tab starts hibernated and wakes on activation", () => {
+        let state = ok(createContainer(initialState(), newContainer()))
+        const parent = state.containers[0].activeTabId!
+        const child = nextTabId()
+        state = ok(createChildTab(state, parent, newChild({ id: child, background: true })))
+        expect(state.tabs.get(child)!.hibernated).toBe(true)
+        state = ok(selectTab(state, child, 0))
+        expect(state.tabs.get(child)!.hibernated).toBe(false)
     })
 })

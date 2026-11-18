@@ -275,6 +275,7 @@ describe("omnibox history suggestions", () => {
             collapsed: false,
             userLabel: null,
             favicon: null,
+            hibernated: false,
             lastActiveAt: NOW,
         }
         const snap = {
