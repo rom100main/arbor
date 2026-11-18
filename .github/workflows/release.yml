@@ -8,9 +8,32 @@ on:
 
 permissions:
     contents: write
+    actions: read
 
 jobs:
+    verify:
+        runs-on: ubuntu-24.04
+        timeout-minutes: 5
+        steps:
+            # Fails unless CI already finished successfully for the tagged SHA.
+            - name: Ensure CI already passed on ${{ github.sha }}
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
+                  SHA: ${{ github.sha }}
+              run: |
+                  RUN=$(gh run list --workflow CI --commit "$SHA" --limit 1 --json databaseId,status,conclusion --jq '.[0] // empty')
+                  STATUS=$(echo "$RUN" | jq -r '.status // empty')
+                  CONCLUSION=$(echo "$RUN" | jq -r '.conclusion // empty')
+                  if [ "$STATUS" = "completed" ] && [ "$CONCLUSION" = "success" ]; then
+                      echo "CI is green for $SHA: $(echo "$RUN" | jq -r '.databaseId')"
+                      exit 0
+                  fi
+                  echo "::error::CI is not finished and green for $SHA (status=$STATUS conclusion=$CONCLUSION), refusing to release. Push the tag after CI succeeds, then re-run."
+                  exit 1
+
     build:
+        needs: verify
         strategy:
             fail-fast: false
             matrix:
@@ -25,6 +48,7 @@ jobs:
             - uses: actions/setup-node@v5
               with:
                   node-version: 26
+                  cache: npm
 
             # package.json pins npm (devEngines): install that version outside the repo, where the pin is not checked.
             - name: Install pinned npm
@@ -32,9 +56,6 @@ jobs:
               run: npm install -g npm@11.20.0
 
             - run: npm ci
-            - run: npm run check
-            - run: npm test
-            - run: npm run licenses:check
             - run: npm run build
 
             - name: Package and upload
