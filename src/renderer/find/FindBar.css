@@ -1,0 +1,73 @@
+.find-bar {
+    box-sizing: border-box;
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    height: 100%;
+    padding: 6px 8px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-popup-strong);
+}
+
+.find-input {
+    flex: 1;
+    min-width: 0;
+    height: 28px;
+    padding: 0 8px;
+    font-size: var(--font-size-body);
+    color: var(--color-text);
+    outline: none;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+}
+
+.find-input:focus {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+.find-count {
+    min-width: 44px;
+    font-size: var(--font-size-md);
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-faint);
+    text-align: center;
+    white-space: nowrap;
+}
+
+.find-count-error {
+    color: #d32f2f;
+}
+
+.find-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    height: 28px;
+    padding: 0 6px;
+    font-size: var(--font-size-body);
+    color: var(--color-text);
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+}
+
+.find-button:hover {
+    background: var(--color-hover);
+}
+
+.find-button:disabled {
+    color: var(--color-text-faint);
+    cursor: default;
+    background: transparent;
+}
+
+.find-button-toggle.active {
+    color: var(--color-accent);
+    background: var(--color-active);
+}

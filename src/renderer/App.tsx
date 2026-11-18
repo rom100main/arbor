@@ -1,6 +1,7 @@
 import { HISTORY_URL, INTERNAL_SCHEME } from "../shared/settings"
 import { DownloadsPopup } from "./downloads/DownloadsPopup"
 import { ExtensionsPopup } from "./extensions/ExtensionsPopup"
+import { FindBar } from "./find/FindBar"
 import { HistoryApp } from "./history/HistoryApp"
 import { OmniboxPopup } from "./omnibox/OmniboxPopup"
 import { PermissionApp } from "./permissions/PermissionApp"
@@ -22,6 +23,7 @@ export default function App() {
     if (appMode === "permission") return <PermissionApp />
     if (appMode === "history") return <HistoryApp />
     if (appMode === "settings") return <SettingsApp />
+    if (appMode === "find") return <FindBar />
     return <MainShell />
 }
 
@@ -34,6 +36,7 @@ type AppMode =
     | "permission"
     | "settings"
     | "history"
+    | "find"
 
 const getAppMode = (): AppMode => {
     // Internal pages carry their route in the path, not a query param: arbor://settings/search.
@@ -45,5 +48,6 @@ const getAppMode = (): AppMode => {
     if (searchParams.has("extensions")) return "extensions"
     if (searchParams.has("downloads")) return "downloads"
     if (searchParams.has("permission")) return "permission"
+    if (searchParams.has("find")) return "find"
     return "main"
 }
