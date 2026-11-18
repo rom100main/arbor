@@ -1508,10 +1508,10 @@ terms above.
 
 Used by:
 
-- `@solidjs/web` 2.0.0-rc.21
+- `@solidjs/web` 2.0.1
 - `electron-chrome-web-store` 0.13.0
 - `lazy-val` 1.0.5
-- `solid-js` 2.0.0-rc.21
+- `solid-js` 2.0.1
 
 ```
 MIT
@@ -1671,7 +1671,7 @@ SOFTWARE.
 
 Used by:
 
-- `@solidjs/signals` 2.0.0-rc.21
+- `@solidjs/signals` 2.0.1
 
 ```
 MIT License
@@ -1701,8 +1701,8 @@ SOFTWARE.
 
 Used by:
 
-- `seroval` 1.7.0
-- `seroval-plugins` 1.7.0
+- `seroval` 1.8.2
+- `seroval-plugins` 1.8.0
 
 ```
 MIT License Copyright (c) 2025 Alexis Munsayac <alexis.munsayac@gmail.com>
