@@ -48,7 +48,7 @@ const metaFrom = (event: Exclude<ViewEvent, { kind: "openChild" }>): TabMeta =>
         : event.kind === "navigated"
           ? // Internal pages carry their own favicon: Chromium's `page-favicon-updated`
             // is not guaranteed to fire on reload, so assign it here, not from that event.
-            { url: event.url, title: "", favicon: internalFavicon(event.url) }
+            { url: event.url, title: "", favicon: internalFavicon(event.url) ?? undefined }
           : event.kind === "navigatedInPage"
             ? { url: event.url }
             : { favicon: event.favicon }
@@ -183,7 +183,7 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                         if (!tab) return
                         if (event.kind === "navigated") {
                             yield* history.visit({ url: event.url, containerId: tab.containerId })
-                            yield* history.meta(event.url, { title: "", favicon: null })
+                            yield* history.meta(event.url, { title: "" })
                         } else if (event.kind === "navigatedInPage") {
                             yield* history.inPage(event.url, tab.containerId)
                         } else if (event.kind === "title") {
@@ -191,7 +191,7 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                         } else if (event.kind === "favicon") {
                             yield* history.meta(tab.url, { favicon: event.favicon })
                         }
-                        // A navigation that resets title/favicon must also clear the entry's stale title/favicon
+                        // A navigation that resets the title must also clear the entry's stale title
                         // (already done, via the meta call above, for "navigated").
                     })
 

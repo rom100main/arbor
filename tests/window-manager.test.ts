@@ -284,15 +284,53 @@ describe("navigation", () => {
                 expect(historyFavicon?.startsWith("data:image/svg+xml,")).toBe(true)
                 expect(historyFavicon).not.toBe(first?.favicon)
 
-                // Ordinary pages stay with Chromium: navigation clears, then the page reports.
+                // Ordinary pages stay with Chromium: the page reports, navigation does not clear.
                 window.emit({ kind: "navigated", tabId, url: "https://example.com/" })
                 yield* settleLong
-                expect((yield* store.state).tabs.get(tabId)?.favicon).toBeNull()
+                expect((yield* store.state).tabs.get(tabId)?.favicon).toBe(historyFavicon)
                 window.emit({ kind: "favicon", tabId, favicon: "https://example.com/icon.png" })
                 yield* settleLong
                 expect((yield* store.state).tabs.get(tabId)?.favicon).toBe(
                     "https://example.com/icon.png",
                 )
+            }),
+        ))
+
+    it("keeps an ordinary page's favicon across navigations that reuse the same favicon URL", () =>
+        runTest(
+            Effect.gen(function* () {
+                const { host, store } = yield* startApp
+                const tabId = (yield* activeTab(store))!
+                const window = host.windows[0]
+
+                window.emit({ kind: "navigated", tabId, url: "https://example.com/" })
+                window.emit({ kind: "favicon", tabId, favicon: "https://example.com/icon.png" })
+                yield* settleLong
+                expect((yield* store.state).tabs.get(tabId)?.favicon).toBe(
+                    "https://example.com/icon.png",
+                )
+
+                // Same-site navigation: Chromium reuses the favicon URL, so Electron emits no
+                // new page-favicon-updated (its last emitted set is never reset on navigation).
+                // The kept icon must survive, with no favicon event after.
+                window.emit({ kind: "navigated", tabId, url: "https://example.com/other" })
+                yield* settleLong
+                expect((yield* store.state).tabs.get(tabId)?.favicon).toBe(
+                    "https://example.com/icon.png",
+                )
+
+                // A reload of the same URL: same story.
+                window.emit({ kind: "navigated", tabId, url: "https://example.com/other" })
+                yield* settleLong
+                expect((yield* store.state).tabs.get(tabId)?.favicon).toBe(
+                    "https://example.com/icon.png",
+                )
+
+                // A *changed* favicon set still replaces the kept icon, including a page
+                // with none (the empty set Chromium reports).
+                window.emit({ kind: "favicon", tabId, favicon: null })
+                yield* settleLong
+                expect((yield* store.state).tabs.get(tabId)?.favicon).toBeNull()
             }),
         ))
 })
