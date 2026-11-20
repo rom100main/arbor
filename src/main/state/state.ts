@@ -11,6 +11,7 @@ import type {
     TabId,
     TabNode,
 } from "../../shared/protocol"
+import { displayTabs } from "../../shared/tree-display"
 
 export interface DomainState {
     containers: ContainerMeta[]
@@ -107,6 +108,22 @@ export const subtreeOf = (state: DomainState, root: TabNode): TabNode[] => [
     root,
     ...descendantsOf(state, root),
 ]
+
+/**
+ * Fallback tab when the active tab is closed or hibernated:
+ * the first loaded tab in display order (outside `excludedIds`),
+ * else the next one.
+ */
+export const fallbackTab = (
+    state: DomainState,
+    containerId: ContainerId,
+    excludedIds: ReadonlySet<TabId>,
+): TabId | null => {
+    const candidates = displayTabs([...state.tabs.values()], containerId).filter(
+        (t) => !excludedIds.has(t.id),
+    )
+    return candidates.find((t) => !t.hibernated)?.id ?? candidates[0]?.id ?? null
+}
 
 // --- derived
 

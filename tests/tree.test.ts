@@ -292,6 +292,65 @@ describe("close semantics", () => {
         expect(state.containers[0].activeTabId).not.toBeNull()
         expect(state.tabs.has(state.containers[0].activeTabId!)).toBe(true)
     })
+
+    it("closing the active tab wakes a hibernated fallback so it loads now", () => {
+        let state = ok(createContainer(initialState(), newContainer()))
+        const a = state.containers[0].activeTabId!
+        state = ok(createTab(state, newTab()))
+        const b = state.containers[0].activeTabId!
+        state = ok(hibernateTab(state, b))
+        expect(state.tabs.get(b)!.hibernated).toBe(true)
+        expect(state.containers[0].activeTabId).toBe(a)
+        state = ok(closeTab(state, a, 0))
+        expect(state.containers[0].activeTabId).toBe(b)
+        expect(state.tabs.get(b)!.hibernated).toBe(false)
+    })
+
+    it("closing an expanded tab wakes a hibernated promoted child", () => {
+        let state = ok(createContainer(initialState(), newContainer()))
+        const a = state.containers[0].activeTabId!
+        const b = nextTabId()
+        state = ok(createChildTab(state, a, newChild({ id: b, background: true })))
+        expect(state.tabs.get(b)!.hibernated).toBe(true)
+        state = ok(selectTab(state, a, 0))
+        state = ok(closeTab(state, a, 0))
+        expect(state.containers[0].activeTabId).toBe(b)
+        expect(state.tabs.get(b)!.hibernated).toBe(false)
+    })
+
+    it("closing the active tab prefers a loaded tab over a hibernated next tab", () => {
+        let state = ok(createContainer(initialState(), newContainer()))
+        const a = state.containers[0].activeTabId!
+        state = ok(createTab(state, newTab()))
+        const b = state.containers[0].activeTabId!
+        state = ok(createTab(state, newTab()))
+        const c = state.containers[0].activeTabId!
+        state = ok(selectTab(state, a, 0))
+        state = ok(hibernateTab(state, b))
+        expect(state.tabs.get(b)!.hibernated).toBe(true)
+        expect(state.tabs.get(c)!.hibernated).toBe(false)
+        state = ok(closeTab(state, a, 0))
+        // Like hibernating: the open tab wins, the hibernated one stays unloaded.
+        expect(state.containers[0].activeTabId).toBe(c)
+        expect(state.tabs.get(b)!.hibernated).toBe(true)
+    })
+
+    it("closing the active tab loads the next tab when no remaining tab is open", () => {
+        let state = ok(createContainer(initialState(), newContainer()))
+        const a = state.containers[0].activeTabId!
+        state = ok(createTab(state, newTab()))
+        const b = state.containers[0].activeTabId!
+        state = ok(createTab(state, newTab()))
+        const c = state.containers[0].activeTabId!
+        state = ok(selectTab(state, a, 0))
+        state = ok(hibernateTab(state, b))
+        state = ok(hibernateTab(state, c))
+        state = ok(closeTab(state, a, 0))
+        // No open tab remains: the first in display order loads now.
+        expect(state.containers[0].activeTabId).toBe(b)
+        expect(state.tabs.get(b)!.hibernated).toBe(false)
+        expect(state.tabs.get(c)!.hibernated).toBe(true)
+    })
 })
 
 describe("ancestor of the active tab", () => {
@@ -571,6 +630,21 @@ describe("hibernate", () => {
         const hibernated = ok(hibernateTab(state, a))
         expect(hibernated.tabs.get(a)!.hibernated).toBe(true)
         expect(hibernated.containers[0].activeTabId).toBe(b)
+    })
+
+    it("hibernating the active tab wakes the first remaining tab when none is loaded", () => {
+        let state = ok(createContainer(initialState(), newContainer()))
+        const a = state.containers[0].activeTabId!
+        state = ok(createTab(state, newTab()))
+        const b = state.containers[0].activeTabId!
+        state = ok(selectTab(state, a, 0))
+        state = ok(hibernateTab(state, b))
+        expect(state.tabs.get(b)!.hibernated).toBe(true)
+        expect(state.containers[0].activeTabId).toBe(a)
+        const hibernated = ok(hibernateTab(state, a))
+        expect(hibernated.tabs.get(a)!.hibernated).toBe(true)
+        expect(hibernated.containers[0].activeTabId).toBe(b)
+        expect(hibernated.tabs.get(b)!.hibernated).toBe(false)
     })
 
     it("hibernating a container hibernates every tab in it", () => {

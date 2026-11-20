@@ -3,11 +3,11 @@ import { Result } from "effect"
 import { NoContainer } from "../../shared/errors"
 import type { ContainerId, TabId, TabNode } from "../../shared/protocol"
 import { NEW_TAB_TITLE, NEW_TAB_URL } from "../../shared/settings"
-import { displayTabs } from "../../shared/tree-display"
 import {
     childrenOf,
     containerOf,
     descendantsOf,
+    fallbackTab,
     putTab,
     reindex,
     siblingsOf,
@@ -143,14 +143,9 @@ export const setCollapsed = (state: DomainState, tabId: TabId, collapsed: boolea
         return putTab(state, { ...tab, collapsed })
     })
 
-/** Fallback active tab after hibernating: first loaded tab in display order. */
-const loadedFallback = (state: DomainState, containerId: ContainerId) =>
-    displayTabs([...state.tabs.values()], containerId).find((t) => !t.hibernated)?.id ?? null
-
 /**
  * Hibernate a tab and its whole subtree (a collapsed parent takes its children with it).
- * The tab stays in the tree: only its page goes away.
- * If the active tab hibernates, the container activates its first loaded tab instead.
+ * If hibernates active tab, activates next loaded tab, else load next tab.
  */
 export const hibernateTab = (state: DomainState, tabId: TabId) =>
     Result.gen(function* () {
@@ -167,8 +162,12 @@ export const hibernateTab = (state: DomainState, tabId: TabId) =>
             container.activeTabId !== null &&
             hibernatedIds.has(container.activeTabId)
         ) {
-            const fallback = loadedFallback(next, tab.containerId)
+            const fallback = fallbackTab(next, tab.containerId, hibernatedIds)
             if (fallback !== null) {
+                const fallbackNode = next.tabs.get(fallback)
+                if (fallbackNode?.hibernated) {
+                    next.tabs.set(fallback, { ...fallbackNode, hibernated: false })
+                }
                 return {
                     ...next,
                     containers: next.containers.map((c) =>

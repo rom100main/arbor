@@ -1,11 +1,12 @@
 import { Result } from "effect"
 
 import { LastTab, NoContainer, NothingToReopen } from "../../shared/errors"
-import type { ClosedSubtree, ContainerId, TabId, TabNode } from "../../shared/protocol"
+import type { ClosedSubtree, TabId, TabNode } from "../../shared/protocol"
 import {
     childrenOf,
     containerOf,
     descendantsOf,
+    fallbackTab,
     reindex,
     removeContainer,
     siblingsOf,
@@ -16,20 +17,11 @@ import {
     type DomainState,
 } from "./state"
 
-const successorTab = (state: DomainState, removed: TabNode): TabId | null => {
-    const siblings = siblingsOf(state, removed)
-    const index = siblings.findIndex((s) => s.id === removed.id)
-    const nextSibling = siblings[index + 1] ?? siblings[index - 1]
-    if (nextSibling) return nextSibling.id
-    if (removed.parentId !== null) return removed.parentId
-    const roots = childrenOf(state, removed.containerId, null)
-    return roots[0]?.id ?? null
-}
-
 /**
  * Close semantics:
- * a collapsed tab takes its whole subtree;
- * an expanded tab promotes its direct children, inheriting its position and order.
+ * - a collapsed tab takes its whole subtree.
+ * - an expanded tab promotes its direct children, inheriting its position and order.
+ * if close active tab, activates next loaded tab, else load next tab.
  */
 export const closeTab = (state: DomainState, tabId: TabId, now: number) =>
     Result.gen(function* () {
@@ -91,12 +83,11 @@ export const closeTab = (state: DomainState, tabId: TabId, now: number) =>
             container.activeTabId === tabId ||
             descendants.some((d) => d.id === container.activeTabId)
         ) {
-            const fallback = expands
-                ? (promotedSuccessor(result, container.id, tab.parentId, indexBefore) ?? null)
-                : successorTab(result, tab)
+            const fallback = fallbackTab(result, container.id, new Set<TabId>())
             if (fallback) {
-                const fallbackTab = result.tabs.get(fallback)
-                if (fallbackTab) result.tabs.set(fallback, touch(fallbackTab, now))
+                const fallbackNode = result.tabs.get(fallback)
+                if (fallbackNode)
+                    result.tabs.set(fallback, touch({ ...fallbackNode, hibernated: false }, now))
             }
             result = {
                 ...result,
@@ -123,16 +114,6 @@ export const closeEmptiesContainer = (state: DomainState, tabId: TabId): boolean
     const removedCount = expands ? 1 : 1 + descendants.length
     if (removedCount >= state.tabs.size) return false
     return removedCount === tabCount(state, tab.containerId)
-}
-
-const promotedSuccessor = (
-    state: DomainState,
-    containerId: ContainerId,
-    parentId: TabId | null,
-    indexBefore: number,
-): TabId | null => {
-    const siblings = childrenOf(state, containerId, parentId)
-    return siblings[Math.min(indexBefore, siblings.length - 1)]?.id ?? null
 }
 
 /**
