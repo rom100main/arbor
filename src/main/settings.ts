@@ -1,7 +1,12 @@
 import { Context, Effect, Layer, Option, Result, Schema, type Stream } from "effect"
 
 import { SettingsRejected } from "../shared/errors"
-import { DEFAULT_SEARCH_TEMPLATE, DEFAULT_SETTINGS } from "../shared/settings"
+import {
+    DEFAULT_SEARCH_TEMPLATE,
+    DEFAULT_SETTINGS,
+    isNewTabImageDataUrl,
+    normalizeNewTabColor,
+} from "../shared/settings"
 import { Settings, SettingsPatch } from "../shared/settings-schema"
 import { decodeOr, orDefault } from "./persistence/decode"
 import { readJson } from "./persistence/json-file"
@@ -37,6 +42,19 @@ const PersistedSettings = Schema.Struct({
         () => DEFAULT_SETTINGS.adblockEnabled,
     ),
     adblockDisabledSites: orDefault(Schema.Array(Schema.Unknown), () => []),
+    newTabBackgroundKind: orDefault(
+        Settings.fields.newTabBackgroundKind,
+        () => DEFAULT_SETTINGS.newTabBackgroundKind,
+    ),
+    newTabBackgroundColor: orDefault(Schema.String, () => DEFAULT_SETTINGS.newTabBackgroundColor),
+    newTabBackgroundImage: orDefault(
+        Schema.NullOr(Schema.String),
+        () => DEFAULT_SETTINGS.newTabBackgroundImage,
+    ),
+    newTabShowSearchBar: orDefault(
+        Settings.fields.newTabShowSearchBar,
+        () => DEFAULT_SETTINGS.newTabShowSearchBar,
+    ),
 })
 
 const parseSettings = decodeOr(PersistedSettings)
@@ -76,6 +94,14 @@ export const fromPersistedSettings = (data: unknown): Settings | null => {
         historyRetention: parsed.historyRetention,
         adblockEnabled: parsed.adblockEnabled,
         adblockDisabledSites: cleanDisabledSites(parsed.adblockDisabledSites),
+        newTabBackgroundKind: parsed.newTabBackgroundKind,
+        newTabBackgroundColor:
+            normalizeNewTabColor(parsed.newTabBackgroundColor) ??
+            DEFAULT_SETTINGS.newTabBackgroundColor,
+        newTabBackgroundImage: isNewTabImageDataUrl(parsed.newTabBackgroundImage)
+            ? parsed.newTabBackgroundImage
+            : null,
+        newTabShowSearchBar: parsed.newTabShowSearchBar,
     }
 }
 
