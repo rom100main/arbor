@@ -225,15 +225,10 @@ export const Anchor = Schema.Struct({
     x: Schema.Finite,
     y: Schema.Finite,
     width: Schema.Finite,
+    height: Schema.optionalKey(Schema.Finite),
+    below: Schema.optionalKey(Schema.Boolean),
 })
 export type Anchor = typeof Anchor.Type
-
-/** A box in window coordinates. */
-export const Rect = Schema.Struct({
-    ...Anchor.fields,
-    height: Schema.Finite,
-})
-export type Rect = typeof Rect.Type
 
 /** What find-in-page matches: the text plus how it is matched. */
 export const FindQuery = Schema.Struct({
