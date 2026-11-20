@@ -75,3 +75,9 @@ export class NoActionPopup extends Schema.TaggedError<NoActionPopup>()("NoAction
         return `Extension ${this.extensionId} has no action popup`
     }
 }
+
+/** The OS refused to make Arbor the default browser. */
+export class DefaultBrowserFailed extends Schema.TaggedError<DefaultBrowserFailed>()(
+    "DefaultBrowserFailed",
+    { message: Schema.String },
+) {}

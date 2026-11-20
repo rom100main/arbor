@@ -51,6 +51,9 @@ export const REQUESTS = {
     getUpdateStatus: "arbor:update:get-status",
     installUpdate: "arbor:update:install",
 
+    getDefaultBrowserStatus: "arbor:browser:get-status",
+    setDefaultBrowser: "arbor:browser:set-default",
+
     findSearch: "arbor:find:search",
     findStep: "arbor:find:step",
 } as const

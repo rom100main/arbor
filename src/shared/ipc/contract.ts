@@ -6,6 +6,7 @@
 import { Predicate, Schema } from "effect"
 
 import {
+    DefaultBrowserFailed,
     EmptyContainer,
     InvalidMove,
     LastTab,
@@ -32,7 +33,6 @@ import {
     OmniboxActivation,
     PermissionPromptRequest,
     PinnedActionInfo,
-    Rect,
     RenameTarget,
     RevealEdge,
     TabId,
@@ -123,7 +123,7 @@ export const Requests = {
     }),
     // Main reads the popup URL from the manifest: the renderer only names the extension.
     openExtensionActionPopup: request({
-        payload: Schema.Struct({ extensionId: Schema.String, anchor: Schema.NullOr(Rect) }),
+        payload: Schema.Struct({ extensionId: Schema.String, anchor: Schema.NullOr(Anchor) }),
         error: NoActionPopup,
     }),
 
@@ -227,6 +227,20 @@ export const Requests = {
 
     getUpdateStatus: request({ success: UpdateStatus }),
     installUpdate: request({}),
+
+    getDefaultBrowserStatus: request({
+        success: Schema.Struct({
+            isDefault: Schema.Boolean,
+            platform: Schema.String,
+        }),
+    }),
+    setDefaultBrowser: request({
+        success: Schema.Struct({
+            isDefault: Schema.Boolean,
+            platform: Schema.String,
+        }),
+        error: DefaultBrowserFailed,
+    }),
 
     findSearch: request({ payload: FindQuery, success: FindStatus }),
     findStep: request({
