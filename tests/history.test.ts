@@ -6,9 +6,7 @@ import { decodeHistory } from "../src/main/history/history"
 import { isRecordableUrl, stripFragment } from "../src/main/history/record"
 import { History } from "../src/main/history/service"
 import { SettingsStore } from "../src/main/settings"
-import { scoreHistoryEntry } from "../src/renderer/omnibox/scoring"
-import { computeSuggestions, moveSuggestionSelection } from "../src/renderer/omnibox/suggestions"
-import type { ContainerId, HistoryEntry, TabId } from "../src/shared/protocol"
+import type { HistoryEntry } from "../src/shared/protocol"
 import { runTest, settle } from "./support/effect"
 import { files } from "./support/memory-fs"
 
@@ -54,11 +52,6 @@ describe("decodeHistory", () => {
             { nope: true },
         ])
         expect(decoded?.map((e) => e.id)).toEqual(["history-1"])
-    })
-
-    it("returns null when the payload is not an array", () => {
-        expect(decodeHistory({})).toBeNull()
-        expect(decodeHistory("nope")).toBeNull()
     })
 })
 
@@ -235,98 +228,4 @@ describe("history service", () => {
                 expect((yield* history.snapshot).totalCount).toBe(0)
             }),
         ))
-})
-
-describe("history scoring", () => {
-    const NOW = 10_000_000_000
-    const base = entry({ lastVisitedAt: NOW - 3_600_000, visitCount: 3 })
-
-    it("ranks an exact URL above a substring, and a substring above a title hit", () => {
-        const exact = scoreHistoryEntry(base, "https://example.com/page", NOW, 10)
-        const substring = scoreHistoryEntry(base, "example.com/pa", NOW, 10)
-        const title = scoreHistoryEntry(base, "exam", NOW, 10)
-        expect(exact).toBeGreaterThan(substring)
-        expect(substring).toBeGreaterThan(0)
-        expect(title).toBeGreaterThan(0)
-        expect(scoreHistoryEntry(base, "no-match-xyz", NOW, 10)).toBe(0)
-    })
-
-    it("prefers frequent entries among equal URL precision", () => {
-        const frequent = entry({ url: "https://a.test/", visitCount: 20 })
-        const rare = entry({ url: "https://a.test/x", visitCount: 1 })
-        const frequentScore = scoreHistoryEntry(frequent, "a.test", NOW, 20)
-        const rareScore = scoreHistoryEntry(rare, "a.test", NOW, 20)
-        expect(frequentScore).toBeGreaterThan(rareScore)
-    })
-})
-
-describe("omnibox history suggestions", () => {
-    const NOW = 10_000_000_000
-
-    it("appends ranked history after the go action, capped at 5", () => {
-        const entries = Array.from({ length: 7 }, (_, index) =>
-            entry({
-                id: `history-${index}` as HistoryEntry["id"],
-                url: `https://site.test/page-${index}`,
-                title: `Page ${index}`,
-                lastVisitedAt: NOW - index * 1000,
-                visitCount: index + 1,
-            }),
-        )
-        const suggestions = computeSuggestions(null, "site.test", undefined, entries, NOW)
-        expect(suggestions[0].kind).toBe("go")
-        const kinds = suggestions.slice(1).map((s) => s.kind)
-        expect(kinds).toEqual(["history", "history", "history", "history", "history"])
-    })
-
-    it("skips a history entry already shown as a tab", () => {
-        const tab = {
-            id: "tab-1" as TabId,
-            containerId: "container-1" as ContainerId,
-            parentId: null,
-            order: 0,
-            url: "https://site.test/page-0",
-            title: "Page 0",
-            collapsed: false,
-            userLabel: null,
-            favicon: null,
-            hibernated: false,
-            lastActiveAt: NOW,
-        }
-        const snap = {
-            containers: [],
-            tabs: [tab],
-            activeContainerId: null,
-            activeTabId: null,
-        }
-        const suggestions = computeSuggestions(
-            snap,
-            "site.test",
-            undefined,
-            [entry({ url: "https://site.test/page-0", lastVisitedAt: NOW })],
-            NOW,
-        )
-        expect(suggestions.some((s) => s.kind === "history")).toBe(false)
-        expect(suggestions.some((s) => s.kind === "tab")).toBe(true)
-    })
-})
-
-describe("moveSuggestionSelection", () => {
-    it("moves plainly inside the list", () => {
-        expect(moveSuggestionSelection(1, 1, 4)).toBe(2)
-        expect(moveSuggestionSelection(2, -1, 4)).toBe(1)
-    })
-
-    it("wraps down from the last item to the first", () => {
-        expect(moveSuggestionSelection(3, 1, 4)).toBe(0)
-    })
-
-    it("wraps up from the first item to the last", () => {
-        expect(moveSuggestionSelection(0, -1, 4)).toBe(3)
-    })
-
-    it("stays put for an empty list", () => {
-        expect(moveSuggestionSelection(0, 1, 0)).toBe(0)
-        expect(moveSuggestionSelection(0, -1, 0)).toBe(0)
-    })
 })

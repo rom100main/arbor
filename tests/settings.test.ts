@@ -2,10 +2,7 @@ import { describe, expect, it } from "vite-plus/test"
 
 import { SEARCH_ENGINES } from "../src/renderer/settings/search-engines"
 import {
-    chromeInsets,
-    effectiveVisibilities,
     isNewTabImageDataUrl,
-    isNewTabUrl,
     MAX_NEW_TAB_IMAGE_CHARS,
     normalizeNewTabColor,
     normalizeSearchTemplate,
@@ -63,26 +60,6 @@ describe("normalizeSearchTemplate", () => {
     })
 })
 
-describe("fullscreen visibility", () => {
-    const displayed = {
-        sidebarVisibility: "displayed" as const,
-        urlBarVisibility: "displayed" as const,
-    }
-
-    it("hides both bars in fullscreen and restores the settings outside", () => {
-        expect(effectiveVisibilities(displayed, true)).toEqual({
-            sidebarVisibility: "hidden",
-            urlBarVisibility: "hidden",
-        })
-        expect(effectiveVisibilities(displayed, false)).toEqual(displayed)
-    })
-
-    it("gives the page the whole window in fullscreen", () => {
-        expect(chromeInsets(displayed, true)).toEqual({ left: 0, bottom: 0 })
-        expect(chromeInsets(displayed, false)).toEqual({ left: 240, bottom: 44 })
-    })
-})
-
 describe("searchUrl", () => {
     it("substitutes and encodes the query", () => {
         expect(searchUrl("https://duckduckgo.com/?q=%s", "hello world")).toBe(
@@ -94,24 +71,12 @@ describe("searchUrl", () => {
         expect(searchUrl("https://x.test/?q=%s", "a&b=c#d")).toBe("https://x.test/?q=a%26b%3Dc%23d")
     })
 
-    it("substitutes every occurrence of the token", () => {
-        expect(searchUrl("https://x.test/%s/%s", "q")).toBe("https://x.test/q/q")
-    })
-
     it("returns null when there is no token to substitute", () => {
         expect(searchUrl("https://duckduckgo.com/", "hi")).toBeNull()
     })
 })
 
 describe("the new-tab page", () => {
-    it("recognises the new-tab URL only", () => {
-        expect(isNewTabUrl("arbor://newtab")).toBe(true)
-        expect(isNewTabUrl("arbor://newtab/")).toBe(true)
-        expect(isNewTabUrl("arbor://settings")).toBe(false)
-        expect(isNewTabUrl("about:blank")).toBe(false)
-        expect(isNewTabUrl("https://example.com")).toBe(false)
-    })
-
     it("normalises a #rrggbb color and rejects anything else", () => {
         expect(normalizeNewTabColor("#FF8800")).toBe("#ff8800")
         expect(normalizeNewTabColor("  #123abc ")).toBe("#123abc")

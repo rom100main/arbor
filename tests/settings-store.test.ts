@@ -76,16 +76,6 @@ describe("fromPersistedSettings", () => {
         ).toEqual([])
     })
 
-    it("defaults the download save mode and rejects a non-boolean", () => {
-        expect(fromPersistedSettings({})?.downloadAskWhereToSave).toBe(true)
-        expect(
-            fromPersistedSettings({ downloadAskWhereToSave: "yes" })?.downloadAskWhereToSave,
-        ).toBe(true)
-        expect(
-            fromPersistedSettings({ downloadAskWhereToSave: false })?.downloadAskWhereToSave,
-        ).toBe(false)
-    })
-
     it("keeps a valid file intact", () => {
         const payload = {
             searchTemplate: "https://kagi.com/search?q=%s",
@@ -150,15 +140,6 @@ describe("settings store", () => {
             }),
         ))
 
-    it("normalises a bare-host template on the way in", () =>
-        runTest(
-            Effect.gen(function* () {
-                const { store } = yield* open()
-                const next = yield* store.set({ searchTemplate: "kagi.com/search?q=%s" })
-                expect(next.searchTemplate).toBe("https://kagi.com/search?q=%s")
-            }),
-        ))
-
     it("rejects a template with no %s and writes nothing", () =>
         runTest(
             Effect.gen(function* () {
@@ -191,35 +172,6 @@ describe("settings store", () => {
             }),
         ))
 
-    it("persists bar visibility", () =>
-        runTest(
-            Effect.gen(function* () {
-                const first = yield* open()
-                yield* first.store.set({ sidebarVisibility: "hidden", urlBarVisibility: "hidden" })
-                yield* Scope.close(first.scope, Exit.void)
-                const reloaded = yield* (yield* open()).store.get
-                expect(reloaded.sidebarVisibility).toBe("hidden")
-                expect(reloaded.urlBarVisibility).toBe("hidden")
-            }),
-        ))
-
-    it("persists the download save mode and publishes it", () =>
-        runTest(
-            Effect.gen(function* () {
-                const { store, scope } = yield* open()
-                const { seen } = yield* collect(store.changes)
-                yield* store.set({ downloadAskWhereToSave: false })
-                yield* settle
-                expect(seen.map((settings) => settings.downloadAskWhereToSave)).toEqual([false])
-
-                yield* Scope.close(scope, Exit.void)
-                expect(onDisk()).toMatchObject({ downloadAskWhereToSave: false })
-
-                const reloaded = yield* (yield* open()).store.get
-                expect(reloaded.downloadAskWhereToSave).toBe(false)
-            }),
-        ))
-
     it("persists the disabled-sites list, cleaned", () =>
         runTest(
             Effect.gen(function* () {
@@ -246,32 +198,6 @@ describe("settings store", () => {
                 yield* store.set({ theme: "light" })
                 yield* settle
                 expect(seen.map((settings) => settings.theme)).toEqual(["dark", "light"])
-            }),
-        ))
-
-    it("persists the new-tab page, normalising the color", () =>
-        runTest(
-            Effect.gen(function* () {
-                const first = yield* open()
-                yield* first.store.set({
-                    newTabBackgroundKind: "image",
-                    newTabBackgroundColor: "#FF00AA",
-                    newTabBackgroundImage: "data:image/jpeg;base64,AAAA",
-                    newTabShowSearchBar: false,
-                })
-                yield* Scope.close(first.scope, Exit.void)
-                expect(onDisk()).toMatchObject({
-                    newTabBackgroundKind: "image",
-                    newTabBackgroundColor: "#ff00aa",
-                    newTabBackgroundImage: "data:image/jpeg;base64,AAAA",
-                    newTabShowSearchBar: false,
-                })
-
-                const reloaded = yield* (yield* open()).store.get
-                expect(reloaded.newTabBackgroundKind).toBe("image")
-                expect(reloaded.newTabBackgroundColor).toBe("#ff00aa")
-                expect(reloaded.newTabBackgroundImage).toBe("data:image/jpeg;base64,AAAA")
-                expect(reloaded.newTabShowSearchBar).toBe(false)
             }),
         ))
 

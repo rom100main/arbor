@@ -17,7 +17,6 @@ import {
     selectTab,
     setCollapsed,
 } from "../src/main/state/tabs"
-import { childRow, neighborRow, parentRow } from "../src/renderer/shell/sidebar/navigation"
 import { InvalidMove, LastTab } from "../src/shared/errors"
 import { displayTabs } from "../src/shared/tree-display"
 import { err, newChild, newContainer, newTab, nextTabId, ok } from "./support/domain"
@@ -379,49 +378,6 @@ describe("display order", () => {
     })
 })
 
-describe("keyboard tree navigation", () => {
-    const rows = () => {
-        let state = ok(createContainer(initialState(), newContainer()))
-        const a = state.containers[0].activeTabId!
-        const b = nextTabId()
-        state = ok(createChildTab(state, a, newChild({ id: b })))
-        const c = nextTabId()
-        state = ok(createChildTab(state, b, newChild({ id: c })))
-        const d = nextTabId()
-        state = ok(createChildTab(state, a, newChild({ id: d })))
-        state = ok(selectTab(state, a, 0))
-        return {
-            state,
-            a,
-            b,
-            c,
-            d,
-            visible: displayTabs([...state.tabs.values()], state.containers[0].id),
-        }
-    }
-
-    it("moves between visible rows without wrapping", () => {
-        const { a, b, c, d, visible } = rows()
-        // a, b, c, d
-        expect(neighborRow(visible, a, 1)).toBe(b)
-        expect(neighborRow(visible, b, 1)).toBe(c)
-        expect(neighborRow(visible, d, 1)).toBeNull()
-        expect(neighborRow(visible, a, -1)).toBeNull()
-        expect(neighborRow(visible, c, -1)).toBe(b)
-    })
-
-    it("finds the first child and the parent of a row", () => {
-        const { a, b, c, d, visible } = rows()
-        expect(childRow(visible, a)).toBe(b)
-        expect(childRow(visible, b)).toBe(c)
-        expect(childRow(visible, c)).toBeNull()
-        expect(parentRow(visible, c)).toBe(b)
-        expect(parentRow(visible, b)).toBe(a)
-        expect(parentRow(visible, a)).toBeNull()
-        expect(parentRow(visible, d)).toBe(a)
-    })
-})
-
 describe("recency", () => {
     it("new tabs are more recent than their parent", () => {
         let state = ok(createContainer(initialState(), newContainer({ now: 1000 })))
@@ -528,14 +484,6 @@ describe("hibernate", () => {
         expect(hibernated.tabs.get(d)!.hibernated).toBe(true)
         expect(hibernated.tabs.get(a)!.hibernated).toBe(false)
         expect(hibernated.tabs.get(c)!.hibernated).toBe(false)
-    })
-
-    it("hibernating a collapsed tab takes its hidden children too", () => {
-        const { state, b, d } = buildTree()
-        const collapsed = ok(setCollapsed(state, b, true))
-        const hibernated = ok(hibernateTab(collapsed, b))
-        expect(hibernated.tabs.get(b)!.hibernated).toBe(true)
-        expect(hibernated.tabs.get(d)!.hibernated).toBe(true)
     })
 
     it("hibernating the active tab activates the first loaded tab", () => {

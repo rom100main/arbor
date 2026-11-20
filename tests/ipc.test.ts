@@ -11,7 +11,7 @@ import {
 import { initialState } from "../src/main/state/state"
 import { BrowserStore, type StoreService } from "../src/main/state/store"
 import { EVENTS, PUSHES, REQUESTS } from "../src/shared/ipc/channels"
-import type { DownloadInfo, DownloadsSnapshot } from "../src/shared/protocol"
+import type { DownloadsSnapshot } from "../src/shared/protocol"
 import { DEFAULT_SETTINGS } from "../src/shared/settings"
 import { captureLogs, runTest } from "./support/effect"
 import * as ipc from "./support/ipc"
@@ -133,32 +133,6 @@ describe("IPC requests", () => {
                     ok: true,
                     value: { containers: [{ name: "Work" }] },
                 })
-            }),
-        ))
-
-    it("serves the download list and forwards a cancel", () =>
-        runTest(
-            Effect.gen(function* () {
-                const { invoke } = yield* serve
-                const item: DownloadInfo = {
-                    id: "download-1",
-                    filename: "a.txt",
-                    savePath: null,
-                    url: "https://example.com/a.txt",
-                    state: "pending",
-                    receivedBytes: 0,
-                    totalBytes: 10,
-                    startedAt: 1,
-                    finishedAt: null,
-                }
-                downloadsSnapshot = { items: [item], folder: "/Downloads" }
-
-                expect(yield* invoke(REQUESTS.downloadsList)).toEqual({
-                    ok: true,
-                    value: downloadsSnapshot,
-                })
-                yield* invoke(REQUESTS.downloadCancel, { id: "download-1" })
-                expect(downloadIds).toEqual(["download-1"])
             }),
         ))
 

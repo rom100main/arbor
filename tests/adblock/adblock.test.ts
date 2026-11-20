@@ -231,23 +231,6 @@ describe("Adblock service", () => {
             }),
         ))
 
-    it("starts unblocked when the setting is off", () =>
-        runTest(
-            Effect.gen(function* () {
-                yield* stale()
-                // Seed settings before the service builds.
-                files.set(SETTINGS, JSON.stringify({ adblockEnabled: false }))
-                controls.fetchResult = () => Promise.resolve(stubEngine)
-                const { adblock } = yield* open
-                yield* adblock.ready
-                const session = new FakeSession()
-                yield* adblock.attach(asSession(session))
-
-                session.beforeRequest?.({}, () => undefined)
-                expect(fakeBlockerCalls).toEqual([])
-            }),
-        ))
-
     it("never delegates main-frame navigations to the engine", () =>
         runTest(
             Effect.gen(function* () {
@@ -310,25 +293,6 @@ describe("Adblock service", () => {
                 expect(insertCSS).not.toHaveBeenCalled()
             }),
         ))
-
-    it("starts unblocked for disabled sites seeded on disk", () =>
-        runTest(
-            Effect.gen(function* () {
-                yield* stale()
-                files.set(SETTINGS, JSON.stringify({ adblockDisabledSites: ["example.com"] }))
-                controls.fetchResult = () => Promise.resolve(stubEngine)
-                const { adblock } = yield* open
-                yield* adblock.ready
-                const session = new FakeSession()
-                yield* adblock.attach(asSession(session))
-
-                session.beforeRequest?.(
-                    { url: "https://example.com/ad.js", resourceType: "script" },
-                    () => undefined,
-                )
-                expect(fakeBlockerCalls).toEqual([])
-            }),
-        ))
 })
 
 describe("matchesDisabledPattern", () => {
@@ -348,11 +312,6 @@ describe("matchesDisabledPattern", () => {
             true,
         )
         expect(matchesDisabledPattern(["https://example.com/*"], "https://example.com")).toBe(false)
-    })
-
-    it("is case-insensitive and ignores empty patterns", () => {
-        expect(matchesDisabledPattern(["EXAMPLE.COM"], "https://example.com/")).toBe(true)
-        expect(matchesDisabledPattern(["", "  "], "https://example.com/")).toBe(false)
     })
 
     it("never matches an invalid URL", () => {

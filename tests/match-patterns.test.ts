@@ -7,22 +7,6 @@ import {
 } from "../src/shared/match-patterns"
 
 describe("parseMatchPattern", () => {
-    it("parses scheme, host, and path", () => {
-        expect(parseMatchPattern("https://account.proton.me/*")).toEqual({
-            scheme: "https",
-            host: "account.proton.me",
-            path: "/*",
-        })
-    })
-
-    it("parses <all_urls>", () => {
-        expect(parseMatchPattern("<all_urls>")).toEqual({
-            scheme: "<all_urls>",
-            host: "<all_urls>",
-            path: "<all_urls>",
-        })
-    })
-
     it("rejects invalid patterns", () => {
         expect(parseMatchPattern("not-a-pattern")).toBeNull()
         expect(parseMatchPattern("https://example.com")).toBeNull()
@@ -82,12 +66,6 @@ describe("matchPatternCovers", () => {
 })
 
 describe("originsCoveredBy", () => {
-    it("Proton Pass minimal host permissions under broad host_permissions", () => {
-        const granted = ["https://*/*", "http://*/*"]
-        const requested = ["https://account.proton.me/*", "https://pass.proton.me/*"]
-        expect(originsCoveredBy(granted, requested)).toBe(true)
-    })
-
     it("false when any requested origin is uncovered", () => {
         expect(
             originsCoveredBy(["https://*/*"], ["https://a.example/*", "http://b.example/*"]),

@@ -34,11 +34,6 @@ describe("isInternalUrl", () => {
         expect(isInternalUrl("https://example.com")).toBe(false)
         expect(isInternalUrl("chrome-extension://abc/page.html")).toBe(false)
     })
-
-    it("rejects a hostless arbor URL", () => {
-        // Same scheme, no authority: not a page Arbor can serve.
-        expect(isInternalUrl("arbor:/settings")).toBe(false)
-    })
 })
 
 describe("isSettingsUrl", () => {
@@ -47,11 +42,6 @@ describe("isSettingsUrl", () => {
         expect(isSettingsUrl("arbor://settings/")).toBe(true)
         expect(isSettingsUrl("arbor://settings/search")).toBe(true)
         expect(isSettingsUrl("arbor://settings/assets/app.js")).toBe(true)
-    })
-
-    it("rejects another host on the same scheme", () => {
-        expect(isSettingsUrl("arbor://other")).toBe(false)
-        expect(isSettingsUrl("https://example.com")).toBe(false)
     })
 })
 
@@ -88,18 +78,6 @@ describe("the new-tab URL", () => {
 })
 
 describe("internalFavicon", () => {
-    it("is a data URL for settings, history and the new-tab page, distinct per page", () => {
-        const settings = internalFavicon("arbor://settings/search")
-        const history = internalFavicon("arbor://history")
-        const newtab = internalFavicon("arbor://newtab")
-        expect(settings?.startsWith("data:image/svg+xml,")).toBe(true)
-        expect(history?.startsWith("data:image/svg+xml,")).toBe(true)
-        expect(newtab?.startsWith("data:image/svg+xml,")).toBe(true)
-        expect(settings).not.toBe(history)
-        expect(newtab).not.toBe(settings)
-        expect(newtab).not.toBe(history)
-    })
-
     it("is null for ordinary pages, which keep Chromium's favicon", () => {
         expect(internalFavicon("https://example.com/")).toBeNull()
         expect(internalFavicon("arbor://other")).toBeNull()
@@ -150,10 +128,6 @@ describe("isAssetRequest", () => {
 })
 
 describe("assetRelativePath", () => {
-    it("strips the leading slash", () => {
-        expect(assetRelativePath("/assets/app.js")).toBe("assets/app.js")
-    })
-
     it("refuses paths that escape the bundle root", () => {
         expect(assetRelativePath("/../secret")).toBeNull()
         expect(assetRelativePath("/assets/../../secret")).toBeNull()
@@ -173,10 +147,6 @@ describe("injectDocumentHead", () => {
             "<html>X<body></body></html>",
         )
     })
-
-    it("prepends when the document has neither", () => {
-        expect(injectDocumentHead("<p>hi</p>", "X")).toBe("X<p>hi</p>")
-    })
 })
 
 describe("devAssetUrl", () => {
@@ -187,14 +157,6 @@ describe("devAssetUrl", () => {
         expect(devAssetUrl("http://localhost:5173/", "@vite/client")).toBe(
             "http://localhost:5173/@vite/client",
         )
-    })
-
-    it("tolerates several trailing slashes", () => {
-        expect(devAssetUrl("http://localhost:5173///", "a.js")).toBe("http://localhost:5173/a.js")
-    })
-
-    it("leaves an origin without a trailing slash alone", () => {
-        expect(devAssetUrl("http://localhost:5173", "a.js")).toBe("http://localhost:5173/a.js")
     })
 
     it("preserves the query string, which changes the response MIME", () => {

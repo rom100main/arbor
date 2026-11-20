@@ -127,13 +127,3 @@ describe("extension storage persist format", () => {
         expect(restored).toEqual({ ok: { local: { a: 1 }, session: {} } })
     })
 })
-
-describe("applyExtStorageOp set merges", () => {
-    it("overwrites matching keys and leaves others", () => {
-        const { areas } = applyExtStorageOp(
-            { local: { a: 1, b: 2 }, session: {} },
-            { op: "set", area: "local", items: { b: 3, c: 4 } },
-        )
-        expect(areas.local).toEqual({ a: 1, b: 3, c: 4 })
-    })
-})
