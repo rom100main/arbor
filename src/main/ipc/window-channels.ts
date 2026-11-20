@@ -7,10 +7,11 @@
 import { Effect, Option } from "effect"
 import { Menu } from "electron"
 
-import { NoActionPopup } from "../../shared/errors"
+import { DefaultBrowserFailed, NoActionPopup } from "../../shared/errors"
 import type { FindStatus, OmniboxActivation, RenameTarget, TabId } from "../../shared/protocol"
 import { DEFAULT_SEARCH_TEMPLATE } from "../../shared/settings"
 import { omniboxTarget } from "../../shared/url"
+import { getDefaultBrowserStatus, setDefaultBrowser } from "../default-browser"
 import type { DownloadsService } from "../downloads/downloads"
 import type { ExtensionsService } from "../extension/extensions"
 import type { PermissionPromptsService } from "../extension/prompts"
@@ -172,6 +173,19 @@ export const windowRequests = (ctx: WindowContext): RequestHandlers<never> => {
 
         getUpdateStatus: () => ctx.updater.status,
         installUpdate: () => ctx.updater.install,
+
+        getDefaultBrowserStatus: () => Effect.sync(getDefaultBrowserStatus),
+        setDefaultBrowser: () =>
+            Effect.gen(function* () {
+                const ok = yield* Effect.sync(setDefaultBrowser)
+                if (!ok) {
+                    return yield* new DefaultBrowserFailed({
+                        message:
+                            "The OS did not make Arbor the default browser. On macOS you may need to confirm in System Settings. On Linux Arbor must be installed with its .desktop file.",
+                    })
+                }
+                return getDefaultBrowserStatus()
+            }),
 
         findSearch: (find) =>
             Effect.gen(function* () {
