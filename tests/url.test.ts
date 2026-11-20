@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test"
 
-import { omniboxTarget, urlDisplayParts } from "../src/shared/url"
+import { displayTabLabel, displayUrl, omniboxTarget, urlDisplayParts } from "../src/shared/url"
 
 describe("omniboxTarget", () => {
     it("passes a scheme through unchanged, including internal pages", () => {
@@ -101,5 +101,39 @@ describe("urlDisplayParts", () => {
         ]) {
             expect(urlDisplayParts(value)).toEqual({ prefix: value, host: "", suffix: "" })
         }
+    })
+})
+
+describe("displayUrl", () => {
+    it("is empty for the new-tab page and legacy blank pages", () => {
+        expect(displayUrl("arbor://newtab")).toBe("")
+        expect(displayUrl("arbor://newtab/")).toBe("")
+        expect(displayUrl("about:blank")).toBe("")
+    })
+
+    it("keeps ordinary and internal page URLs", () => {
+        expect(displayUrl("https://example.com")).toBe("https://example.com")
+        expect(displayUrl("arbor://settings")).toBe("arbor://settings")
+    })
+})
+
+describe("displayTabLabel", () => {
+    it("is 'New tab' for the new-tab page until renamed", () => {
+        expect(displayTabLabel({ url: "arbor://newtab", title: "", userLabel: null })).toBe(
+            "New tab",
+        )
+        expect(displayTabLabel({ url: "about:blank", title: "", userLabel: null })).toBe("New tab")
+        expect(displayTabLabel({ url: "arbor://newtab", title: "", userLabel: "Pinned" })).toBe(
+            "Pinned",
+        )
+    })
+
+    it("falls back to title then URL for ordinary pages", () => {
+        expect(
+            displayTabLabel({ url: "https://example.com", title: "Example", userLabel: null }),
+        ).toBe("Example")
+        expect(displayTabLabel({ url: "https://example.com", title: "", userLabel: null })).toBe(
+            "https://example.com",
+        )
     })
 })

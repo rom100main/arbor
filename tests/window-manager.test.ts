@@ -201,11 +201,33 @@ describe("CurrentWindow", () => {
 })
 
 describe("navigation", () => {
-    it("moving to arbor://settings swaps the view for an internal one, with one load (B3)", () =>
+    it("moving to arbor://settings keeps the internal view, with one load (B3)", () =>
         runTest(
             Effect.gen(function* () {
                 const { host, ipc, store } = yield* startApp
                 const tabId = (yield* activeTab(store))!
+                const calls = host.windows[0].calls
+                calls.length = 0
+
+                ipc.emit(EVENTS.omniboxActivate, { kind: "go", query: "arbor://settings" })
+                yield* settleLong
+
+                // The seeded tab is the new-tab page, already on the internal session,
+                // so settings needs no view swap: the same view just loads the new URL.
+                expect(ops(calls, "close")).toEqual([])
+                expect(ops(calls, "createView")).toEqual([])
+                expect(ops(calls, "load")).toEqual([{ op: "load", tabId, url: "arbor://settings" }])
+                // The tab was already shown, so nothing is re-shown.
+            }),
+        ))
+
+    it("moving an ordinary page to arbor://settings swaps the view for an internal one, with one load (B3)", () =>
+        runTest(
+            Effect.gen(function* () {
+                const { host, ipc, store } = yield* startApp
+                const tabId = yield* store.createTab("https://example.test/")
+                yield* store.selectTab(tabId)
+                yield* settleLong
                 const calls = host.windows[0].calls
                 calls.length = 0
 
@@ -372,8 +394,9 @@ describe("reconciliation", () => {
         runTest(
             Effect.gen(function* () {
                 const { host, store } = yield* startApp
-                const tabId = (yield* activeTab(store))!
-                yield* store.createTab("https://stays.test/")
+                // An ordinary page: the seeded new-tab page is on the internal session
+                // whatever its Container, so it would not swap sessions.
+                const tabId = yield* store.createTab("https://moves.test/")
                 const other = yield* store.createContainer("Other")
                 yield* store.moveToContainer(tabId, other)
                 yield* store.selectTab(tabId)

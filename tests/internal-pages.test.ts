@@ -9,10 +9,11 @@ import {
     isHistoryUrl,
     isInternalPageUrl,
     isInternalUrl,
+    isNewTabUrl,
     isSettingsUrl,
 } from "../src/main/windows/internal-page-urls"
 import { settingsRoute } from "../src/renderer/settings/routes"
-import { HISTORY_URL, SETTINGS_URL } from "../src/shared/settings"
+import { HISTORY_URL, NEW_TAB_URL, SETTINGS_URL } from "../src/shared/settings"
 
 describe("the settings URL", () => {
     // `arbor:/settings` parses as a scheme with an empty authority, so hostname is "" and
@@ -68,13 +69,35 @@ describe("the history URL", () => {
     })
 })
 
+describe("the new-tab URL", () => {
+    it("carries its own host, like settings and history", () => {
+        expect(NEW_TAB_URL).toBe("arbor://newtab")
+        expect(new URL(NEW_TAB_URL).hostname).toBe("newtab")
+        expect(isNewTabUrl("arbor://newtab")).toBe(true)
+        expect(isNewTabUrl("arbor://newtab/")).toBe(true)
+        expect(isNewTabUrl("arbor://settings")).toBe(false)
+        expect(isNewTabUrl("about:blank")).toBe(false)
+        expect(isInternalPageUrl("arbor://newtab")).toBe(true)
+    })
+
+    it("serves as a document, not an asset, at the bare host path", () => {
+        expect(isAssetRequest("")).toBe(false)
+        expect(isAssetRequest("/")).toBe(false)
+        expect(isAssetRequest("/assets/app.js")).toBe(true)
+    })
+})
+
 describe("internalFavicon", () => {
-    it("is a data URL for settings and history, distinct per page", () => {
+    it("is a data URL for settings, history and the new-tab page, distinct per page", () => {
         const settings = internalFavicon("arbor://settings/search")
         const history = internalFavicon("arbor://history")
+        const newtab = internalFavicon("arbor://newtab")
         expect(settings?.startsWith("data:image/svg+xml,")).toBe(true)
         expect(history?.startsWith("data:image/svg+xml,")).toBe(true)
+        expect(newtab?.startsWith("data:image/svg+xml,")).toBe(true)
         expect(settings).not.toBe(history)
+        expect(newtab).not.toBe(settings)
+        expect(newtab).not.toBe(history)
     })
 
     it("is null for ordinary pages, which keep Chromium's favicon", () => {
@@ -86,7 +109,9 @@ describe("internalFavicon", () => {
 
 describe("settingsRoute", () => {
     it("maps known paths to their section", () => {
+        expect(settingsRoute("arbor://settings/general")).toBe("general")
         expect(settingsRoute("arbor://settings/search")).toBe("search")
+        expect(settingsRoute("arbor://settings/newtab")).toBe("newtab")
         expect(settingsRoute("arbor://settings/downloads")).toBe("downloads")
         expect(settingsRoute("arbor://settings/history")).toBe("history")
         expect(settingsRoute("arbor://settings/appearance")).toBe("appearance")

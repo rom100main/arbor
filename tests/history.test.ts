@@ -7,7 +7,7 @@ import { isRecordableUrl, stripFragment } from "../src/main/history/record"
 import { History } from "../src/main/history/service"
 import { SettingsStore } from "../src/main/settings"
 import { scoreHistoryEntry } from "../src/renderer/omnibox/scoring"
-import { computeSuggestions } from "../src/renderer/omnibox/suggestions"
+import { computeSuggestions, moveSuggestionSelection } from "../src/renderer/omnibox/suggestions"
 import type { ContainerId, HistoryEntry, TabId } from "../src/shared/protocol"
 import { runTest, settle } from "./support/effect"
 import { files } from "./support/memory-fs"
@@ -308,5 +308,25 @@ describe("omnibox history suggestions", () => {
         )
         expect(suggestions.some((s) => s.kind === "history")).toBe(false)
         expect(suggestions.some((s) => s.kind === "tab")).toBe(true)
+    })
+})
+
+describe("moveSuggestionSelection", () => {
+    it("moves plainly inside the list", () => {
+        expect(moveSuggestionSelection(1, 1, 4)).toBe(2)
+        expect(moveSuggestionSelection(2, -1, 4)).toBe(1)
+    })
+
+    it("wraps down from the last item to the first", () => {
+        expect(moveSuggestionSelection(3, 1, 4)).toBe(0)
+    })
+
+    it("wraps up from the first item to the last", () => {
+        expect(moveSuggestionSelection(0, -1, 4)).toBe(3)
+    })
+
+    it("stays put for an empty list", () => {
+        expect(moveSuggestionSelection(0, 1, 0)).toBe(0)
+        expect(moveSuggestionSelection(0, -1, 0)).toBe(0)
     })
 })

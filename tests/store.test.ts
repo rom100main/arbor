@@ -117,6 +117,22 @@ describe("store transitions", () => {
             }),
         ))
 
+    it("opens a bare new tab on the new-tab page, titled 'New tab'", () =>
+        scopedTest(
+            Effect.gen(function* () {
+                const store = yield* makeStore()
+                yield* store.createContainer()
+                const seeded = (yield* store.snapshot).tabs[0]
+                expect(seeded.url).toBe("arbor://newtab")
+                expect(seeded.title).toBe("New tab")
+
+                const tabId = yield* store.createTab()
+                const created = (yield* store.state).tabs.get(tabId)!
+                expect(created.url).toBe("arbor://newtab")
+                expect(created.title).toBe("New tab")
+            }),
+        ))
+
     it("stamps lastActiveAt with the clock's time", () =>
         scopedTest(
             Effect.gen(function* () {
