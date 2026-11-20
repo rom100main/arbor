@@ -1,6 +1,7 @@
 import { Show } from "solid-js"
 
 import type { DisplayTab } from "../../../shared/protocol"
+import { displayTabLabel } from "../../../shared/url"
 import { Favicon } from "../../ui/Favicon"
 import { Icon } from "../../ui/Icon"
 import { useSnapshot } from "../snapshot"
@@ -28,7 +29,7 @@ export const TabRow = (props: {
     onFocus: () => void
 }) => {
     const snapshot = useSnapshot()
-    const label = () => props.tab.userLabel || props.tab.title || props.tab.url
+    const label = () => displayTabLabel(props.tab)
     // The last tab of the last container cannot be closed (domain guard).
     const closeProtected = () => {
         const snap = snapshot()

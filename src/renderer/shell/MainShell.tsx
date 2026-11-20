@@ -11,6 +11,7 @@ import {
     TITLEBAR_HEIGHT,
     TOOLBAR_HEIGHT,
 } from "../../shared/settings"
+import { displayUrl } from "../../shared/url"
 import { Icon } from "../ui/Icon"
 import { ConfirmCloseContainer } from "./ConfirmCloseContainer"
 import { requestTabTreeFocus } from "./focus"
@@ -33,7 +34,8 @@ export const MainShell = () => {
     const activeTabId = () => snapshot()?.activeTabId ?? null
     const activeTabUrl = () => {
         const snap = snapshot()
-        return snap?.tabs.find((t) => t.id === snap.activeTabId)?.url ?? ""
+        const url = snap?.tabs.find((t) => t.id === snap.activeTabId)?.url ?? ""
+        return displayUrl(url)
     }
 
     // --- fullscreen: both bars are hidden, whatever the settings say
