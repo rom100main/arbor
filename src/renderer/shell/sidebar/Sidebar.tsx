@@ -251,6 +251,19 @@ const TabPage = (props: {
             }
             const focused = focusedId()
             if (focused !== null && !visible.has(focused)) {
+                const snap = snapshot()
+                const focusedTab = snap?.tabs.find((tab) => tab.id === focused)
+                if (focusedTab) {
+                    const byId = new Map(snap!.tabs.map((tab) => [tab.id, tab]))
+                    let ancestor = focusedTab.parentId ? byId.get(focusedTab.parentId) : undefined
+                    while (ancestor && !visible.has(ancestor.id)) {
+                        ancestor = ancestor.parentId ? byId.get(ancestor.parentId) : undefined
+                    }
+                    if (ancestor) {
+                        focusRow(ancestor.id)
+                        return
+                    }
+                }
                 focusActive()
                 if (snapshot()?.activeTabId === null) setFocusedId(null)
             }

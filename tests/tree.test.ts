@@ -294,6 +294,74 @@ describe("close semantics", () => {
     })
 })
 
+describe("ancestor of the active tab", () => {
+    // Root A with a sibling root S, A → B (active) → C.
+    const build = () => {
+        let state = ok(createContainer(initialState(), newContainer()))
+        const a = state.containers[0].activeTabId!
+        state = ok(createTab(state, newTab()))
+        const s = state.containers[0].activeTabId!
+        state = ok(selectTab(state, a, 0))
+        const b = nextTabId()
+        state = ok(createChildTab(state, a, newChild({ id: b })))
+        const c = nextTabId()
+        state = ok(createChildTab(state, b, newChild({ id: c })))
+        return { state, a, b, c, s }
+    }
+
+    it("collapsing an ancestor of the active tab keeps it active and hides its row", () => {
+        const { state, a, b, c, s } = build()
+        const containerId = state.containers[0].id
+        expect(state.containers[0].activeTabId).toBe(c)
+        const collapsed = ok(setCollapsed(state, a, true))
+        expect(collapsed.containers[0].activeTabId).toBe(c)
+        expect(collapsed.tabs.get(a)!.collapsed).toBe(true)
+        // The active subtree is pruned, the sibling root stays visible.
+        expect(displayTabs([...collapsed.tabs.values()], containerId).map((t) => t.id)).toEqual([
+            a,
+            s,
+        ])
+        expect(
+            displayTabs([...collapsed.tabs.values()], containerId).map((t) => t.id),
+        ).not.toContain(b)
+        expect(
+            displayTabs([...collapsed.tabs.values()], containerId).map((t) => t.id),
+        ).not.toContain(c)
+    })
+
+    it("closing a collapsed ancestor removes the active subtree and activates a fallback", () => {
+        const { state, a, b, c, s } = build()
+        let collapsed = ok(setCollapsed(state, a, true))
+        collapsed = ok(closeTab(collapsed, a, 0))
+        expect(collapsed.tabs.has(a)).toBe(false)
+        expect(collapsed.tabs.has(b)).toBe(false)
+        expect(collapsed.tabs.has(c)).toBe(false)
+        expect(collapsed.tabs.has(s)).toBe(true)
+        expect(collapsed.containers[0].activeTabId).toBe(s)
+    })
+
+    it("closing an expanded ancestor promotes the active child instead of closing it", () => {
+        let state = ok(createContainer(initialState(), newContainer()))
+        const a = state.containers[0].activeTabId!
+        const b = nextTabId()
+        state = ok(createChildTab(state, a, newChild({ id: b })))
+        expect(state.containers[0].activeTabId).toBe(b)
+        const closed = ok(closeTab(state, a, 0))
+        expect(closed.tabs.has(a)).toBe(false)
+        expect(closed.tabs.get(b)!.parentId).toBeNull()
+        expect(closed.containers[0].activeTabId).toBe(b)
+    })
+
+    it("a collapsed ancestor holding the active tab asks before emptying its container", () => {
+        const { state, a, s } = build()
+        let withSecond = ok(createContainer(state, newContainer()))
+        // Close the sibling root, leaving the A subtree alone in its container.
+        withSecond = ok(closeTab(withSecond, s, 0))
+        withSecond = ok(setCollapsed(withSecond, a, true))
+        expect(closeEmptiesContainer(withSecond, a)).toBe(true)
+    })
+})
+
 describe("moves", () => {
     it("reorders tabs between parents", () => {
         let state = ok(createContainer(initialState(), newContainer()))
