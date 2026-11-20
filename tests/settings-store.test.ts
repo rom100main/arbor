@@ -101,6 +101,10 @@ describe("fromPersistedSettings", () => {
             historyRetention: DEFAULT_SETTINGS.historyRetention,
             adblockEnabled: DEFAULT_SETTINGS.adblockEnabled,
             adblockDisabledSites: DEFAULT_SETTINGS.adblockDisabledSites,
+            newTabBackgroundKind: DEFAULT_SETTINGS.newTabBackgroundKind,
+            newTabBackgroundColor: DEFAULT_SETTINGS.newTabBackgroundColor,
+            newTabBackgroundImage: DEFAULT_SETTINGS.newTabBackgroundImage,
+            newTabShowSearchBar: DEFAULT_SETTINGS.newTabShowSearchBar,
         })
     })
 })
@@ -134,6 +138,10 @@ describe("settings store", () => {
                     historyRetention: DEFAULT_SETTINGS.historyRetention,
                     adblockEnabled: DEFAULT_SETTINGS.adblockEnabled,
                     adblockDisabledSites: DEFAULT_SETTINGS.adblockDisabledSites,
+                    newTabBackgroundKind: DEFAULT_SETTINGS.newTabBackgroundKind,
+                    newTabBackgroundColor: DEFAULT_SETTINGS.newTabBackgroundColor,
+                    newTabBackgroundImage: DEFAULT_SETTINGS.newTabBackgroundImage,
+                    newTabShowSearchBar: DEFAULT_SETTINGS.newTabShowSearchBar,
                 })
 
                 const reloaded = yield* (yield* open()).store.get
@@ -238,6 +246,52 @@ describe("settings store", () => {
                 yield* store.set({ theme: "light" })
                 yield* settle
                 expect(seen.map((settings) => settings.theme)).toEqual(["dark", "light"])
+            }),
+        ))
+
+    it("persists the new-tab page, normalising the color", () =>
+        runTest(
+            Effect.gen(function* () {
+                const first = yield* open()
+                yield* first.store.set({
+                    newTabBackgroundKind: "image",
+                    newTabBackgroundColor: "#FF00AA",
+                    newTabBackgroundImage: "data:image/jpeg;base64,AAAA",
+                    newTabShowSearchBar: false,
+                })
+                yield* Scope.close(first.scope, Exit.void)
+                expect(onDisk()).toMatchObject({
+                    newTabBackgroundKind: "image",
+                    newTabBackgroundColor: "#ff00aa",
+                    newTabBackgroundImage: "data:image/jpeg;base64,AAAA",
+                    newTabShowSearchBar: false,
+                })
+
+                const reloaded = yield* (yield* open()).store.get
+                expect(reloaded.newTabBackgroundKind).toBe("image")
+                expect(reloaded.newTabBackgroundColor).toBe("#ff00aa")
+                expect(reloaded.newTabBackgroundImage).toBe("data:image/jpeg;base64,AAAA")
+                expect(reloaded.newTabShowSearchBar).toBe(false)
+            }),
+        ))
+
+    it("rejects a bad new-tab color and image, and repairs a bad file", () =>
+        runTest(
+            Effect.gen(function* () {
+                const { store } = yield* open()
+                const badColor = yield* Effect.flip(store.set({ newTabBackgroundColor: "red" }))
+                expect(badColor).toBeInstanceOf(SettingsRejected)
+                const badImage = yield* Effect.flip(
+                    store.set({ newTabBackgroundImage: "https://example.com/bg.png" }),
+                )
+                expect(badImage).toBeInstanceOf(SettingsRejected)
+
+                const repaired = fromPersistedSettings({
+                    newTabBackgroundColor: "red",
+                    newTabBackgroundImage: "https://example.com/bg.png",
+                })
+                expect(repaired?.newTabBackgroundColor).toBe(DEFAULT_SETTINGS.newTabBackgroundColor)
+                expect(repaired?.newTabBackgroundImage).toBeNull()
             }),
         ))
 

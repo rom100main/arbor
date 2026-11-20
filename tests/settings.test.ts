@@ -4,6 +4,10 @@ import { SEARCH_ENGINES } from "../src/renderer/settings/search-engines"
 import {
     chromeInsets,
     effectiveVisibilities,
+    isNewTabImageDataUrl,
+    isNewTabUrl,
+    MAX_NEW_TAB_IMAGE_CHARS,
+    normalizeNewTabColor,
     normalizeSearchTemplate,
     searchUrl,
 } from "../src/shared/settings"
@@ -96,5 +100,35 @@ describe("searchUrl", () => {
 
     it("returns null when there is no token to substitute", () => {
         expect(searchUrl("https://duckduckgo.com/", "hi")).toBeNull()
+    })
+})
+
+describe("the new-tab page", () => {
+    it("recognises the new-tab URL only", () => {
+        expect(isNewTabUrl("arbor://newtab")).toBe(true)
+        expect(isNewTabUrl("arbor://newtab/")).toBe(true)
+        expect(isNewTabUrl("arbor://settings")).toBe(false)
+        expect(isNewTabUrl("about:blank")).toBe(false)
+        expect(isNewTabUrl("https://example.com")).toBe(false)
+    })
+
+    it("normalises a #rrggbb color and rejects anything else", () => {
+        expect(normalizeNewTabColor("#FF8800")).toBe("#ff8800")
+        expect(normalizeNewTabColor("  #123abc ")).toBe("#123abc")
+        expect(normalizeNewTabColor("red")).toBeNull()
+        expect(normalizeNewTabColor("#fff")).toBeNull()
+        expect(normalizeNewTabColor("#12345")).toBeNull()
+        expect(normalizeNewTabColor("")).toBeNull()
+    })
+
+    it("accepts only bounded image data URLs", () => {
+        expect(isNewTabImageDataUrl("data:image/jpeg;base64,AAAA")).toBe(true)
+        expect(isNewTabImageDataUrl("data:image/png;base64,BBBB")).toBe(true)
+        expect(isNewTabImageDataUrl(null)).toBe(false)
+        expect(isNewTabImageDataUrl("https://example.com/bg.png")).toBe(false)
+        expect(isNewTabImageDataUrl("data:image/jpeg,not-base64")).toBe(false)
+        expect(
+            isNewTabImageDataUrl(`data:image/jpeg;base64,${"A".repeat(MAX_NEW_TAB_IMAGE_CHARS)}`),
+        ).toBe(false)
     })
 })
