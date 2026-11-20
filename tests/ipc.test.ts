@@ -69,6 +69,8 @@ const handlersFor = (store: StoreService): RequestHandlers<never> => ({
     historyClearAll: () => Effect.void,
     getUpdateStatus: () => Effect.succeed({ kind: "idle" }),
     installUpdate: () => Effect.void,
+    getDefaultBrowserStatus: () => Effect.succeed({ isDefault: false, platform: "linux" }),
+    setDefaultBrowser: () => Effect.succeed({ isDefault: true, platform: "linux" }),
     findSearch: () => Effect.succeed({ total: 0, activeIndex: -1, error: null }),
     findStep: () => Effect.succeed({ total: 0, activeIndex: -1, error: null }),
 })
