@@ -1,6 +1,6 @@
 // Should be Effect free
 
-import { DEFAULT_SEARCH_TEMPLATE, searchUrl } from "./settings"
+import { DEFAULT_SEARCH_TEMPLATE, isNewTabUrl, NEW_TAB_TITLE, searchUrl } from "./settings"
 
 export type UrlDisplayParts = {
     /** Everything before the host: scheme, userinfo. Greyed. */
@@ -73,6 +73,22 @@ export const urlDisplayParts = (value: string): UrlDisplayParts => {
         host,
         suffix: value.slice(hostStart + host.length),
     }
+}
+
+/** What the URL bar shows for a page: the new-tab page (and legacy blank pages) show nothing. */
+export const displayUrl = (url: string): string =>
+    isNewTabUrl(url) || url === "about:blank" ? "" : url
+
+/** What the sidebar shows for a tab: the new-tab page always reads `New tab` until renamed. */
+export const displayTabLabel = (
+    tab: Pick<
+        { url: string; title: string; userLabel: string | null },
+        "url" | "title" | "userLabel"
+    >,
+): string => {
+    if (tab.userLabel) return tab.userLabel
+    if (isNewTabUrl(tab.url) || tab.url === "about:blank") return NEW_TAB_TITLE
+    return tab.title || tab.url
 }
 
 /**
