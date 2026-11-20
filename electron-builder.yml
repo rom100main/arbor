@@ -1,5 +1,10 @@
 appId: dev.arbor.app
 productName: Arbor
+protocols:
+    - name: HTTP and HTTPS
+      schemes:
+          - http
+          - https
 directories:
     output: release
 files:

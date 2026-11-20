@@ -1,6 +1,7 @@
 {
     "name": "arbor",
     "productName": "Arbor",
+    "desktopName": "dev.arbor.app",
     "private": true,
     "version": "0.4.0",
     "description": "A desktop browser that keeps tabs as trees.",
