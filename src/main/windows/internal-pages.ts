@@ -4,7 +4,13 @@ import { pathToFileURL } from "node:url"
 import { Effect } from "effect"
 import { net, protocol, session, type Session } from "electron"
 
-import { HISTORY_URL, INTERNAL_SCHEME, SETTINGS_URL } from "../../shared/settings"
+import {
+    HISTORY_URL,
+    INTERNAL_SCHEME,
+    NEW_TAB_TITLE,
+    NEW_TAB_URL,
+    SETTINGS_URL,
+} from "../../shared/settings"
 import { AppRuntime } from "../runtime"
 import {
     assetRelativePath,
@@ -15,6 +21,7 @@ import {
     isHistoryUrl,
     isInternalPageUrl,
     isInternalUrl,
+    isNewTabUrl,
 } from "./internal-page-urls"
 import { preloadPath, rendererPath } from "./paths"
 
@@ -51,13 +58,25 @@ const clientDir = (): string => path.dirname(rendererPath)
  */
 const headExtras = (url: string): string => {
     const favicon = internalFavicon(url) ?? ""
-    return isHistoryUrl(url)
-        ? `<base href="${HISTORY_URL}/">` +
-              `<title>History</title>` +
-              `<link rel="icon" href="${favicon}">`
-        : `<base href="${SETTINGS_URL}/">` +
-              `<title>Settings</title>` +
-              `<link rel="icon" href="${favicon}">`
+    if (isHistoryUrl(url)) {
+        return (
+            `<base href="${HISTORY_URL}/">` +
+            `<title>History</title>` +
+            `<link rel="icon" href="${favicon}">`
+        )
+    }
+    if (isNewTabUrl(url)) {
+        return (
+            `<base href="${NEW_TAB_URL}/">` +
+            `<title>${NEW_TAB_TITLE}</title>` +
+            `<link rel="icon" href="${favicon}">`
+        )
+    }
+    return (
+        `<base href="${SETTINGS_URL}/">` +
+        `<title>Settings</title>` +
+        `<link rel="icon" href="${favicon}">`
+    )
 }
 
 const serveDocument = async (requestUrl: string): Promise<Response> => {

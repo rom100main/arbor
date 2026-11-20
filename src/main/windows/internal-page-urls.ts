@@ -1,19 +1,22 @@
 import historyGlyph from "@tabler/icons/outline/history.svg?raw"
+import homeGlyph from "@tabler/icons/outline/home.svg?raw"
 import settingsGlyph from "@tabler/icons/outline/settings.svg?raw"
 
-import { INTERNAL_SCHEME } from "../../shared/settings"
+import { INTERNAL_SCHEME, isNewTabUrl } from "../../shared/settings"
 
 /**
  * URL helpers for the pages Arbor serves itself over `arbor://`.
  * The route names match `renderer/settings/routes.ts`, which parses the same URLs.
  */
 const SETTINGS_DOCUMENT_PATHS = new Set([
+    "",
     "/",
     "/search",
     "/downloads",
     "/history",
     "/extensions",
     "/appearance",
+    "/newtab",
 ])
 
 export const isInternalUrl = (url: string): boolean => url.startsWith(`${INTERNAL_SCHEME}://`)
@@ -36,8 +39,11 @@ export const isHistoryUrl = (url: string): boolean => {
     }
 }
 
-/** Any `arbor://` page Arbor serves itself (settings or history). */
-export const isInternalPageUrl = (url: string): boolean => isSettingsUrl(url) || isHistoryUrl(url)
+export { isNewTabUrl }
+
+/** Any `arbor://` page Arbor serves itself (settings, history or the new-tab page). */
+export const isInternalPageUrl = (url: string): boolean =>
+    isSettingsUrl(url) || isHistoryUrl(url) || isNewTabUrl(url)
 
 /**
  * The `data:` favicon the served document declares for an internal page.
@@ -55,7 +61,13 @@ const faviconGlyph = (raw: string): string =>
         .replace("currentColor", FAVICON_COLOR)
 
 export const internalFavicon = (url: string): string | null => {
-    const raw = isHistoryUrl(url) ? historyGlyph : isSettingsUrl(url) ? settingsGlyph : null
+    const raw = isNewTabUrl(url)
+        ? homeGlyph
+        : isHistoryUrl(url)
+          ? historyGlyph
+          : isSettingsUrl(url)
+            ? settingsGlyph
+            : null
     return raw === null ? null : `data:image/svg+xml,${encodeURIComponent(faviconGlyph(raw))}`
 }
 

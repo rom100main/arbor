@@ -6,7 +6,7 @@
 import { Predicate } from "effect"
 import { BrowserWindow, type BrowserWindowConstructorOptions } from "electron"
 
-import type { Anchor, Rect, RenameTarget } from "../../shared/protocol"
+import type { Anchor, RenameTarget } from "../../shared/protocol"
 import type { Pusher } from "../ipc/router"
 import { loadRenderer, preloadPath } from "./paths"
 
@@ -97,7 +97,7 @@ export interface Overlays {
     readonly toggleActionPopup: (options: {
         readonly extensionId: string
         readonly popupUrl: string
-        readonly anchor: Rect | null
+        readonly anchor: Anchor | null
         readonly session: Electron.Session
         readonly onWindowOpen: (url: string) => void
     }) => void
@@ -151,7 +151,12 @@ export const createOverlays = (win: BrowserWindow, ipc: Pusher): Overlays => {
         const bounds = win.getContentBounds()
         omnibox.setBounds({
             x: Math.round(bounds.x + omniboxAnchor.x),
-            y: Math.round(bounds.y + omniboxAnchor.y - omniboxHeight - POPUP_GAP),
+            y: Math.round(
+                bounds.y +
+                    (omniboxAnchor.below
+                        ? omniboxAnchor.y + (omniboxAnchor.height ?? 0) + POPUP_GAP
+                        : omniboxAnchor.y - omniboxHeight - POPUP_GAP),
+            ),
             width: Math.round(omniboxAnchor.width),
             height: Math.round(omniboxHeight),
         })
@@ -295,7 +300,7 @@ export const createOverlays = (win: BrowserWindow, ipc: Pusher): Overlays => {
 
     // --- extension action popups
 
-    const actionAnchors = new Map<string, Rect>()
+    const actionAnchors = new Map<string, Anchor>()
 
     const anchorAbove = (
         rect: Electron.Rectangle,

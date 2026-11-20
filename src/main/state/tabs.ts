@@ -2,6 +2,7 @@ import { Result } from "effect"
 
 import { NoContainer } from "../../shared/errors"
 import type { ContainerId, TabId, TabNode } from "../../shared/protocol"
+import { NEW_TAB_TITLE, NEW_TAB_URL } from "../../shared/settings"
 import { displayTabs } from "../../shared/tree-display"
 import {
     childrenOf,
@@ -46,13 +47,14 @@ export const createTab = (state: DomainState, options: CreateTabOptions) =>
         const anchor =
             container.activeTabId !== null ? state.tabs.get(container.activeTabId) : undefined
 
+        const url = options.url ?? NEW_TAB_URL
         const base: TabNode = {
             id,
             containerId,
             parentId: null,
             order: 0,
-            url: options.url ?? "about:blank",
-            title: "",
+            url,
+            title: url === NEW_TAB_URL ? NEW_TAB_TITLE : "",
             collapsed: false,
             userLabel: null,
             favicon: null,
@@ -92,13 +94,14 @@ export const createChildTab = (
 ) =>
     Result.gen(function* () {
         const parent = yield* tabOf(state, parentTabId)
+        const url = options.url ?? NEW_TAB_URL
         const tab: TabNode = {
             id: options.id,
             containerId: parent.containerId,
             parentId: parent.id,
             order: 0,
-            url: options.url ?? "about:blank",
-            title: "",
+            url,
+            title: url === NEW_TAB_URL ? NEW_TAB_TITLE : "",
             collapsed: false,
             userLabel: null,
             favicon: null,
