@@ -3,7 +3,7 @@
 import { Schema, type Effect, type Scope, type Stream } from "effect"
 import type { BrowserWindow, WebContents } from "electron"
 
-import type { ContainerId, TabId } from "../../shared/protocol"
+import type { ContainerId, NavigationState, TabId } from "../../shared/protocol"
 import { isInternalUrl } from "./internal-page-urls"
 import type { Overlays } from "./overlays"
 
@@ -53,6 +53,13 @@ export type ViewEvent =
 
 export type HistoryStep = "back" | "forward" | "reload"
 
+/** Back/forward availability read off a tab's live page. */
+export const navAvailability = (view: ViewHandle | undefined): NavigationState => {
+    if (!view || view.webContents.isDestroyed()) return { canGoBack: false, canGoForward: false }
+    const history = view.webContents.navigationHistory
+    return { canGoBack: history.canGoBack(), canGoForward: history.canGoForward() }
+}
+
 export interface WindowHandle {
     readonly native: BrowserWindow
     /** The popups and the rename modal over this window. They close with it. */
@@ -83,6 +90,8 @@ export interface MenuModel {
     readonly containerNames: ReadonlyArray<string>
     readonly canCloseTab: boolean
     readonly canReopenTab: boolean
+    readonly canGoBack: boolean
+    readonly canGoForward: boolean
 }
 
 export type MenuAction =

@@ -237,7 +237,10 @@ export const MainShell = () => {
                 onFocusIn={onToolbarFocusIn}
                 onFocusOut={onToolbarFocusOut}
             >
-                <NavButtons tabId={activeTabId()} />
+                <NavButtons
+                    tabId={activeTabId()}
+                    navigation={snapshot()?.navigation ?? { canGoBack: false, canGoForward: false }}
+                />
                 <OmniboxInput tabId={activeTabId()} url={activeTabUrl()} />
                 <PinnedActions />
                 <UpdateButton />

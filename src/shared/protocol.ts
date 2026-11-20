@@ -99,11 +99,20 @@ export const ExtensionMenuRequest = Schema.Struct({
 })
 export type ExtensionMenuRequest = typeof ExtensionMenuRequest.Type
 
+/** Whether the active tab's page can step back or forward in its own history. */
+export const NavigationState = Schema.Struct({
+    canGoBack: Schema.Boolean,
+    canGoForward: Schema.Boolean,
+})
+export type NavigationState = typeof NavigationState.Type
+
 export const BrowserSnapshot = Schema.Struct({
     containers: Schema.Array(ContainerMeta),
     tabs: Schema.Array(TabNode),
     activeContainerId: Schema.NullOr(ContainerId),
     activeTabId: Schema.NullOr(TabId),
+    /** Back/forward availability of the active tab's live page, if it has one. */
+    navigation: NavigationState,
 })
 export type BrowserSnapshot = typeof BrowserSnapshot.Type
 

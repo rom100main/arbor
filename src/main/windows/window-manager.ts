@@ -26,6 +26,7 @@ import { CurrentWindow } from "./current-window"
 import { makeWindowHost } from "./electron-host"
 import { runFindClear } from "./find-in-page"
 import {
+    navAvailability,
     sameSessionKey,
     sessionKeyFor,
     type HistoryStep,
@@ -142,9 +143,9 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                             if (shown === tabId) shown = null
                             yield* handle.close(view)
                         }
-                        const next = snapshot(state)
-                        const active = next.activeTabId
-                            ? state.tabs.get(next.activeTabId)
+                        const snap = snapshot(state)
+                        const active = snap.activeTabId
+                            ? state.tabs.get(snap.activeTabId)
                             : undefined
                         if (active && !active.hibernated && shown !== active.id) {
                             // Leaving a tab clears its find highlights and closes the bar.
@@ -158,6 +159,14 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                             yield* handle.show(yield* viewFor(active))
                             shown = active.id
                         }
+                        // Read after (possibly) creating the active view,
+                        // so the toolbar greys Back/Forward from the page actually shown.
+                        const next = snapshot(
+                            state,
+                            navAvailability(
+                                snap.activeTabId !== null ? views.get(snap.activeTabId) : undefined,
+                            ),
+                        )
                         yield* pushes.push("state", next)
                     }).pipe(Semaphore.withPermit(lock))
 
@@ -303,7 +312,18 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
 
                 /** Rebuilt only when what it shows changes: not on every title or favicon update. */
                 const menu = store.changes.pipe(
-                    Stream.map(menuModel),
+                    Stream.map((state) => {
+                        const model = menuModel(state)
+                        const { activeTabId } = snapshot(state)
+                        const nav = navAvailability(
+                            activeTabId !== null ? views.get(activeTabId) : undefined,
+                        )
+                        return {
+                            ...model,
+                            canGoBack: nav.canGoBack,
+                            canGoForward: nav.canGoForward,
+                        }
+                    }),
                     Stream.changesWith(sameMenuModel),
                     Stream.runForEach((model) =>
                         host.setMenu(model, (action) => {

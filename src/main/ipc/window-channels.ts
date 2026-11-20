@@ -23,7 +23,12 @@ import type { StoreService } from "../state/store"
 import type { UpdaterService } from "../update/updater"
 import { sessionForContainer } from "../windows/electron-host"
 import { runFindClear, runFindSearch, runFindStep } from "../windows/find-in-page"
-import type { HistoryStep, ViewHandle, WindowHandle } from "../windows/host"
+import {
+    navAvailability,
+    type HistoryStep,
+    type ViewHandle,
+    type WindowHandle,
+} from "../windows/host"
 import type { Overlays } from "../windows/overlays"
 import type { EventHandlers, IpcPushService, RequestHandlers } from "./router"
 
@@ -104,7 +109,19 @@ export const windowRequests = (ctx: WindowContext): RequestHandlers<never> => {
             yield* store.closeTab(tabId)
         })
     return {
-        getSnapshot: () => store.snapshot,
+        // The store's snapshot cannot see live pages: enrich it with the active tab's history,
+        // so a shell loading late still greys Back/Forward correctly.
+        getSnapshot: () =>
+            Effect.gen(function* () {
+                const state = yield* store.state
+                const snap = snapshot(state)
+                return snapshot(
+                    state,
+                    navAvailability(
+                        snap.activeTabId !== null ? ctx.viewOf(snap.activeTabId) : undefined,
+                    ),
+                )
+            }),
         getSettings: () => settings.get,
         setSettings: (patch) => settings.set(patch),
 

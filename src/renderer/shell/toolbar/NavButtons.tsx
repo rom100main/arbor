@@ -1,9 +1,9 @@
-import type { TabId } from "../../../shared/protocol"
+import type { NavigationState, TabId } from "../../../shared/protocol"
 import { Icon } from "../../ui/Icon"
 
 import "./NavButtons.css"
 
-export const NavButtons = (props: { tabId: TabId | null }) => {
+export const NavButtons = (props: { tabId: TabId | null; navigation: NavigationState }) => {
     // Middle click, and Cmd/Ctrl+click, open the destination in a background tab.
     const step =
         (direction: "goBack" | "goForward") =>
@@ -29,7 +29,7 @@ export const NavButtons = (props: { tabId: TabId | null }) => {
             <button
                 type="button"
                 aria-label="Back"
-                disabled={props.tabId === null}
+                disabled={props.tabId === null || !props.navigation.canGoBack}
                 onClick={step("goBack")}
                 onAuxClick={openInBackground("goBack")}
             >
@@ -38,7 +38,7 @@ export const NavButtons = (props: { tabId: TabId | null }) => {
             <button
                 type="button"
                 aria-label="Forward"
-                disabled={props.tabId === null}
+                disabled={props.tabId === null || !props.navigation.canGoForward}
                 onClick={step("goForward")}
                 onAuxClick={openInBackground("goForward")}
             >

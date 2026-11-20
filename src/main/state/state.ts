@@ -7,6 +7,7 @@ import type {
     ContainerId,
     ContainerMeta,
     ExtensionGrant,
+    NavigationState,
     TabId,
     TabNode,
 } from "../../shared/protocol"
@@ -109,7 +110,12 @@ export const subtreeOf = (state: DomainState, root: TabNode): TabNode[] => [
 
 // --- derived
 
-export const snapshot = (state: DomainState): BrowserSnapshot => {
+export const NO_NAVIGATION: NavigationState = { canGoBack: false, canGoForward: false }
+
+export const snapshot = (
+    state: DomainState,
+    navigation: NavigationState = NO_NAVIGATION,
+): BrowserSnapshot => {
     const active = state.activeContainerId
         ? state.containers.find((c) => c.id === state.activeContainerId)
         : undefined
@@ -118,5 +124,6 @@ export const snapshot = (state: DomainState): BrowserSnapshot => {
         tabs: [...state.tabs.values()],
         activeContainerId: state.activeContainerId,
         activeTabId: active?.activeTabId ?? null,
+        navigation,
     }
 }

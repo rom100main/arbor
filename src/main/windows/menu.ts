@@ -8,11 +8,15 @@ export const menuModel = (state: DomainState): MenuModel => ({
     // The last tab of the last container cannot close.
     canCloseTab: !(state.containers.length === 1 && state.tabs.size === 1),
     canReopenTab: state.closeHistory.length > 0,
+    canGoBack: false,
+    canGoForward: false,
 })
 
 export const sameMenuModel = (a: MenuModel, b: MenuModel): boolean =>
     a.canCloseTab === b.canCloseTab &&
     a.canReopenTab === b.canReopenTab &&
+    a.canGoBack === b.canGoBack &&
+    a.canGoForward === b.canGoForward &&
     a.containerNames.length === b.containerNames.length &&
     a.containerNames.every((name, index) => name === b.containerNames[index])
 
@@ -75,8 +79,13 @@ export const menuTemplate = (
         {
             label: "History",
             submenu: [
-                item("Back", "CmdOrCtrl+[", { kind: "history", step: "back" }),
-                item("Forward", "CmdOrCtrl+]", { kind: "history", step: "forward" }),
+                item("Back", "CmdOrCtrl+[", { kind: "history", step: "back" }, model.canGoBack),
+                item(
+                    "Forward",
+                    "CmdOrCtrl+]",
+                    { kind: "history", step: "forward" },
+                    model.canGoForward,
+                ),
             ],
         },
         { role: "windowMenu" },

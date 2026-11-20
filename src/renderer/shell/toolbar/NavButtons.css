@@ -9,9 +9,15 @@
         width: 28px;
         height: 28px;
         padding: 0;
+        color: var(--color-text);
         cursor: pointer;
         background: transparent;
         border: none;
         border-radius: var(--radius-md);
+
+        &:disabled {
+            color: var(--color-text-faintest);
+            cursor: default;
+        }
     }
 }
