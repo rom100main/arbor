@@ -336,3 +336,29 @@
         white-space: nowrap;
     }
 }
+
+.settings-color-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    max-width: 512px;
+
+    input[type="color"] {
+        width: 56px;
+        height: 36px;
+        padding: 0;
+        cursor: pointer;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+    }
+}
+
+.settings-image-preview {
+    display: block;
+    width: min(512px, 100%);
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+}

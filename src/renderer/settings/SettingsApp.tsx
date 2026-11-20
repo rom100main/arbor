@@ -3,11 +3,13 @@ import { For, Match, Show, Switch, createEffect, createMemo, createSignal, untra
 import {
     HISTORY_RETENTIONS,
     HISTORY_URL,
+    NEW_TAB_BACKGROUND_KINDS,
     SETTINGS_URL,
     SIDEBAR_VISIBILITIES,
     THEMES,
     URL_BAR_VISIBILITIES,
     type HistoryRetention,
+    type NewTabBackgroundKind,
     type SidebarVisibility,
     type Theme,
     type UrlBarVisibility,
@@ -20,7 +22,9 @@ import { SEARCH_ENGINES } from "./search-engines"
 import "./SettingsApp.css"
 
 const NAV: { route: SettingsRoute; label: string; icon: IconName }[] = [
+    { route: "general", label: "General", icon: "device-desktop" },
     { route: "search", label: "Search", icon: "search" },
+    { route: "newtab", label: "New Tab", icon: "home" },
     { route: "downloads", label: "Downloads", icon: "download" },
     { route: "history", label: "History", icon: "history" },
     { route: "adblocking", label: "Ad blocking", icon: "shield" },
@@ -163,6 +167,12 @@ export const SettingsApp = () => {
             </nav>
             <main class="settings-content">
                 <Switch>
+                    <Match when={route() === "general"}>
+                        <GeneralSection />
+                    </Match>
+                    <Match when={route() === "newtab"}>
+                        <NewTabSection />
+                    </Match>
                     <Match when={route() === "search"}>
                         <SearchSection />
                     </Match>
@@ -622,6 +632,264 @@ const AppearanceSection = () => {
                     onChange={(urlBarVisibility) =>
                         void window.arbor.setSettings({ urlBarVisibility })
                     }
+                />
+            </div>
+        </section>
+    )
+}
+
+interface DefaultBrowserStatus {
+    readonly isDefault: boolean
+    readonly platform: string
+}
+
+const GeneralSection = () => {
+    const [status, setStatus] = createSignal<DefaultBrowserStatus | null>(null)
+    const [error, setError] = createSignal<string | null>(null)
+    const [working, setWorking] = createSignal(false)
+
+    const refresh = async (): Promise<void> => {
+        const reply = await window.arbor.getDefaultBrowserStatus()
+        if (reply.ok) setStatus(reply.value)
+    }
+    void refresh()
+
+    const makeDefault = async (): Promise<void> => {
+        setWorking(true)
+        setError(null)
+        const reply = await window.arbor.setDefaultBrowser()
+        setWorking(false)
+        if (reply.ok) {
+            setStatus(reply.value)
+            return
+        }
+        setError(reply.error.message)
+        void refresh()
+    }
+
+    const platformHint = (): string => {
+        const platform = status()?.platform
+        if (platform === "darwin") {
+            return "On macOS, clicking the button may open System Settings to confirm Arbor as the default browser."
+        }
+        if (platform === "linux") {
+            return "On Linux, Arbor must be installed with its .desktop file (the packaged AppImage) for the OS to offer it as a browser."
+        }
+        return "On Windows, clicking the button registers Arbor for http and https links."
+    }
+
+    return (
+        <section>
+            <h1>General</h1>
+            <div class="settings-group">
+                <h2>Default browser</h2>
+                <p class="settings-hint">
+                    {status() === null
+                        ? "Checking…"
+                        : status()?.isDefault
+                          ? "Arbor is the default browser for http and https links."
+                          : "Arbor is not the default browser yet."}
+                </p>
+                <button
+                    type="button"
+                    class="settings-button"
+                    disabled={working() || status()?.isDefault === true}
+                    onClick={() => void makeDefault()}
+                >
+                    <Icon name="device-desktop" size={14} />
+                    {working() ? "Setting…" : "Make Arbor the default browser"}
+                </button>
+                <Show when={error()}>
+                    <p class="settings-error">{error()}</p>
+                </Show>
+                <p class="settings-hint">{platformHint()}</p>
+            </div>
+        </section>
+    )
+}
+
+const NEW_TAB_KIND_LABELS: Record<NewTabBackgroundKind, string> = {
+    theme: "Theme",
+    color: "Color",
+    image: "Image",
+}
+
+const NEW_TAB_KIND_ICONS: Record<NewTabBackgroundKind, IconName> = {
+    theme: "device-desktop",
+    color: "sun",
+    image: "photo",
+}
+
+type SearchBarMode = "show" | "hide"
+
+const SEARCH_BAR_MODES = ["show", "hide"] as const
+
+const SEARCH_BAR_LABELS: Record<SearchBarMode, string> = {
+    show: "Show search bar",
+    hide: "Hide search bar",
+}
+
+const SEARCH_BAR_ICONS: Record<SearchBarMode, IconName> = {
+    show: "search",
+    hide: "x",
+}
+
+/** Read an image file as a resized AVIF data URL (4K max, quality 60), so settings.json stays small. */
+const fileToBackgroundImage = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file)
+        const image = new Image()
+        image.onload = () => {
+            const maxSide = 3840
+            const scale = Math.min(1, maxSide / Math.max(image.width, image.height))
+            const canvas = document.createElement("canvas")
+            canvas.width = Math.max(1, Math.round(image.width * scale))
+            canvas.height = Math.max(1, Math.round(image.height * scale))
+            const ctx = canvas.getContext("2d")
+            if (!ctx) {
+                URL.revokeObjectURL(url)
+                reject(new Error("Could not read the image."))
+                return
+            }
+            ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
+            URL.revokeObjectURL(url)
+            resolve(canvas.toDataURL("image/avif", 0.6))
+        }
+        image.onerror = () => {
+            URL.revokeObjectURL(url)
+            reject(new Error("Could not read the image."))
+        }
+        image.src = url
+    })
+
+const NewTabSection = () => {
+    const settings = useSettings()
+    const [error, setError] = createSignal<string | null>(null)
+    let fileInput: HTMLInputElement | undefined
+
+    const chooseImage = (event: Event & { currentTarget: HTMLInputElement }): void => {
+        const file = event.currentTarget.files?.[0]
+        event.currentTarget.value = ""
+        if (!file) return
+        void (async () => {
+            try {
+                const dataUrl = await fileToBackgroundImage(file)
+                const reply = await window.arbor.setSettings({
+                    newTabBackgroundImage: dataUrl,
+                    newTabBackgroundKind: "image",
+                })
+                setError(reply.ok ? null : reply.error.message)
+            } catch {
+                setError("Could not read the image.")
+            }
+        })()
+    }
+
+    const chooseColor = (event: Event & { currentTarget: HTMLInputElement }): void => {
+        void (async () => {
+            const reply = await window.arbor.setSettings({
+                newTabBackgroundColor: event.currentTarget.value,
+            })
+            setError(reply.ok ? null : reply.error.message)
+        })()
+    }
+
+    return (
+        <section>
+            <h1>New Tab</h1>
+            <div class="settings-group">
+                <h2>Background</h2>
+                <OptionCards
+                    name="newtab-background"
+                    label="Background"
+                    options={NEW_TAB_BACKGROUND_KINDS}
+                    labels={NEW_TAB_KIND_LABELS}
+                    icons={NEW_TAB_KIND_ICONS}
+                    value={settings().newTabBackgroundKind}
+                    onChange={(newTabBackgroundKind) =>
+                        void window.arbor.setSettings({ newTabBackgroundKind })
+                    }
+                />
+                <Show when={settings().newTabBackgroundKind === "theme"}>
+                    <p class="settings-hint">
+                        Follows your Appearance theme (Light, Dark or System).
+                    </p>
+                </Show>
+                <Show when={settings().newTabBackgroundKind === "color"}>
+                    <div class="settings-color-row">
+                        <input
+                            type="color"
+                            aria-label="Background color"
+                            value={settings().newTabBackgroundColor}
+                            onChange={chooseColor}
+                        />
+                        <span class="settings-hint">{settings().newTabBackgroundColor}</span>
+                    </div>
+                </Show>
+                <Show when={settings().newTabBackgroundKind === "image"}>
+                    <Show
+                        when={settings().newTabBackgroundImage}
+                        fallback={<p class="settings-hint">No image yet. Choose one below.</p>}
+                    >
+                        <img
+                            class="settings-image-preview"
+                            src={settings().newTabBackgroundImage ?? ""}
+                            alt="New tab background preview"
+                        />
+                    </Show>
+                    <div class="settings-color-row">
+                        <input
+                            ref={(el) => (fileInput = el)}
+                            type="file"
+                            accept="image/*"
+                            aria-label="Background image file"
+                            hidden
+                            onChange={chooseImage}
+                        />
+                        <button
+                            type="button"
+                            class="settings-button"
+                            onClick={() => fileInput?.click()}
+                        >
+                            <Icon name="photo" size={14} />
+                            Choose image…
+                        </button>
+                        <Show when={settings().newTabBackgroundImage}>
+                            <button
+                                type="button"
+                                class="settings-button"
+                                onClick={() =>
+                                    void window.arbor.setSettings({
+                                        newTabBackgroundImage: null,
+                                        newTabBackgroundKind: "color",
+                                    })
+                                }
+                            >
+                                <Icon name="x" size={14} />
+                                Remove image
+                            </button>
+                        </Show>
+                    </div>
+                </Show>
+                <Show when={error()}>
+                    <p class="settings-error">{error()}</p>
+                </Show>
+            </div>
+            <div class="settings-group">
+                <h2>Search bar</h2>
+                <OptionCards
+                    name="newtab-search-bar"
+                    label="Search bar"
+                    options={SEARCH_BAR_MODES}
+                    labels={SEARCH_BAR_LABELS}
+                    icons={SEARCH_BAR_ICONS}
+                    value={settings().newTabShowSearchBar ? "show" : "hide"}
+                    onChange={(mode) =>
+                        void window.arbor.setSettings({
+                            newTabShowSearchBar: mode === "show",
+                        })
+                    }
+                    variant="wide"
                 />
             </div>
         </section>

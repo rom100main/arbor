@@ -1,5 +1,7 @@
 export type SettingsRoute =
+    | "general"
     | "search"
+    | "newtab"
     | "downloads"
     | "history"
     | "adblocking"
@@ -7,7 +9,9 @@ export type SettingsRoute =
     | "appearance"
 
 const SETTINGS_ROUTES: Record<string, SettingsRoute> = {
+    "/general": "general",
     "/search": "search",
+    "/newtab": "newtab",
     "/downloads": "downloads",
     "/history": "history",
     "/adblocking": "adblocking",
