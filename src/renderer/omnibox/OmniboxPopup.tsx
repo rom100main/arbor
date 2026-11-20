@@ -4,7 +4,7 @@ import { initHistory, useHistory } from "../shell/history"
 import { useSettings } from "../shell/settings"
 import { initState, useSnapshot } from "../shell/snapshot"
 import { SuggestionRow } from "./SuggestionRow"
-import { computeSuggestions } from "./suggestions"
+import { computeSuggestions, moveSuggestionSelection } from "./suggestions"
 
 import "./OmniboxPopup.css"
 
@@ -41,7 +41,7 @@ export const OmniboxPopup = () => {
     window.arbor.onOmniboxMoveSelection((delta) => {
         const count = suggestions().length
         if (count === 0) return
-        setSelected((current) => Math.min(count - 1, Math.max(0, current + delta)))
+        setSelected((current) => moveSuggestionSelection(current, delta, count))
     })
     window.arbor.onOmniboxActivateSelected(activateCurrent)
 

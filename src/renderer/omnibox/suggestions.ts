@@ -53,3 +53,13 @@ export const computeSuggestions = (
     for (const { entry, score } of scored) list.push({ kind: "history", entry, score })
     return list
 }
+
+/**
+ * Move the selection by `delta`, wrapping around both ends:
+ * up from the first item cycles to the last, down from the last cycles to the first.
+ * An empty list or a non-positive count stays at zero.
+ */
+export const moveSuggestionSelection = (current: number, delta: number, count: number): number => {
+    if (count <= 0) return 0
+    return (current + delta + count) % count
+}
