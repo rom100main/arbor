@@ -20,6 +20,7 @@ import { useSettings } from "./settings"
 import { Sidebar } from "./sidebar/Sidebar"
 import { initState, useSnapshot } from "./snapshot"
 import { DownloadButton } from "./toolbar/DownloadButton"
+import { FavoritesListButton } from "./toolbar/FavoritesButtons"
 import { NavButtons } from "./toolbar/NavButtons"
 import { OmniboxInput } from "./toolbar/OmniboxInput"
 import { PinnedActions } from "./toolbar/PinnedActions"
@@ -254,6 +255,7 @@ export const MainShell = () => {
                         <Icon name="puzzle" />
                     </button>
                     <DownloadButton />
+                    <FavoritesListButton />
                     <button type="button" aria-label="History" onClick={openHistory}>
                         <Icon name="history" />
                     </button>

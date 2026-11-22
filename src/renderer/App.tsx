@@ -1,6 +1,7 @@
 import { HISTORY_URL, INTERNAL_SCHEME, NEW_TAB_URL } from "../shared/settings"
 import { DownloadsPopup } from "./downloads/DownloadsPopup"
 import { ExtensionsPopup } from "./extensions/ExtensionsPopup"
+import { FavoritesPopup } from "./favorites/FavoritesPopup"
 import { FindBar } from "./find/FindBar"
 import { HistoryApp } from "./history/HistoryApp"
 import { NewTabApp } from "./newtab/NewTabApp"
@@ -21,6 +22,7 @@ export default function App() {
     if (appMode === "rename") return <RenameApp />
     if (appMode === "extensions") return <ExtensionsPopup />
     if (appMode === "downloads") return <DownloadsPopup />
+    if (appMode === "favorites") return <FavoritesPopup />
     if (appMode === "permission") return <PermissionApp />
     if (appMode === "history") return <HistoryApp />
     if (appMode === "newtab") return <NewTabApp />
@@ -35,6 +37,7 @@ type AppMode =
     | "rename"
     | "extensions"
     | "downloads"
+    | "favorites"
     | "permission"
     | "settings"
     | "history"
@@ -51,6 +54,7 @@ const getAppMode = (): AppMode => {
     if (searchParams.has("rename")) return "rename"
     if (searchParams.has("extensions")) return "extensions"
     if (searchParams.has("downloads")) return "downloads"
+    if (searchParams.has("favorites")) return "favorites"
     if (searchParams.has("permission")) return "permission"
     if (searchParams.has("find")) return "find"
     return "main"
