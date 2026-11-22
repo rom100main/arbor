@@ -1,0 +1,34 @@
+.favorite-star {
+    position: relative;
+    z-index: 2;
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    margin-right: 4px;
+    color: var(--color-text);
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-md);
+
+    &:hover {
+        background: var(--color-hover);
+    }
+
+    &:disabled {
+        color: var(--color-text-faintest);
+        cursor: default;
+    }
+
+    &.active {
+        color: var(--color-accent);
+
+        svg {
+            fill: currentcolor;
+        }
+    }
+}

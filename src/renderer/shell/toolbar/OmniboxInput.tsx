@@ -3,6 +3,7 @@ import { createEffect, createSignal } from "solid-js"
 import type { TabId } from "../../../shared/protocol"
 import { urlDisplayParts } from "../../../shared/url"
 import { requestOmniboxFocus, useOmniboxFocus } from "../focus"
+import { FavoriteStar } from "./FavoritesButtons"
 
 import "./OmniboxInput.css"
 
@@ -131,6 +132,7 @@ export const OmniboxInput = (props: { tabId: TabId | null; url: string }) => {
                 onKeyDown={onKeyDown}
                 onScroll={syncScroll}
             />
+            <FavoriteStar />
         </div>
     )
 }
