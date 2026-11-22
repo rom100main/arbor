@@ -229,6 +229,37 @@ export const CloseContainerConfirmation = Schema.Struct({
 })
 export type CloseContainerConfirmation = typeof CloseContainerConfirmation.Type
 
+export const FavoriteId = Schema.TemplateLiteral(["favorite-", Schema.String])
+export type FavoriteId = typeof FavoriteId.Type
+
+/**
+ * One node of the favorites tree:
+ * `url === null` means a folder, otherwise a bookmark.
+ */
+export const FavoriteNode = Schema.Struct({
+    id: FavoriteId,
+    parentId: Schema.NullOr(FavoriteId),
+    order: Schema.Finite,
+    name: Schema.String,
+    url: Schema.NullOr(Schema.String),
+    favicon: Schema.NullOr(Schema.String),
+})
+export type FavoriteNode = typeof FavoriteNode.Type
+
+export const FavoritesSnapshot = Schema.Struct({
+    nodes: Schema.Array(FavoriteNode),
+})
+export type FavoritesSnapshot = typeof FavoritesSnapshot.Type
+
+export const FavoritesMode = Schema.Literals(["add", "list"])
+export type FavoritesMode = typeof FavoritesMode.Type
+
+export const FavoritesContext = Schema.Struct({
+    mode: FavoritesMode,
+    favoriteId: Schema.NullOr(FavoriteId),
+})
+export type FavoritesContext = typeof FavoritesContext.Type
+
 /** Where a popup hangs from, in window coordinates: its left edge, top and width. */
 export const Anchor = Schema.Struct({
     x: Schema.Finite,

@@ -48,6 +48,14 @@ export const REQUESTS = {
     historyClearAfter: "arbor:history:clear-after",
     historyClearAll: "arbor:history:clear-all",
 
+    favoritesList: "arbor:favorites:list",
+    favoritesOpen: "arbor:favorites:open",
+    favoritesAdd: "arbor:favorites:add",
+    favoritesUpdate: "arbor:favorites:update",
+    favoritesRemove: "arbor:favorites:remove",
+    favoritesCreateFolder: "arbor:favorites:create-folder",
+    favoritesMove: "arbor:favorites:move",
+
     getUpdateStatus: "arbor:update:get-status",
     installUpdate: "arbor:update:install",
 
@@ -76,6 +84,9 @@ export const EVENTS = {
     downloadsToggle: "arbor:downloads:toggle",
     downloadsClose: "arbor:downloads:close",
     downloadsSetPopupHeight: "arbor:downloads:popup-height",
+    favoritesToggle: "arbor:favorites:toggle",
+    favoritesClose: "arbor:favorites:close",
+    favoritesSetPopupHeight: "arbor:favorites:popup-height",
     permissionRespond: "arbor:permission:respond",
     shellRaise: "arbor:shell:raise",
     titlebarReveal: "arbor:titlebar:reveal",
@@ -101,5 +112,7 @@ export const PUSHES = {
     updateStatus: "arbor:update:status",
     downloads: "arbor:downloads:changed",
     history: "arbor:history:changed",
+    favorites: "arbor:favorites:changed",
+    favoritesContext: "arbor:favorites:context",
     openFind: "arbor:find:open",
 } as const

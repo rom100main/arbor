@@ -25,6 +25,10 @@ import {
     DownloadId,
     DownloadsSnapshot,
     ExtensionMenuRequest,
+    FavoriteId,
+    FavoritesContext,
+    FavoritesMode,
+    FavoritesSnapshot,
     FindQuery,
     FindStatus,
     HistoryEntryId,
@@ -225,6 +229,40 @@ export const Requests = {
     historyClearAfter: request({ payload: Schema.Struct({ cutoff: Schema.Finite }) }),
     historyClearAll: request({}),
 
+    favoritesList: request({ success: FavoritesSnapshot }),
+    favoritesOpen: request({
+        payload: Schema.Struct({ url: Schema.String, newTab: Schema.Boolean }),
+    }),
+    favoritesAdd: request({
+        payload: Schema.Struct({
+            name: Schema.String,
+            url: Schema.String,
+            favicon: Schema.optionalKey(Schema.NullOr(Schema.String)),
+            parentId: Schema.NullOr(FavoriteId),
+        }),
+        success: FavoriteId,
+    }),
+    favoritesUpdate: request({
+        payload: Schema.Struct({
+            id: FavoriteId,
+            name: Schema.optionalKey(Schema.String),
+            url: Schema.optionalKey(Schema.String),
+            favicon: Schema.optionalKey(Schema.NullOr(Schema.String)),
+        }),
+    }),
+    favoritesRemove: request({ payload: Schema.Struct({ id: FavoriteId }) }),
+    favoritesCreateFolder: request({
+        payload: Schema.Struct({ name: Schema.String, parentId: Schema.NullOr(FavoriteId) }),
+        success: FavoriteId,
+    }),
+    favoritesMove: request({
+        payload: Schema.Struct({
+            id: FavoriteId,
+            parentId: Schema.NullOr(FavoriteId),
+            index: Schema.Int,
+        }),
+    }),
+
     getUpdateStatus: request({ success: UpdateStatus }),
     installUpdate: request({}),
 
@@ -276,6 +314,15 @@ export const Events = {
     downloadsToggle: event(Anchor),
     downloadsClose: event(),
     downloadsSetPopupHeight: event(Schema.Finite),
+    favoritesToggle: event(
+        Schema.Struct({
+            anchor: Anchor,
+            mode: FavoritesMode,
+            favoriteId: Schema.NullOr(FavoriteId),
+        }),
+    ),
+    favoritesClose: event(),
+    favoritesSetPopupHeight: event(Schema.Finite),
     permissionRespond: event(Schema.Boolean),
     // A revealed bar floats over the page, so the shell rises above it for as long as one is out.
     shellRaise: event(Schema.Boolean),
@@ -303,6 +350,8 @@ export const Pushes = {
     updateStatus: push(UpdateStatus),
     downloads: push(DownloadsSnapshot),
     history: push(HistorySnapshot),
+    favorites: push(FavoritesSnapshot),
+    favoritesContext: push(FavoritesContext),
     // Ctrl/Cmd+F: the find bar asks the renderer to focus its input.
     openFind: push(),
 } satisfies { readonly [K in keyof typeof PUSHES]: PushDef }
