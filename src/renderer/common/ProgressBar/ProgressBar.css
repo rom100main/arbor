@@ -1,0 +1,43 @@
+.progress-track {
+    display: block;
+    height: 3px;
+    overflow: hidden;
+    background: var(--color-border-soft);
+    border-radius: var(--radius-sm);
+}
+
+.progress-track-thin {
+    height: 2px;
+}
+
+.progress-value {
+    display: block;
+    height: 100%;
+    background: var(--color-accent);
+    transform-origin: left;
+    transition: transform var(--motion) linear;
+}
+
+.progress-track[data-indeterminate="true"] .progress-value {
+    width: 34%;
+    transform: none;
+    animation: progress-sweep 1.4s ease-in-out infinite;
+}
+
+@keyframes progress-sweep {
+    from {
+        transform: translateX(-110%);
+    }
+
+    to {
+        transform: translateX(400%);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .progress-track[data-indeterminate="true"] .progress-value {
+        width: 100%;
+        opacity: 0.4;
+        animation: none;
+    }
+}

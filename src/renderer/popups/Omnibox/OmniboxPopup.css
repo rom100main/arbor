@@ -1,0 +1,21 @@
+.omnibox-suggestions {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 6px);
+    left: 0;
+    z-index: 100;
+    max-height: none;
+    padding: 4px;
+}
+
+.omnibox-popup-root {
+    box-sizing: border-box;
+    height: 100vh;
+    padding: 6px;
+    overflow: hidden;
+    background: transparent;
+
+    .omnibox-suggestions {
+        position: static;
+    }
+}

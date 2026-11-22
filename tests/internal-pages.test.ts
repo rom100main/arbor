@@ -12,7 +12,7 @@ import {
     isNewTabUrl,
     isSettingsUrl,
 } from "../src/main/windows/internal-page-urls"
-import { settingsRoute } from "../src/renderer/settings/routes"
+import { settingsRoute } from "../src/renderer/pages/Settings/routes"
 import { HISTORY_URL, NEW_TAB_URL, SETTINGS_URL } from "../src/shared/settings"
 
 describe("the settings URL", () => {

@@ -1,0 +1,28 @@
+.find-bar {
+    flex-direction: row;
+    gap: 4px;
+    align-items: center;
+    height: 100%;
+    padding: 6px 8px;
+
+    .field-input {
+        flex: 1;
+        min-width: 0;
+        min-height: 28px;
+        font-size: var(--font-size-body);
+        background: var(--color-bg);
+    }
+}
+
+.find-count {
+    min-width: 44px;
+    font-size: var(--font-size-md);
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-faint);
+    text-align: center;
+    white-space: nowrap;
+}
+
+.find-count-error {
+    color: var(--color-danger);
+}

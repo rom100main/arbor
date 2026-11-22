@@ -6,6 +6,10 @@
     --font-size-md: 12px;
     --font-size-body: 13px;
     --font-size-lg: 14px;
+    --font-size-title: 20px;
+    --font-size-display: 16px;
+    --line-height-body: 1.5;
+    --line-height-tight: 1.2;
     --color-bg: oklch(100% 0 0deg);
     --color-sidebar-bg: oklch(97.2% 0.002 250deg);
     --color-toolbar-bg: oklch(97.2% 0.002 250deg);
@@ -27,16 +31,28 @@
     --color-accent-solid: oklch(50% 0.17 258deg);
     --color-accent-contrast: oklch(100% 0 0deg);
     --color-overlay: oklch(28% 0.02 258deg / 48%);
+    --color-danger: oklch(55% 0.2 25deg);
+    --color-danger-bg: color-mix(in oklch, oklch(55% 0.2 25deg) 10%, transparent);
     --shadow-popup: 0 8px 24px oklch(28% 0.02 258deg / 12%);
     --shadow-popup-strong: 0 4px 18px oklch(28% 0.02 258deg / 20%);
     --shadow-modal: 0 12px 32px oklch(28% 0.02 258deg / 24%);
     --shadow-float: 0 0 24px oklch(28% 0.02 258deg / 18%);
+    --shadow-focus: 0 0 0 3px var(--color-accent-wash);
+    --outline-focus: 2px solid var(--color-accent);
     --radius-sm: 4px;
     --radius-md: 6px;
     --radius-lg: 8px;
     --radius-xl: 10px;
+    --radius-pill: 999px;
+    --h-icon-button: 28px;
+    --h-row: 30px;
+    --h-input: 28px;
+    --motion: 120ms;
+    --icon-size-sm: 12px;
+    --icon-size-md: 16px;
+    --icon-size-lg: 18px;
     --tab-row-height: 30px;
-    --omnibox-height: 30px;
+    --omnibox-height: var(--h-icon-button);
     --container-chip-size: 28px;
     --container-strip-height: 48px;
 }
@@ -80,9 +96,18 @@ body {
     height: 100%;
     margin: 0;
     font-family: var(--font-family);
+    font-synthesis: none;
+    line-height: var(--line-height-body);
+    -webkit-font-smoothing: antialiased;
     user-select: none;
 }
 
 #root {
     height: 100%;
+}
+
+/* The one focus ring everywhere: same as the tab tree rows. */
+*:focus-visible:not(input, textarea, select) {
+    outline: var(--outline-focus);
+    outline-offset: -2px;
 }

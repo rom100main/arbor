@@ -1,0 +1,93 @@
+.field-input {
+    width: 100%;
+    min-height: var(--h-input);
+    padding: 7px 9px;
+    font-family: var(--font-family);
+    font-size: var(--font-size-lg);
+    line-height: var(--line-height-tight);
+    color: var(--color-text);
+    user-select: text;
+    outline: none;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+
+    &::placeholder {
+        color: var(--color-text-faintest);
+    }
+
+    &:focus {
+        outline: var(--outline-focus);
+        outline-offset: -2px;
+        border-color: var(--color-accent);
+    }
+
+    &.invalid {
+        border-color: var(--color-danger);
+    }
+}
+
+.search-field {
+    display: flex;
+    flex: 1;
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+    padding: 8px 10px;
+    color: var(--color-text-muted);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+
+    &:focus-within {
+        outline: var(--outline-focus);
+        outline-offset: -2px;
+        border-color: var(--color-accent);
+    }
+
+    .search-field-input {
+        flex: 1;
+        min-width: 0;
+        font-family: var(--font-family);
+        font-size: var(--font-size-body);
+        color: var(--color-text);
+        outline: none;
+        background: transparent;
+        border: none;
+    }
+}
+
+.select-field {
+    position: relative;
+    display: flex;
+    align-items: center;
+
+    select {
+        box-sizing: border-box;
+        height: 100%;
+        padding: 8px 28px 8px 10px;
+        font: inherit;
+        font-size: var(--font-size-md);
+        color: var(--color-text);
+        appearance: none;
+        background-color: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+    }
+
+    .select-field-chevron {
+        position: absolute;
+        top: 50%;
+        right: 10px;
+        display: inline-flex;
+        color: var(--color-text-muted);
+        pointer-events: none;
+        transform: translateY(-50%);
+    }
+
+    select:focus {
+        outline: var(--outline-focus);
+        outline-offset: -2px;
+        border-color: var(--color-accent);
+    }
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test"
 
-import { SEARCH_ENGINES } from "../src/renderer/settings/search-engines"
+import { SEARCH_ENGINES } from "../src/renderer/pages/Settings/search-engines"
 import {
     isNewTabImageDataUrl,
     MAX_NEW_TAB_IMAGE_CHARS,

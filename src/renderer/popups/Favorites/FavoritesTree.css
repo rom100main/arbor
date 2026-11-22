@@ -1,0 +1,37 @@
+.favorites-tree {
+    flex: 1;
+    min-height: 280px;
+    padding: 4px;
+    overflow-y: auto;
+}
+
+.favorites-row {
+    margin: 1px 2px;
+
+    &.active .favorites-row-name {
+        font-weight: 600;
+    }
+
+    &.is-folder .favorites-row-name {
+        color: var(--color-text-muted);
+    }
+}
+
+.favorites-row-name {
+    flex-shrink: 0;
+    max-width: 45%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--color-text);
+    white-space: nowrap;
+}
+
+.favorites-row-url {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-faintest);
+    white-space: nowrap;
+}

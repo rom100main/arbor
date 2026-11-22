@@ -1,0 +1,17 @@
+.pinned-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.pinned-action-icon {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+}
+
+.pinned-action-fallback {
+    font-size: var(--font-size-body);
+    font-weight: 600;
+    color: var(--color-text-muted);
+}

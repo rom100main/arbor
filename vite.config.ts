@@ -5,7 +5,7 @@ import { defineConfig } from "vite-plus"
 
 import { ICONS_JSON, generateIcons } from "./scripts/build-icons.ts"
 
-// Regenerates src/renderer/ui/Icon.tsx from icons.json on dev/build startup,
+// Regenerates src/renderer/common/Icon/Icon.tsx from icons.json on dev/build startup,
 // and re-runs when icons.json changes during `vp dev`.
 const iconsPlugin: Plugin = {
     name: "arbor-icons",
@@ -16,7 +16,8 @@ const iconsPlugin: Plugin = {
         server.watcher.add(ICONS_JSON)
     },
     handleHotUpdate: ({ file }): void => {
-        if (file.replace(/\\/g, "/").endsWith("src/renderer/ui/icons.json")) generateIcons()
+        if (file.replace(/\\/g, "/").endsWith("src/renderer/common/Icon/icons.json"))
+            generateIcons()
     },
 }
 

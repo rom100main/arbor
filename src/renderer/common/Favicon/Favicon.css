@@ -1,0 +1,18 @@
+.favicon {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    border-radius: var(--radius-sm);
+
+    &.grayscale {
+        opacity: 0.55;
+        filter: grayscale(100%);
+    }
+
+    &.placeholder {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--color-text-faintest);
+    }
+}

@@ -1,0 +1,15 @@
+.favorite-star {
+    width: calc(var(--omnibox-height) - 4px);
+    height: calc(var(--omnibox-height) - 4px);
+    min-height: calc(var(--omnibox-height) - 4px);
+    margin-right: 2px;
+
+    &.active {
+        color: var(--color-accent);
+        background: var(--color-accent-wash);
+
+        svg {
+            fill: currentcolor;
+        }
+    }
+}

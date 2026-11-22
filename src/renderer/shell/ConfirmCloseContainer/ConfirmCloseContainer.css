@@ -1,0 +1,10 @@
+.confirm-title {
+    font-size: var(--font-size-body);
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.confirm-summary {
+    font-size: var(--font-size-md);
+    color: var(--color-text-faint);
+}

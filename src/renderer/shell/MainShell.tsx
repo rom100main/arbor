@@ -12,19 +12,19 @@ import {
     TOOLBAR_HEIGHT,
 } from "../../shared/settings"
 import { displayUrl } from "../../shared/url"
-import { Icon } from "../ui/Icon"
-import { ConfirmCloseContainer } from "./ConfirmCloseContainer"
-import { requestTabTreeFocus } from "./focus"
+import { Button } from "../common/Button/Button"
+import { requestTabTreeFocus } from "../common/store/focus"
+import { useSettings } from "../common/store/settings"
+import { initState, useSnapshot } from "../common/store/snapshot"
+import { ConfirmCloseContainer } from "./ConfirmCloseContainer/ConfirmCloseContainer"
 import { createReveal, REVEAL_MS, revealZones } from "./reveal"
-import { useSettings } from "./settings"
-import { Sidebar } from "./sidebar/Sidebar"
-import { initState, useSnapshot } from "./snapshot"
-import { DownloadButton } from "./toolbar/DownloadButton"
-import { FavoritesListButton } from "./toolbar/FavoritesButtons"
-import { NavButtons } from "./toolbar/NavButtons"
-import { OmniboxInput } from "./toolbar/OmniboxInput"
-import { PinnedActions } from "./toolbar/PinnedActions"
-import { UpdateButton } from "./toolbar/UpdateButton"
+import { Sidebar } from "./Sidebar"
+import { DownloadButton } from "./toolbar/DownloadButton/DownloadButton"
+import { FavoritesListButton } from "./toolbar/FavoritesList/FavoritesList"
+import { NavButtons } from "./toolbar/NavButtons/NavButtons"
+import { OmniboxInput } from "./toolbar/OmniboxInput/OmniboxInput"
+import { PinnedActions } from "./toolbar/PinnedActions/PinnedActions"
+import { UpdateButton } from "./toolbar/UpdateButton/UpdateButton"
 
 import "./MainShell.css"
 
@@ -246,22 +246,16 @@ export const MainShell = () => {
                 <PinnedActions />
                 <UpdateButton />
                 <div class="extensions">
-                    <button
-                        type="button"
-                        aria-label="Extensions"
+                    <Button
+                        icon="puzzle"
+                        ariaLabel="Extensions"
                         ref={(el) => (button = el)}
                         onClick={toggleExtensions}
-                    >
-                        <Icon name="puzzle" />
-                    </button>
+                    />
                     <DownloadButton />
                     <FavoritesListButton />
-                    <button type="button" aria-label="History" onClick={openHistory}>
-                        <Icon name="history" />
-                    </button>
-                    <button type="button" aria-label="Settings" onClick={openSettings}>
-                        <Icon name="settings" />
-                    </button>
+                    <Button icon="history" ariaLabel="History" onClick={openHistory} />
+                    <Button icon="settings" ariaLabel="Settings" onClick={openSettings} />
                 </div>
             </section>
         </div>

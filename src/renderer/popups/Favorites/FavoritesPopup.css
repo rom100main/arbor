@@ -1,0 +1,33 @@
+.favorites-popup-root {
+    box-sizing: border-box;
+    height: 100vh;
+    padding: 6px;
+    overflow: hidden;
+    background: transparent;
+}
+
+.favorites-editor {
+    display: flex;
+    flex-shrink: 0;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    border-bottom: 1px solid var(--color-border-soft);
+}
+
+.favorites-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+}
+
+.favorites-footer {
+    display: flex;
+    flex-shrink: 0;
+    gap: 6px;
+    align-items: center;
+    padding: 8px 10px;
+    border-top: 1px solid var(--color-border-soft);
+}

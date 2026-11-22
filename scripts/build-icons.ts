@@ -1,4 +1,4 @@
-// Generates src/renderer/ui/Icon.tsx from src/renderer/ui/icons.json.
+// Generates src/renderer/common/Icon/Icon.tsx from src/renderer/common/Icon/icons.json.
 //
 // Run manually with `vp run build:icons`. Also auto-runs through the arbor-icons
 // Vite plugin in vite.config.ts on `vp dev` / `vp build`.
@@ -7,8 +7,8 @@ import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
-export const ICONS_JSON = resolve(root, "src/renderer/ui/icons.json")
-export const ICON_TSX = resolve(root, "src/renderer/ui/Icon.tsx")
+export const ICONS_JSON = resolve(root, "src/renderer/common/Icon/icons.json")
+export const ICON_TSX = resolve(root, "src/renderer/common/Icon/Icon.tsx")
 
 const toVarName = (name: string): string =>
     name
@@ -55,7 +55,7 @@ const render = (names: string[]): string => {
             return variable === name ? `    ${variable},` : `    "${name}": ${variable},`
         })
         .join("\n")
-    return `// GENERATED - do not edit by hand. Source: src/renderer/ui/icons.json.
+    return `// GENERATED - do not edit by hand. Source: src/renderer/common/Icon/icons.json.
 // Regenerate with \`vp run build:icons\` (also auto-runs in \`vp dev\` / \`vp build\`).
 import type { JSX } from "@solidjs/web"
 ${imports}

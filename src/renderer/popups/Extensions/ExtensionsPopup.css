@@ -1,0 +1,20 @@
+.extensions-popup-root {
+    box-sizing: border-box;
+    height: 100vh;
+    padding: 6px;
+    overflow: hidden;
+    background: transparent;
+}
+
+.extensions-card {
+    padding: 8px;
+}
+
+.extension-actions {
+    --browser-action-hover-bg: var(--color-hover);
+
+    display: flex;
+    flex-flow: row wrap;
+    gap: 4px;
+    align-items: center;
+}
