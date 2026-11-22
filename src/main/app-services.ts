@@ -8,6 +8,7 @@ import { Downloads } from "./downloads/downloads"
 import { Extensions } from "./extension/extensions"
 import { PermissionPrompts } from "./extension/prompts"
 import { ExtensionStorage } from "./extension/storage"
+import { Favorites } from "./favorites/service"
 import { History } from "./history/service"
 import { IpcPush } from "./ipc/router"
 import { browserStoreFromFile } from "./persistence/state-file"
@@ -40,10 +41,14 @@ export const AppServices = (userData: string) => {
     const history = History.layer({ historyPath: path.join(userData, "history.json") }).pipe(
         Layer.provideMerge(base),
     )
+    const favorites = Favorites.layer({
+        favoritesPath: path.join(userData, "favorites.json"),
+    }).pipe(Layer.provideMerge(base))
     return WindowManager.layer.pipe(
         Layer.provideMerge(adblock),
         Layer.provideMerge(extensions),
         Layer.provideMerge(downloads),
         Layer.provideMerge(history),
+        Layer.provideMerge(favorites),
     )
 }
