@@ -15,6 +15,7 @@ import { getDefaultBrowserStatus, setDefaultBrowser } from "../default-browser"
 import type { DownloadsService } from "../downloads/downloads"
 import type { ExtensionsService } from "../extension/extensions"
 import type { PermissionPromptsService } from "../extension/prompts"
+import type { FavoritesService } from "../favorites/service"
 import type { HistoryService } from "../history/service"
 import type { SettingsService } from "../settings"
 import { closeEmptiesContainer } from "../state/close-reopen"
@@ -41,6 +42,7 @@ export interface WindowContext {
     readonly updater: UpdaterService
     readonly downloads: DownloadsService
     readonly history: HistoryService
+    readonly favorites: FavoritesService
     readonly handle: WindowHandle
     readonly overlays: Overlays
     readonly viewOf: (tabId: TabId) => ViewHandle | undefined
@@ -81,7 +83,7 @@ const historyInBackground = (
 }
 
 export const windowRequests = (ctx: WindowContext): RequestHandlers<never> => {
-    const { store, settings, overlays, extensions, downloads, history, pushes } = ctx
+    const { store, settings, overlays, extensions, downloads, history, favorites, pushes } = ctx
     // The active match over all frames: stepping needs the current position, not a fresh search.
     const lastFindStatus: { current: FindStatus } = {
         current: { total: 0, activeIndex: -1, error: null },
@@ -187,6 +189,23 @@ export const windowRequests = (ctx: WindowContext): RequestHandlers<never> => {
         historyClearBefore: ({ cutoff }) => history.clearBefore(cutoff),
         historyClearAfter: ({ cutoff }) => history.clearAfter(cutoff),
         historyClearAll: () => history.clearBefore(Number.MAX_SAFE_INTEGER),
+
+        favoritesList: () => favorites.snapshot,
+        favoritesOpen: ({ url, newTab }) =>
+            Effect.gen(function* () {
+                const { activeTabId } = snapshot(yield* store.state)
+                if (newTab || activeTabId === null) {
+                    yield* store.createTab(url).pipe(Effect.ignore)
+                    return
+                }
+                yield* ctx.navigate(activeTabId, url)
+            }),
+        favoritesAdd: (input) => favorites.add(input),
+        favoritesUpdate: ({ id, name, url, favicon }) =>
+            favorites.update(id, { name, url, favicon }),
+        favoritesRemove: ({ id }) => favorites.remove(id),
+        favoritesCreateFolder: (input) => favorites.createFolder(input),
+        favoritesMove: ({ id, parentId, index }) => favorites.move(id, parentId, index),
 
         getUpdateStatus: () => ctx.updater.status,
         installUpdate: () => ctx.updater.install,
@@ -354,6 +373,10 @@ export const windowEvents = (ctx: WindowContext): EventHandlers<never> => {
         downloadsToggle: (anchor) => Effect.sync(() => overlays.toggleDownloads(anchor)),
         downloadsClose: () => Effect.sync(() => overlays.closeDownloads()),
         downloadsSetPopupHeight: (height) => Effect.sync(() => overlays.setDownloadsHeight(height)),
+        favoritesToggle: ({ anchor, mode, favoriteId }) =>
+            Effect.sync(() => overlays.toggleFavorites(anchor, mode, favoriteId)),
+        favoritesClose: () => Effect.sync(() => overlays.closeFavorites()),
+        favoritesSetPopupHeight: (height) => Effect.sync(() => overlays.setFavoritesHeight(height)),
         extensionsMenu: (request) => ctx.extensions.openMenu(request),
         permissionRespond: (allowed) => ctx.prompts.respond(allowed),
         shellRaise: (raised) => ctx.handle.raiseShell(raised),
