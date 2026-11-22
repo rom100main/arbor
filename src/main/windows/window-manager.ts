@@ -12,6 +12,7 @@ import type { TabId, TabNode } from "../../shared/protocol"
 import { Downloads } from "../downloads/downloads"
 import { Extensions } from "../extension/extensions"
 import { PermissionPrompts } from "../extension/prompts"
+import { Favorites } from "../favorites/service"
 import { History } from "../history/service"
 import { IpcPush, serveEvents, serveRequests } from "../ipc/router"
 import { windowEvents, windowRequests, type WindowContext } from "../ipc/window-channels"
@@ -70,6 +71,7 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
             const updater = yield* Updater
             const downloads = yield* Downloads
             const history = yield* History
+            const favorites = yield* Favorites
 
             const logged = (label: string) => (effect: Effect.Effect<unknown, unknown>) =>
                 effect.pipe(
@@ -348,6 +350,11 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                     Stream.runForEach((next) => pushes.push("history", next)),
                 )
 
+                /** The favorites tree, to every renderer (toolbar + favorites popup). */
+                const broadcastFavorites = favorites.changes.pipe(
+                    Stream.runForEach((next) => pushes.push("favorites", next)),
+                )
+
                 // --- start
 
                 const ctx: WindowContext = {
@@ -359,6 +366,7 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                     updater,
                     downloads,
                     history,
+                    favorites,
                     handle,
                     overlays,
                     viewOf: (tabId) => views.get(tabId),
@@ -390,6 +398,7 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                 yield* Effect.forkScoped(broadcastSettings)
                 yield* Effect.forkScoped(broadcastDownloads)
                 yield* Effect.forkScoped(broadcastHistory)
+                yield* Effect.forkScoped(broadcastFavorites)
                 // A second launch of Arbor quits at once and brings this window forward.
                 yield* host.relaunches.pipe(
                     Stream.runForEach(() => handle.focus),

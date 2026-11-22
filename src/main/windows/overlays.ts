@@ -6,7 +6,7 @@
 import { Predicate } from "effect"
 import { BrowserWindow, type BrowserWindowConstructorOptions } from "electron"
 
-import type { Anchor, RenameTarget } from "../../shared/protocol"
+import type { Anchor, FavoriteId, FavoritesMode, RenameTarget } from "../../shared/protocol"
 import type { Pusher } from "../ipc/router"
 import { loadRenderer, preloadPath } from "./paths"
 
@@ -54,6 +54,10 @@ const DOWNLOADS_POPUP_WIDTH = 380
 const DOWNLOADS_POPUP_DEFAULT_HEIGHT = 220
 const DOWNLOADS_POPUP_MAX_HEIGHT = 520
 
+const FAVORITES_POPUP_WIDTH = 360
+const FAVORITES_POPUP_DEFAULT_HEIGHT = 560
+const FAVORITES_POPUP_MAX_HEIGHT = 720
+
 const FIND_BAR_WIDTH = 440
 const FIND_BAR_HEIGHT = 48
 
@@ -92,6 +96,14 @@ export interface Overlays {
     readonly toggleDownloads: (anchor: Anchor) => void
     readonly closeDownloads: () => void
     readonly setDownloadsHeight: (height: number) => void
+
+    readonly toggleFavorites: (
+        anchor: Anchor,
+        mode: FavoritesMode,
+        favoriteId: FavoriteId | null,
+    ) => void
+    readonly closeFavorites: () => void
+    readonly setFavoritesHeight: (height: number) => void
 
     /** Open (or, clicked again, close) a pinned extension's action popup above its toolbar button. */
     readonly toggleActionPopup: (options: {
@@ -133,7 +145,11 @@ export const createOverlays = (win: BrowserWindow, ipc: Pusher): Overlays => {
     let toolbarPopupShown = false
     const syncToolbarPopup = (): void => {
         const next =
-            alive(extensions) || alive(downloads) || actionPopup !== null || libraryPopups.size > 0
+            alive(extensions) ||
+            alive(downloads) ||
+            alive(favorites) ||
+            actionPopup !== null ||
+            libraryPopups.size > 0
         if (next === toolbarPopupShown) return
         toolbarPopupShown = next
         ipc.push("toolbarPopup", next)
@@ -294,6 +310,79 @@ export const createOverlays = (win: BrowserWindow, ipc: Pusher): Overlays => {
         ipc.attach(created.webContents)
         void loadRenderer(created, "downloads")
         placeDownloads()
+        created.show()
+        syncToolbarPopup()
+    }
+
+    // --- favorites popup (add/edit via star, list via button)
+
+    let favorites: BrowserWindow | null = null
+    let favoritesAnchor: Anchor | null = null
+    let favoritesHeight = FAVORITES_POPUP_DEFAULT_HEIGHT
+    let favoritesMode: FavoritesMode = "list"
+    let favoritesFavoriteId: FavoriteId | null = null
+
+    const closeFavorites = (markDismissed = false): void => {
+        if (alive(favorites)) {
+            if (markDismissed) dismissed.mark("favorites")
+            favorites.destroy()
+        }
+        favorites = null
+        syncToolbarPopup()
+    }
+
+    const placeFavorites = (): void => {
+        if (!alive(favorites) || !favoritesAnchor) return
+        const bounds = win.getContentBounds()
+        favorites.setBounds({
+            x: Math.round(
+                bounds.x + favoritesAnchor.x + favoritesAnchor.width - FAVORITES_POPUP_WIDTH,
+            ),
+            y: Math.round(bounds.y + favoritesAnchor.y - favoritesHeight - POPUP_GAP),
+            width: FAVORITES_POPUP_WIDTH,
+            height: Math.round(favoritesHeight),
+        })
+    }
+
+    const toggleFavorites = (
+        anchor: Anchor,
+        mode: FavoritesMode,
+        favoriteId: FavoriteId | null,
+    ): void => {
+        // Same request while open closes it.
+        if (alive(favorites) && favoritesMode === mode && favoritesFavoriteId === favoriteId) {
+            closeFavorites()
+            return
+        }
+        if (dismissed.suppressed("favorites")) return
+        favoritesAnchor = anchor
+        favoritesMode = mode
+        favoritesFavoriteId = favoriteId
+        if (alive(favorites)) {
+            // Switching between add and list: re-anchor and tell the renderer.
+            placeFavorites()
+            ipc.push("favoritesContext", { mode, favoriteId })
+            favorites.show()
+            return
+        }
+        favoritesHeight = FAVORITES_POPUP_DEFAULT_HEIGHT
+        const created = overlayWindow(win, {
+            width: FAVORITES_POPUP_WIDTH,
+            height: favoritesHeight,
+            webPreferences: { preload: preloadPath },
+        })
+        favorites = created
+        created.on("closed", () => {
+            if (favorites === created) favorites = null
+            syncToolbarPopup()
+        })
+        created.on("blur", () => closeFavorites(true))
+        ipc.attach(created.webContents)
+        created.webContents.on("did-finish-load", () =>
+            ipc.push("favoritesContext", { mode, favoriteId }),
+        )
+        void loadRenderer(created, "favorites")
+        placeFavorites()
         created.show()
         syncToolbarPopup()
     }
@@ -534,6 +623,14 @@ export const createOverlays = (win: BrowserWindow, ipc: Pusher): Overlays => {
             downloadsHeight = next
             placeDownloads()
         },
+        toggleFavorites,
+        closeFavorites: () => closeFavorites(),
+        setFavoritesHeight: (height) => {
+            const next = clampHeight(height, FAVORITES_POPUP_MAX_HEIGHT)
+            if (next === null) return
+            favoritesHeight = next
+            placeFavorites()
+        },
         toggleActionPopup,
         positionLibraryPopup,
         openRename,
@@ -545,6 +642,7 @@ export const createOverlays = (win: BrowserWindow, ipc: Pusher): Overlays => {
             if (alive(omnibox)) omnibox.destroy()
             closeExtensions()
             closeDownloads()
+            closeFavorites()
             closeActionPopup()
             closeRename()
             if (alive(findBar)) findBar.destroy()
