@@ -275,6 +275,15 @@ export const windowEvents = (ctx: WindowContext): EventHandlers<never> => {
                     if (activeTabId !== null) yield* ctx.navigate(activeTabId, entry.url)
                     else yield* store.createTab(entry.url).pipe(Effect.ignore)
                 }
+            } else if (payload.kind === "favorite") {
+                const favorite = (yield* ctx.favorites.snapshot).nodes.find(
+                    (n) => n.id === payload.favoriteId,
+                )
+                if (favorite?.url) {
+                    const { activeTabId } = snapshot(yield* store.state)
+                    if (activeTabId !== null) yield* ctx.navigate(activeTabId, favorite.url)
+                    else yield* store.createTab(favorite.url).pipe(Effect.ignore)
+                }
             } else if (payload.query.trim().length > 0) {
                 const { activeTabId } = snapshot(yield* store.state)
                 if (activeTabId !== null) {

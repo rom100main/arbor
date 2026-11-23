@@ -1,6 +1,7 @@
 import { For, createEffect, createMemo, createSignal } from "solid-js"
 
 import { PopupCard } from "../../common/PopupCard/PopupCard"
+import { initFavorites, useFavorites } from "../../common/store/favorites"
 import { initHistory, useHistory } from "../../common/store/history"
 import { useSettings } from "../../common/store/settings"
 import { initState, useSnapshot } from "../../common/store/snapshot"
@@ -13,16 +14,24 @@ import "./OmniboxPopup.css"
 export const OmniboxPopup = () => {
     void initState()
     void initHistory()
+    void initFavorites()
     const snapshot = useSnapshot()
     const settings = useSettings()
     const history = useHistory()
+    const favorites = useFavorites()
     const [query, setQuery] = createSignal("")
     const [selected, setSelected] = createSignal(0)
 
     window.arbor.onOmniboxQuery(setQuery)
 
     const suggestions = createMemo(() =>
-        computeSuggestions(snapshot(), query(), settings().searchTemplate, history().entries),
+        computeSuggestions(
+            snapshot(),
+            query(),
+            settings().searchTemplate,
+            history().entries,
+            favorites().nodes,
+        ),
     )
     const suggestionCount = createMemo(() => suggestions().length)
 
@@ -34,7 +43,9 @@ export const OmniboxPopup = () => {
                 ? { kind: "go", query: suggestion.query }
                 : suggestion.kind === "history"
                   ? { kind: "history", entryId: suggestion.entry.id }
-                  : { kind: "tab", tabId: suggestion.tab.id },
+                  : suggestion.kind === "favorite"
+                    ? { kind: "favorite", favoriteId: suggestion.favorite.id }
+                    : { kind: "tab", tabId: suggestion.tab.id },
         )
     }
 
@@ -77,7 +88,12 @@ export const OmniboxPopup = () => {
                                         ? { kind: "go", query: suggestion.query }
                                         : suggestion.kind === "history"
                                           ? { kind: "history", entryId: suggestion.entry.id }
-                                          : { kind: "tab", tabId: suggestion.tab.id },
+                                          : suggestion.kind === "favorite"
+                                            ? {
+                                                  kind: "favorite",
+                                                  favoriteId: suggestion.favorite.id,
+                                              }
+                                            : { kind: "tab", tabId: suggestion.tab.id },
                                 )
                             }
                         />

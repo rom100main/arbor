@@ -1,21 +1,23 @@
-import type { BrowserSnapshot, HistoryEntry, TabNode } from "../../../shared/protocol"
+import type { BrowserSnapshot, FavoriteNode, HistoryEntry, TabNode } from "../../../shared/protocol"
 import { DEFAULT_SEARCH_TEMPLATE } from "../../../shared/settings"
 import { omniboxTarget } from "../../../shared/url"
-import { scoreHistoryEntry } from "./scoring"
+import { scoreFavorite, scoreHistoryEntry } from "./scoring"
 
 const MAX_TAB_SUGGESTIONS = 3
-const MAX_HISTORY_SUGGESTIONS = 5
+const MAX_SCORED_SUGGESTIONS = 5
 
 export type Suggestion =
     | { kind: "go"; target: string; query: string }
     | { kind: "tab"; tab: TabNode }
     | { kind: "history"; entry: HistoryEntry; score: number }
+    | { kind: "favorite"; favorite: FavoriteNode; score: number }
 
 export const computeSuggestions = (
     snap: BrowserSnapshot | null,
     raw: string,
     searchTemplate: string = DEFAULT_SEARCH_TEMPLATE,
     historyEntries: ReadonlyArray<HistoryEntry> = [],
+    favorites: ReadonlyArray<FavoriteNode> = [],
     now: number = Date.now(),
 ): Suggestion[] => {
     const query = raw.trim()
@@ -44,13 +46,32 @@ export const computeSuggestions = (
         }
     }
     const maxVisitCount = historyEntries.reduce((max, entry) => Math.max(max, entry.visitCount), 1)
-    const scored = historyEntries
-        .filter((entry) => !tabUrls.has(entry.url))
+    const historyByUrl = new Map(historyEntries.map((entry) => [entry.url, entry]))
+    const favoriteUrls = new Set<string>()
+    const scoredFavorites = favorites.flatMap((favorite) => {
+        if (favorite.url === null || tabUrls.has(favorite.url) || favoriteUrls.has(favorite.url))
+            return []
+        const score = scoreFavorite(favorite, query, now, historyByUrl, maxVisitCount)
+        if (score <= 0) return []
+        favoriteUrls.add(favorite.url)
+        return [{ favorite, score }]
+    })
+    const scoredHistory = historyEntries
+        .filter((entry) => !tabUrls.has(entry.url) && !favoriteUrls.has(entry.url))
         .map((entry) => ({ entry, score: scoreHistoryEntry(entry, query, now, maxVisitCount) }))
         .filter((item) => item.score > 0)
+    const merged = [
+        ...scoredFavorites.map(({ favorite, score }) => ({
+            kind: "favorite" as const,
+            favorite,
+            score,
+        })),
+        ...scoredHistory.map(({ entry, score }) => ({ kind: "history" as const, entry, score })),
+    ]
+    merged
         .sort((a, b) => b.score - a.score)
-        .slice(0, MAX_HISTORY_SUGGESTIONS)
-    for (const { entry, score } of scored) list.push({ kind: "history", entry, score })
+        .slice(0, MAX_SCORED_SUGGESTIONS)
+        .forEach((suggestion) => list.push(suggestion))
     return list
 }
 

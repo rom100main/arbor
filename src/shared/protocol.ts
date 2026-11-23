@@ -158,10 +158,14 @@ export const HistoryQuery = Schema.Struct({
 })
 export type HistoryQuery = typeof HistoryQuery.Type
 
+export const FavoriteId = Schema.TemplateLiteral(["favorite-", Schema.String])
+export type FavoriteId = typeof FavoriteId.Type
+
 export const OmniboxActivation = Schema.Union([
     Schema.Struct({ kind: Schema.Literal("go"), query: Schema.String }),
     Schema.Struct({ kind: Schema.Literal("tab"), tabId: TabId }),
     Schema.Struct({ kind: Schema.Literal("history"), entryId: HistoryEntryId }),
+    Schema.Struct({ kind: Schema.Literal("favorite"), favoriteId: FavoriteId }),
 ])
 export type OmniboxActivation = typeof OmniboxActivation.Type
 
@@ -228,9 +232,6 @@ export const CloseContainerConfirmation = Schema.Struct({
     containerName: Schema.String,
 })
 export type CloseContainerConfirmation = typeof CloseContainerConfirmation.Type
-
-export const FavoriteId = Schema.TemplateLiteral(["favorite-", Schema.String])
-export type FavoriteId = typeof FavoriteId.Type
 
 /**
  * One node of the favorites tree:

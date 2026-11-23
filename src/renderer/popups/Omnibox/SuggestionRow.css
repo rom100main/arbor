@@ -16,6 +16,10 @@
 .suggestion-icon {
     display: inline-flex;
     flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 13px;
+    height: 13px;
     color: var(--color-text-faint);
 }
 
@@ -28,6 +32,7 @@
 }
 
 .suggestion-dot {
+    display: block;
     flex-shrink: 0;
     width: 8px;
     height: 8px;

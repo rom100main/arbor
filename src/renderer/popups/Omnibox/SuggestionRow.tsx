@@ -59,6 +59,20 @@ export const SuggestionRow: Component<{
                         </>
                     )
                 }
+                if (props.suggestion.kind === "favorite") {
+                    const favorite = props.suggestion.favorite
+                    return (
+                        <>
+                            <Favicon url={favorite.favicon} />
+                            <span class="suggestion-title">
+                                {favorite.name || favorite.url || ""}
+                            </span>
+                            <span class="suggestion-icon">
+                                <Icon name="star" size={13} />
+                            </span>
+                        </>
+                    )
+                }
                 const tab = props.suggestion.tab
                 const color =
                     snapshot()?.containers.find((c) => c.id === tab.containerId)?.color ??
@@ -69,7 +83,9 @@ export const SuggestionRow: Component<{
                         <span class="suggestion-title">
                             {tab.userLabel || tab.title || tab.url}
                         </span>
-                        <span class="suggestion-dot" style={{ "background-color": color }} />
+                        <span class="suggestion-icon">
+                            <span class="suggestion-dot" style={{ "background-color": color }} />
+                        </span>
                     </>
                 )
             })()}
