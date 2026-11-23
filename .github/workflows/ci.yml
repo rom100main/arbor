@@ -26,7 +26,7 @@ jobs:
                   # push to main diffs against the previous commit, needs history.
                   fetch-depth: 0
 
-            - uses: dorny/paths-filter@v3
+            - uses: dorny/paths-filter@v4
               id: filter
               with:
                   base: ${{ github.ref }}
