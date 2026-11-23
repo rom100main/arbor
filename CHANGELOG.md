@@ -5,6 +5,30 @@ All notable changes will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-11-23
+
+### Added
+
+- Star button in the url bar to bookmark the current page
+- Toolbar bookmark button opens the favorites popup, where favorites can be browsed and organized into folders
+- Omnibox suggests favorites
+- New tab page with a search bar using the same suggestions as the url bar, and a Customize button that opens its settings
+- New Tab settings: background follows the theme, a custom color, or a custom image, and the search bar can be shown or hidden
+- Favorites in the protected New Tab folder are shown on the new tab page
+- Make Arbor the default browser for http and https links from the new General settings page, Arbor is now registered with the OS for those schemes
+
+### Changed
+
+- New tabs now open the new tab page instead of a blank page
+
+### Fixed
+
+- Favicons disappearing when navigating within a site that reuses the same favicon
+- Back and forward buttons greyed out when unavailable
+- Tabs could not be collapsed when the active tab was in their subtree
+- Closing or hibernating a tab could leave a hibernated fallback tab unloaded, the fallback now loads when activated
+- New tabs were displayed as `about:blank` instead of "New tab" in the tab tree
+
 ## [0.4.0] - 2026-11-18
 
 ### Added
