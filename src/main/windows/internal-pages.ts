@@ -132,9 +132,10 @@ export const registerInternalPages = (): void => {
         type: "frame",
         filePath: preloadPath,
     })
-    // Internal pages are local-only: no container session can reach them, and they cannot reach the network.
+    // Internal pages are local-only: no container session can reach them, and they cannot reach the network
+    // except favicon images, which history and the new tab page's favorites need to display.
     ses.webRequest.onBeforeRequest((details, callback) => {
-        callback({ cancel: !isInternalUrl(details.url) })
+        callback({ cancel: !(isInternalUrl(details.url) || details.resourceType === "image") })
     })
 
     if (ses.protocol.isProtocolHandled(INTERNAL_SCHEME)) return

@@ -1,7 +1,11 @@
-import { Show, createSignal, onCleanup } from "solid-js"
+import { For, Show, createSignal, onCleanup } from "solid-js"
 
+import { NEW_TAB_FAVORITES_FOLDER_ID } from "../../../shared/constants"
+import type { FavoriteNode } from "../../../shared/protocol"
 import { chromeInsets, SETTINGS_URL } from "../../../shared/settings"
+import { Favicon } from "../../common/Favicon/Favicon"
 import { Icon } from "../../common/Icon/Icon"
+import { initFavorites, useFavorites } from "../../common/store/favorites"
 import { useSettings } from "../../common/store/settings"
 import { initState, useSnapshot } from "../../common/store/snapshot"
 
@@ -14,8 +18,10 @@ import "./NewTabApp.css"
  */
 export const NewTabApp = () => {
     void initState()
+    void initFavorites()
     const settings = useSettings()
     const snapshot = useSnapshot()
+    const favorites = useFavorites()
     const [value, setValue] = createSignal("")
     const [fullscreen, setFullscreen] = createSignal(false)
     onCleanup(window.arbor.onFullscreen(setFullscreen))
@@ -78,6 +84,53 @@ export const NewTabApp = () => {
         void window.arbor.createTab({ url: route })
     }
 
+    // The protected "New Tab" favorites folder, flattened depth-first:
+    // subfolders contribute their bookmarks but are not shown themselves.
+    const newTabFavorites = (): FavoriteNode[] => {
+        const nodes = favorites().nodes
+        const childrenByParent = new Map<string | null, FavoriteNode[]>()
+        for (const node of nodes) {
+            const bucket = childrenByParent.get(node.parentId) ?? []
+            bucket.push(node)
+            childrenByParent.set(node.parentId, bucket)
+        }
+        for (const siblings of childrenByParent.values()) {
+            siblings.sort((a, b) => a.order - b.order || a.name.localeCompare(b.name))
+        }
+        const out: FavoriteNode[] = []
+        const walk = (parentId: string | null): void => {
+            for (const node of childrenByParent.get(parentId) ?? []) {
+                if (node.url !== null) out.push(node)
+                else walk(node.id)
+            }
+        }
+        walk(NEW_TAB_FAVORITES_FOLDER_ID)
+        return out
+    }
+
+    const openFavorite = (favorite: FavoriteNode, event: MouseEvent): void => {
+        if (favorite.url === null) return
+        void window.arbor.favoritesOpen({
+            url: favorite.url,
+            newTab: event.metaKey || event.ctrlKey,
+        })
+    }
+
+    // A bookmark starred before its favicon arrived has none stored:
+    // ask the site for its conventional icon instead of showing a placeholder.
+    const faviconUrl = (favorite: FavoriteNode): string | null => {
+        if (favorite.favicon) return favorite.favicon
+        if (favorite.url === null) return null
+        try {
+            const parsed = new URL(favorite.url)
+            return parsed.protocol === "http:" || parsed.protocol === "https:"
+                ? `${parsed.origin}/favicon.ico`
+                : null
+        } catch {
+            return null
+        }
+    }
+
     return (
         <div class="newtab-page" style={{ background: background() }}>
             <Show when={settings().newTabShowSearchBar}>
@@ -106,6 +159,23 @@ export const NewTabApp = () => {
                             onKeyDown={onKeyDown}
                         />
                     </label>
+                </div>
+            </Show>
+            <Show when={newTabFavorites().length > 0}>
+                <div class="newtab-favorites">
+                    <For each={newTabFavorites()}>
+                        {(favorite) => (
+                            <button
+                                type="button"
+                                class="newtab-favorite"
+                                title={favorite.url ?? favorite.name}
+                                onClick={(event) => openFavorite(favorite, event)}
+                            >
+                                <Favicon url={faviconUrl(favorite)} size={14} />
+                                <span>{favorite.name}</span>
+                            </button>
+                        )}
+                    </For>
                 </div>
             </Show>
             <button

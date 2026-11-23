@@ -201,6 +201,11 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                             yield* history.meta(tab.url, { title: event.title })
                         } else if (event.kind === "favicon") {
                             yield* history.meta(tab.url, { favicon: event.favicon })
+                            // Bookmarks keep the favicon they were starred with,
+                            // which may be missing: refresh them from live tabs.
+                            if (event.favicon !== null) {
+                                yield* favorites.syncFavicon(tab.url, event.favicon)
+                            }
                         }
                         // A navigation that resets the title must also clear the entry's stale title
                         // (already done, via the meta call above, for "navigated").

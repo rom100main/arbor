@@ -1,5 +1,6 @@
 import { For, Show, createSignal } from "solid-js"
 
+import { isProtectedFavoritesFolderId } from "../../../shared/constants"
 import type { FavoriteId, FavoriteNode } from "../../../shared/protocol"
 import {
     dropPosition,
@@ -34,7 +35,14 @@ export const displayFavorites = (
         childrenByParent.set(key, bucket)
     }
     for (const siblings of childrenByParent.values()) {
-        siblings.sort((a, b) => a.order - b.order || a.name.localeCompare(b.name))
+        // Protected folders is pinned first among its siblings.
+        siblings.sort(
+            (a, b) =>
+                Number(isProtectedFavoritesFolderId(b.id)) -
+                    Number(isProtectedFavoritesFolderId(a.id)) ||
+                a.order - b.order ||
+                a.name.localeCompare(b.name),
+        )
     }
     const out: DisplayFavorite[] = []
     const walk = (parentId: FavoriteId | null, depth: number): void => {
@@ -90,13 +98,18 @@ export const FavoriteRow = (props: {
     onDragEnd: () => void
 }) => {
     const node = () => props.node
+    const protectedFolder = () => isProtectedFavoritesFolderId(node().id)
     return (
         <TreeRow
-            class={{ "favorites-row": true, "is-folder": isFolder(node()) }}
+            class={{
+                "favorites-row": true,
+                "is-folder": isFolder(node()),
+                "is-protected": protectedFolder(),
+            }}
             depth={props.depth}
             active={props.selected}
             drop={props.drop}
-            draggable
+            draggable={!protectedFolder()}
             onClick={(event) => {
                 event.stopPropagation()
                 if (!isFolder(node()) && (event.metaKey || event.ctrlKey)) {
@@ -123,7 +136,12 @@ export const FavoriteRow = (props: {
                 }}
             >
                 <Show when={isFolder(node())} fallback={<Favicon url={node().favicon} size={12} />}>
-                    <Icon name={props.collapsed ? "folder" : "folder-open"} size={12} />
+                    <Icon
+                        name={
+                            protectedFolder() ? "home" : props.collapsed ? "folder" : "folder-open"
+                        }
+                        size={12}
+                    />
                 </Show>
                 <Show when={isFolder(node()) && props.hasChildren}>
                     <button

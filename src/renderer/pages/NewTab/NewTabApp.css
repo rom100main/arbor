@@ -1,7 +1,9 @@
 .newtab-page {
     position: relative;
     display: flex;
+    flex-direction: column;
     align-items: center;
+    justify-content: center;
     min-width: 0;
     height: 100%;
     user-select: text;
@@ -46,6 +48,51 @@
 
     &::placeholder {
         color: var(--color-text-faintest);
+    }
+}
+
+.newtab-favorites {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    width: min(640px, 100%);
+    padding: 0 24px;
+}
+
+.newtab-center + .newtab-favorites {
+    margin-top: -48px;
+}
+
+.newtab-favorite {
+    display: inline-flex;
+    gap: 7px;
+    align-items: center;
+    max-width: 100%;
+    padding: 7px 12px;
+    font: inherit;
+    font-size: var(--font-size-body);
+    color: var(--color-text);
+    cursor: pointer;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-pill);
+    box-shadow: var(--shadow-popup);
+
+    span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    &:hover {
+        border-color: var(--color-accent);
+    }
+
+    &:focus-visible {
+        outline: var(--outline-focus);
+        outline-offset: -2px;
     }
 }
 

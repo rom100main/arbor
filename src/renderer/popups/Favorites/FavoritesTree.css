@@ -15,6 +15,10 @@
     &.is-folder .favorites-row-name {
         color: var(--color-text-muted);
     }
+
+    &.is-protected .favorites-row-name {
+        font-weight: 600;
+    }
 }
 
 .favorites-row-name {

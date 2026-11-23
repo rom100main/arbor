@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test"
 
 import { decodeFavorites, subtreeIds } from "../src/main/favorites/favorites"
 import { Favorites } from "../src/main/favorites/service"
+import { NEW_TAB_FAVORITES_FOLDER_ID } from "../src/shared/constants"
 import type { FavoriteNode } from "../src/shared/protocol"
 import { runTest, settle } from "./support/effect"
 import { files } from "./support/memory-fs"
@@ -30,6 +31,12 @@ const open = (favoritesPath = FAVORITES) =>
     })
 
 describe("decodeFavorites", () => {
+    it("always includes the protected new-tab folder", () => {
+        const decoded = decodeFavorites([])
+        expect(decoded?.map((n) => n.id)).toEqual([NEW_TAB_FAVORITES_FOLDER_ID])
+        expect(decoded?.[0]).toMatchObject({ parentId: null, url: null, name: "New Tab" })
+    })
+
     it("keeps valid nodes, drops bad and duplicate ids", () => {
         const decoded = decodeFavorites([
             node(),
@@ -37,7 +44,33 @@ describe("decodeFavorites", () => {
             node({ id: "favorite-2", parentId: "favorite-missing" }),
             { nope: true },
         ])
-        expect(decoded?.map((n) => n.id)).toEqual(["favorite-1", "favorite-2"])
+        expect(decoded?.map((n) => n.id)).toEqual(["favorite-newtab", "favorite-1", "favorite-2"])
+    })
+
+    it("keeps children of the protected folder", () => {
+        const decoded = decodeFavorites([
+            node({ id: "favorite-2", parentId: NEW_TAB_FAVORITES_FOLDER_ID }),
+        ])
+        expect(decoded?.find((n) => n.id === "favorite-2")?.parentId).toBe(
+            NEW_TAB_FAVORITES_FOLDER_ID,
+        )
+    })
+
+    it("forces a stored protected entry back to a root folder", () => {
+        const decoded = decodeFavorites([
+            node({
+                id: NEW_TAB_FAVORITES_FOLDER_ID,
+                parentId: "favorite-1",
+                name: "Tampered",
+                url: "https://nope.test/",
+            }),
+            node(),
+        ])
+        expect(decoded?.find((n) => n.id === NEW_TAB_FAVORITES_FOLDER_ID)).toMatchObject({
+            parentId: null,
+            name: "New Tab",
+            url: null,
+        })
     })
 
     it("reparents children of bookmarks to the root", () => {
@@ -86,7 +119,7 @@ describe("favorites service", () => {
                 })
                 yield* settle
                 const snapshot = yield* favorites.snapshot
-                expect(snapshot.nodes).toHaveLength(2)
+                expect(snapshot.nodes).toHaveLength(3)
                 const added = snapshot.nodes.find((n) => n.id === id)!
                 expect(added.parentId).toBe(folder)
                 expect(added.favicon).toBeNull()
@@ -119,8 +152,9 @@ describe("favorites service", () => {
                 })
                 yield* favorites.remove(folder)
                 const snapshot = yield* favorites.snapshot
-                expect(snapshot.nodes).toHaveLength(1)
-                expect(snapshot.nodes[0].url).toBe("https://b.test/")
+                expect(snapshot.nodes).toHaveLength(2)
+                expect(snapshot.nodes.some((n) => n.id === NEW_TAB_FAVORITES_FOLDER_ID)).toBe(true)
+                expect(snapshot.nodes.some((n) => n.url === "https://b.test/")).toBe(true)
             }),
         ))
 
@@ -139,7 +173,7 @@ describe("favorites service", () => {
                     url: "https://second.test/",
                     parentId: null,
                 })
-                yield* favorites.move(first, null, 2)
+                yield* favorites.move(first, null, 3)
                 let nodes = (yield* favorites.snapshot).nodes
                 const roots = nodes
                     .filter((n) => n.parentId === null && n.url !== null)
@@ -177,6 +211,59 @@ describe("favorites service", () => {
                 yield* favorites.move(id, id, 0)
                 const nodes = (yield* favorites.snapshot).nodes
                 expect(nodes.find((n) => n.id === id)?.parentId).toBeNull()
+            }),
+        ))
+
+    it("syncFavicon refreshes only bookmarks for that URL", () =>
+        runTest(
+            Effect.gen(function* () {
+                const { favorites } = yield* open()
+                const icon = "data:image/png;base64,AAA"
+                const first = yield* favorites.add({
+                    name: "A",
+                    url: "https://a.test/",
+                    parentId: null,
+                })
+                const second = yield* favorites.add({
+                    name: "B",
+                    url: "https://b.test/",
+                    parentId: null,
+                })
+                yield* favorites.syncFavicon("https://a.test/", icon)
+                yield* favorites.syncFavicon("https://a.test/", icon)
+                const nodes = (yield* favorites.snapshot).nodes
+                expect(nodes.find((n) => n.id === first)?.favicon).toBe(icon)
+                expect(nodes.find((n) => n.id === second)?.favicon).toBeNull()
+            }),
+        ))
+
+    it("the protected new-tab folder cannot be deleted or moved", () =>
+        runTest(
+            Effect.gen(function* () {
+                const { favorites } = yield* open()
+                const folder = yield* favorites.createFolder({ name: "Work", parentId: null })
+                yield* favorites.remove(NEW_TAB_FAVORITES_FOLDER_ID)
+                yield* favorites.move(NEW_TAB_FAVORITES_FOLDER_ID, folder, 0)
+                yield* favorites.update(NEW_TAB_FAVORITES_FOLDER_ID, { name: "Renamed" })
+                const nodes = (yield* favorites.snapshot).nodes
+                const protectedFolder = nodes.find((n) => n.id === NEW_TAB_FAVORITES_FOLDER_ID)
+                expect(protectedFolder?.parentId).toBeNull()
+                expect(protectedFolder?.name).toBe("New Tab")
+            }),
+        ))
+
+    it("bookmarks can be moved into the protected folder", () =>
+        runTest(
+            Effect.gen(function* () {
+                const { favorites } = yield* open()
+                const id = yield* favorites.add({
+                    name: "A",
+                    url: "https://a.test/",
+                    parentId: null,
+                })
+                yield* favorites.move(id, NEW_TAB_FAVORITES_FOLDER_ID, 0)
+                const nodes = (yield* favorites.snapshot).nodes
+                expect(nodes.find((n) => n.id === id)?.parentId).toBe(NEW_TAB_FAVORITES_FOLDER_ID)
             }),
         ))
 })

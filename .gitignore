@@ -27,7 +27,7 @@ dist-ssr
 .vitest/
 
 # Build files
-src/renderer/ui/Icon.tsx
+src/renderer/common/Icon/Icon.tsx
 
 # Packaged apps
 /release

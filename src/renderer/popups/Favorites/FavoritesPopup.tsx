@@ -1,5 +1,6 @@
 import { Show, createEffect, createSignal, onCleanup } from "solid-js"
 
+import { isProtectedFavoritesFolderId } from "../../../shared/constants"
 import type {
     FavoriteId,
     FavoriteNode,
@@ -95,7 +96,15 @@ export const FavoritesPopup = () => {
                 <PopupHeader>
                     <span>{mode() === "add" ? "Add favorite" : "Favorites"}</span>
                 </PopupHeader>
-                <Show when={selected()}>{(sel) => <FavoriteEditor node={sel()} />}</Show>
+                <Show
+                    when={
+                        selected() !== null && !isProtectedFavoritesFolderId(selected()!.id)
+                            ? selected()
+                            : null
+                    }
+                >
+                    {(sel) => <FavoriteEditor node={sel()} />}
+                </Show>
                 <FavoritesTree
                     nodes={nodes()}
                     selectedId={selectedId()}
@@ -123,7 +132,15 @@ export const FavoritesPopup = () => {
                         size="sm"
                         variant="danger"
                         type="button"
-                        disabled={selected() === null}
+                        title={
+                            selected() !== null && isProtectedFavoritesFolderId(selected()!.id)
+                                ? "The New Tab folder can't be deleted"
+                                : undefined
+                        }
+                        disabled={
+                            selected() === null ||
+                            isProtectedFavoritesFolderId(selected()?.id ?? "")
+                        }
                         onClick={() => {
                             const target = selected()
                             if (target === null) return

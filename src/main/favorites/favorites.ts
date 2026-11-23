@@ -5,6 +5,7 @@
  * Bad entries are skipped, orphans reparented to the root.
  */
 
+import { PROTECTED_FAVORITES_FOLDERS } from "../../shared/constants"
 import {
     FavoriteNode,
     type FavoriteId,
@@ -16,6 +17,41 @@ const decodeNode = decodeOr(FavoriteNode)
 
 export const isFolder = (node: FavoriteNodeType): boolean => node.url === null
 export const isBookmark = (node: FavoriteNodeType): boolean => node.url !== null
+
+/**
+ * Every protected favorites folder always exists, at the root, first among its siblings, under its fixed name:
+ * whatever a stored entry under its id was saved as, it is forced back to that folder.
+ */
+export const ensureProtectedFolders = (
+    list: ReadonlyArray<FavoriteNodeType>,
+): FavoriteNodeType[] => {
+    const indexOf = (id: string): number =>
+        PROTECTED_FAVORITES_FOLDERS.findIndex((folder) => folder.id === id)
+    const mapped = list.map((n) => {
+        const index = indexOf(n.id)
+        return index === -1
+            ? n
+            : {
+                  ...n,
+                  parentId: null,
+                  order: -1 - index,
+                  name: PROTECTED_FAVORITES_FOLDERS[index].name,
+                  url: null,
+                  favicon: null,
+              }
+    })
+    const missing = PROTECTED_FAVORITES_FOLDERS.filter(
+        (folder) => !mapped.some((n) => n.id === folder.id),
+    ).map((folder) => ({
+        id: folder.id,
+        parentId: null,
+        order: -1 - indexOf(folder.id),
+        name: folder.name,
+        url: null,
+        favicon: null,
+    }))
+    return [...missing, ...mapped]
+}
 
 /** Ids of `id` followed by every descendant, parents before children. */
 export const subtreeIds = (
@@ -40,13 +76,14 @@ export const subtreeIds = (
 export const decodeFavorites = (data: unknown): ReadonlyArray<FavoriteNodeType> | null => {
     if (!Array.isArray(data)) return null
     const seen = new Set<FavoriteId>()
-    const nodes: FavoriteNodeType[] = []
+    const parsed: FavoriteNodeType[] = []
     for (const raw of data) {
-        const parsed = decodeNode(raw)
-        if (!parsed || seen.has(parsed.id)) continue
-        seen.add(parsed.id)
-        nodes.push(parsed)
+        const node = decodeNode(raw)
+        if (!node || seen.has(node.id)) continue
+        seen.add(node.id)
+        parsed.push(node)
     }
+    const nodes = ensureProtectedFolders(parsed)
     // Break parent cycles: walk each chain and cut the first repeated id to root.
     const byId = new Map(nodes.map((n) => [n.id, n]))
     for (const node of nodes) {

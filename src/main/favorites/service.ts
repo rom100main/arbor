@@ -2,10 +2,11 @@
 
 import { Context, Effect, FiberSet, Layer, Option, Stream, SubscriptionRef } from "effect"
 
+import { isProtectedFavoritesFolderId } from "../../shared/constants"
 import type { FavoriteId, FavoriteNode, FavoritesSnapshot } from "../../shared/protocol"
 import { readJson } from "../persistence/json-file"
 import * as PersistedRef from "../persistence/persisted-ref"
-import { decodeFavorites, isFolder, subtreeIds } from "./favorites"
+import { decodeFavorites, ensureProtectedFolders, isFolder, subtreeIds } from "./favorites"
 
 export interface FavoritesService {
     /** The tree now. */
@@ -19,19 +20,21 @@ export interface FavoritesService {
         favicon?: string | null
         parentId: FavoriteId | null
     }) => Effect.Effect<FavoriteId>
-    /** Rename / retarget a bookmark. Unknown ids are no-ops. */
+    /** Rename / retarget a bookmark. Unknown ids are no-ops, as is protected folders. */
     readonly update: (
         id: FavoriteId,
         patch: { name?: string; url?: string; favicon?: string | null },
     ) => Effect.Effect<void>
-    /** Remove a node and, for a folder, its whole subtree. */
+    /** Refresh the favicon of every bookmark for `url` (e.g. after a tab reports one). */
+    readonly syncFavicon: (url: string, favicon: string) => Effect.Effect<void>
+    /** Remove a node and, for a folder, its whole subtree. Protected folders is kept. */
     readonly remove: (id: FavoriteId) => Effect.Effect<void>
     /** Create a folder, returns its id. */
     readonly createFolder: (input: {
         name: string
         parentId: FavoriteId | null
     }) => Effect.Effect<FavoriteId>
-    /** Move a node under `parentId` at `index` among its new siblings. */
+    /** Move a node under `parentId` at `index` among its new siblings. Protected folders cannot move. */
     readonly move: (
         id: FavoriteId,
         parentId: FavoriteId | null,
@@ -71,10 +74,14 @@ const make = (options: FavoritesOptions) =>
             empty: () => [],
         })
         const stored = yield* persisted.get
-        const items = yield* SubscriptionRef.make<ReadonlyArray<FavoriteNode>>(stored)
+        // A missing or unreadable file skips decode:
+        // protected folders is still guaranteed,
+        // and written back on the first change.
+        const initial = ensureProtectedFolders(stored)
+        const items = yield* SubscriptionRef.make<ReadonlyArray<FavoriteNode>>(initial)
         const run = yield* FiberSet.makeRuntime()
 
-        let records: ReadonlyArray<FavoriteNode> = stored
+        let records: ReadonlyArray<FavoriteNode> = initial
 
         const publish = (next: ReadonlyArray<FavoriteNode>): void => {
             records = next
@@ -83,6 +90,8 @@ const make = (options: FavoritesOptions) =>
 
         const persist = (next: ReadonlyArray<FavoriteNode>) =>
             persisted.modifySome(() => [undefined, Option.some(next)] as const)
+
+        if (initial !== stored) yield* persist(initial)
 
         const update = (next: ReadonlyArray<FavoriteNode>): Effect.Effect<void> => {
             publish(next)
@@ -116,6 +125,8 @@ const make = (options: FavoritesOptions) =>
             patch: { name?: string; url?: string; favicon?: string | null },
         ) =>
             Effect.gen(function* () {
+                // Protected folders cannot be renamed either.
+                if (isProtectedFavoritesFolderId(id)) return
                 const existing = records.find((n) => n.id === id)
                 if (!existing) return
                 const nextName =
@@ -141,8 +152,17 @@ const make = (options: FavoritesOptions) =>
                 )
             })
 
+        const syncFavicon = (url: string, favicon: string) =>
+            Effect.gen(function* () {
+                if (favicon.length === 0) return
+                if (!records.some((n) => n.url === url && n.favicon !== favicon)) return
+                yield* update(records.map((n) => (n.url === url ? { ...n, favicon } : n)))
+            })
+
         const remove = (id: FavoriteId) =>
             Effect.gen(function* () {
+                // Protected folders cannot be deleted.
+                if (isProtectedFavoritesFolderId(id)) return
                 if (!records.some((n) => n.id === id)) return
                 const drop = new Set(subtreeIds(records, id))
                 const rest = records.filter((n) => !drop.has(n.id))
@@ -176,6 +196,8 @@ const make = (options: FavoritesOptions) =>
 
         const move = (id: FavoriteId, parentId: FavoriteId | null, index: number) =>
             Effect.gen(function* () {
+                // Protected folders cannot be moved.
+                if (isProtectedFavoritesFolderId(id)) return
                 const node = records.find((n) => n.id === id)
                 if (!node) return
                 if (parentId !== null) {
@@ -201,6 +223,7 @@ const make = (options: FavoritesOptions) =>
             changes: SubscriptionRef.changes(items).pipe(Stream.map(toSnapshot)),
             add,
             update: updateNode,
+            syncFavicon,
             remove,
             createFolder,
             move,
