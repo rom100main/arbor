@@ -108,8 +108,11 @@ export type MenuAction =
 
 export interface WindowHostService {
     readonly open: Effect.Effect<WindowHandle, never, Scope.Scope>
-    /** Arbor was launched again: the second instance quit at once, and this one should come forward. */
-    readonly relaunches: Stream.Stream<void>
+    /**
+     * Arbor was launched again, or the OS asked it to open links:
+     * each batch is the URLs to open as tabs (empty for a plain relaunch).
+     */
+    readonly relaunches: Stream.Stream<ReadonlyArray<string>>
     /** Replace the application menu. `run` is called with the item the user picked. */
     readonly setMenu: (model: MenuModel, run: (action: MenuAction) => void) => Effect.Effect<void>
 }

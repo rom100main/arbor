@@ -9,6 +9,7 @@ import { Context, Effect, FiberSet, Layer, Semaphore, Stream } from "effect"
 
 import { UnknownTab } from "../../shared/errors"
 import type { TabId, TabNode } from "../../shared/protocol"
+import { isNewTabUrl } from "../../shared/settings"
 import { Downloads } from "../downloads/downloads"
 import { Extensions } from "../extension/extensions"
 import { PermissionPrompts } from "../extension/prompts"
@@ -185,6 +186,19 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                         yield* store.updateTabMeta(tabId, { url })
                         const view = views.get(tabId)
                         if (sameView && view) yield* loadInBackground(view, url)
+                    })
+
+                /** A link the OS opened with Arbor (default browser) */
+                const openExternalUrl = (url: string) =>
+                    Effect.gen(function* () {
+                        const state = yield* store.state
+                        const { activeTabId } = snapshot(state)
+                        const active = activeTabId ? state.tabs.get(activeTabId) : undefined
+                        if (active && !active.hibernated && isNewTabUrl(active.url)) {
+                            yield* navigate(active.id, url)
+                            return
+                        }
+                        yield* store.createTab(url)
                     })
 
                 /** The tab's current URL for late meta events (title / favicon). */
@@ -404,9 +418,20 @@ export class WindowManager extends Context.Service<WindowManager, WindowManagerS
                 yield* Effect.forkScoped(broadcastDownloads)
                 yield* Effect.forkScoped(broadcastHistory)
                 yield* Effect.forkScoped(broadcastFavorites)
-                // A second launch of Arbor quits at once and brings this window forward.
+                // A link opened with Arbor, or a plain relaunch: open every link, then come forward.
                 yield* host.relaunches.pipe(
-                    Stream.runForEach(() => handle.focus),
+                    Stream.runForEach((urls) =>
+                        Effect.gen(function* () {
+                            for (const url of urls) {
+                                yield* openExternalUrl(url).pipe(
+                                    Effect.catchCause((cause) =>
+                                        Effect.logError("External link failed", cause),
+                                    ),
+                                )
+                            }
+                            yield* handle.focus
+                        }),
+                    ),
                     Effect.forkScoped,
                 )
 

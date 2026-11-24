@@ -20,6 +20,7 @@ import { Extensions } from "../extension/extensions"
 import { IpcPush, makePusher } from "../ipc/router"
 import { SettingsStore } from "../settings"
 import { buildContextMenu } from "./context-menu"
+import { initialLaunchUrls, subscribeOpenUrls, urlsFromCommandLine } from "./external-urls"
 import {
     LoadFailed,
     type SessionKey,
@@ -328,17 +329,25 @@ export const makeWindowHost: Effect.Effect<
         return handle
     })
 
-    // `app` outlives every scope, so its listener is removed when the stream ends.
-    const relaunches = Stream.callback<void>((queue) =>
+    // `app` outlives every scope, so its listeners are removed when the stream ends.
+    // A plain relaunch (double-clicking the app) opens nothing, it only comes forward.
+    const relaunches = Stream.callback<ReadonlyArray<string>>((queue) =>
         Effect.acquireRelease(
             Effect.sync(() => {
-                const onRelaunch = (): void => {
-                    Queue.offerUnsafe(queue, undefined)
+                const onRelaunch = (_event: unknown, commandLine: string[]): void => {
+                    Queue.offerUnsafe(queue, urlsFromCommandLine(commandLine))
                 }
                 app.on("second-instance", onRelaunch)
-                return onRelaunch
+                const unsubscribe = subscribeOpenUrls((batch) => Queue.offerUnsafe(queue, batch))
+                // First launch's own arguments
+                const initial = initialLaunchUrls()
+                if (initial.length > 0) Queue.offerUnsafe(queue, initial)
+                return () => {
+                    app.off("second-instance", onRelaunch)
+                    unsubscribe()
+                }
             }),
-            (onRelaunch) => Effect.sync(() => app.off("second-instance", onRelaunch)),
+            (cleanup) => Effect.sync(cleanup),
         ),
     )
 

@@ -75,7 +75,7 @@ const makeMemoryWindowHost = Effect.gen(function* () {
     const windows: MemoryWindow[] = []
     const menus: MenuModel[] = []
     let pick: ((action: MenuAction) => void) | null = null
-    const relaunches = yield* Queue.unbounded<void>()
+    const relaunches = yield* Queue.unbounded<ReadonlyArray<string>>()
     /** What happens when the shell loads: a test can play the shell's first asks. */
     let shellLoad: Effect.Effect<void> = Effect.void
     /** How a load of `url` ends; a load succeeds at once unless a test says otherwise. */
@@ -136,9 +136,9 @@ const makeMemoryWindowHost = Effect.gen(function* () {
         service,
         windows,
         menus,
-        /** Arbor is launched a second time. */
-        relaunch: (): void => {
-            Queue.offerUnsafe(relaunches, undefined)
+        /** Arbor is launched a second time, with the URLs it was asked to open. */
+        relaunch: (urls: ReadonlyArray<string> = []): void => {
+            Queue.offerUnsafe(relaunches, urls)
         },
         /** The user picks a menu item. */
         pickMenu: (action: MenuAction): void => {

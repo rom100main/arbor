@@ -4,6 +4,7 @@ import { app } from "electron"
 import { AppServices } from "./app-services"
 import { filterBenignExtensionLoadWarnings } from "./extension/load-warnings"
 import { AppRuntime } from "./runtime"
+import { captureOpenUrlsEarly } from "./windows/external-urls"
 import { registerInternalScheme } from "./windows/internal-pages"
 import { WindowManager } from "./windows/window-manager"
 
@@ -13,8 +14,11 @@ import { WindowManager } from "./windows/window-manager"
  * A second launch quits at once: the first instance gets `second-instance` and brings its window forward.
  */
 const run = (): void => {
-    // Must precede app.whenReady(): arbor:// needs a real origin for the bundle's module script.
+    // Must precede app.whenReady():
+    // arbor:// needs a real origin for the bundle's module script,
+    // and a link that starts Arbor can fire `open-url` before the app is ready.
     registerInternalScheme()
+    captureOpenUrlsEarly()
     filterBenignExtensionLoadWarnings()
 
     /** Holds every app service. Closing it writes pending changes and closes the window. */
