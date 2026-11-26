@@ -5,6 +5,13 @@ All notable changes will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-11-26
+
+### Fixed
+
+- Links opened with Arbor when set as the default browser now open in a tab instead of being ignored, reusing the new tab page when it is active
+- Corrected find bar popup styling
+
 ## [0.5.0] - 2026-11-23
 
 ### Added
