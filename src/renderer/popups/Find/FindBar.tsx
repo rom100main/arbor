@@ -114,61 +114,63 @@ export const FindBar = () => {
     }
 
     return (
-        <PopupCard class="find-bar">
-            <Field
-                ref={(el) => (input = el)}
-                value={query()}
-                ariaLabel="Find in page"
-                placeholder="Find in page"
-                onInput={(event) => setQuery(event.currentTarget.value)}
-                onKeyDown={onKeyDown}
-            />
-            <span
-                class={{ "find-count": true, "find-count-error": status().error !== null }}
-                title={status().error ?? ""}
-                aria-live="polite"
-            >
-                {countLabel()}
-            </span>
-            <Button
-                icon="chevron-up"
-                ariaLabel="Previous match"
-                title="Previous match (Shift+Enter)"
-                disabled={status().total === 0}
-                onClick={() => void step(false)}
-            />
-            <Button
-                icon="chevron-down"
-                ariaLabel="Next match"
-                title="Next match (Enter)"
-                disabled={status().total === 0}
-                onClick={() => void step(true)}
-            />
-            <Button
-                icon="letter-case"
-                ariaLabel="Match case"
-                title="Match case"
-                active={caseSensitive()}
-                pressed={caseSensitive()}
-                onClick={() => toggle("caseSensitive", !caseSensitive())}
-            />
-            <Button
-                icon="abc"
-                ariaLabel="Match whole word"
-                title="Match whole word"
-                active={wholeWord()}
-                pressed={wholeWord()}
-                onClick={() => toggle("wholeWord", !wholeWord())}
-            />
-            <Button
-                icon="regex"
-                ariaLabel="Use regular expression"
-                title="Regular expression"
-                active={regex()}
-                pressed={regex()}
-                onClick={() => toggle("regex", !regex())}
-            />
-            <Button icon="x" ariaLabel="Close find bar" title="Close (Esc)" onClick={close} />
-        </PopupCard>
+        <div class="find-popup-root">
+            <PopupCard class="find-bar">
+                <Field
+                    ref={(el) => (input = el)}
+                    value={query()}
+                    ariaLabel="Find in page"
+                    placeholder="Find in page"
+                    onInput={(event) => setQuery(event.currentTarget.value)}
+                    onKeyDown={onKeyDown}
+                />
+                <span
+                    class={{ "find-count": true, "find-count-error": status().error !== null }}
+                    title={status().error ?? ""}
+                    aria-live="polite"
+                >
+                    {countLabel()}
+                </span>
+                <Button
+                    icon="chevron-up"
+                    ariaLabel="Previous match"
+                    title="Previous match (Shift+Enter)"
+                    disabled={status().total === 0}
+                    onClick={() => void step(false)}
+                />
+                <Button
+                    icon="chevron-down"
+                    ariaLabel="Next match"
+                    title="Next match (Enter)"
+                    disabled={status().total === 0}
+                    onClick={() => void step(true)}
+                />
+                <Button
+                    icon="letter-case"
+                    ariaLabel="Match case"
+                    title="Match case"
+                    active={caseSensitive()}
+                    pressed={caseSensitive()}
+                    onClick={() => toggle("caseSensitive", !caseSensitive())}
+                />
+                <Button
+                    icon="abc"
+                    ariaLabel="Match whole word"
+                    title="Match whole word"
+                    active={wholeWord()}
+                    pressed={wholeWord()}
+                    onClick={() => toggle("wholeWord", !wholeWord())}
+                />
+                <Button
+                    icon="regex"
+                    ariaLabel="Use regular expression"
+                    title="Regular expression"
+                    active={regex()}
+                    pressed={regex()}
+                    onClick={() => toggle("regex", !regex())}
+                />
+                <Button icon="x" ariaLabel="Close find bar" title="Close (Esc)" onClick={close} />
+            </PopupCard>
+        </div>
     )
 }

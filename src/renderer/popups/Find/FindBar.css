@@ -1,16 +1,24 @@
+.find-popup-root {
+    box-sizing: border-box;
+    height: 100vh;
+    padding: 6px;
+    overflow: hidden;
+    background: transparent;
+}
+
 .find-bar {
     flex-direction: row;
     gap: 4px;
     align-items: center;
     height: 100%;
-    padding: 6px 8px;
+    padding: 6px;
 
     .field-input {
         flex: 1;
         min-width: 0;
-        min-height: 28px;
+        height: var(--h-input);
+        padding: 0 8px;
         font-size: var(--font-size-body);
-        background: var(--color-bg);
     }
 }
 

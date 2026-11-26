@@ -3,7 +3,6 @@
     height: calc(var(--omnibox-height) - 4px);
     min-height: calc(var(--omnibox-height) - 4px);
     margin-right: 2px;
-
     color: var(--color-text-faintest);
 
     &.btn:hover:not(:disabled),

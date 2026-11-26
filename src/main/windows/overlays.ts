@@ -59,7 +59,7 @@ const FAVORITES_POPUP_DEFAULT_HEIGHT = 560
 const FAVORITES_POPUP_MAX_HEIGHT = 720
 
 const FIND_BAR_WIDTH = 440
-const FIND_BAR_HEIGHT = 48
+const FIND_BAR_HEIGHT = 54
 
 const ACTION_POPUP_MIN_WIDTH = 360
 const ACTION_POPUP_MIN_HEIGHT = 480
@@ -561,7 +561,6 @@ export const createOverlays = (win: BrowserWindow, ipc: Pusher): Overlays => {
             const created = overlayWindow(win, {
                 width: FIND_BAR_WIDTH,
                 height: FIND_BAR_HEIGHT,
-                hasShadow: true,
                 webPreferences: { preload: preloadPath },
             })
             findBar = created
